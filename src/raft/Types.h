@@ -38,7 +38,8 @@ enum class raft_state_e
     RAFT_STATE_LEADER
 } ;
 
-enum class raft_logtype_e{
+enum class raft_logtype_e
+{
     RAFT_LOGTYPE_NORMAL,
     RAFT_LOGTYPE_ADD_NONVOTING_NODE,
     RAFT_LOGTYPE_ADD_NODE,
@@ -47,21 +48,13 @@ enum class raft_logtype_e{
     RAFT_LOGTYPE_NUM,
 };
 
-enum class raft_node_status{
+enum class raft_node_status
+{
     RAFT_NODE_STATUS_DISCONNECTED,
     RAFT_NODE_STATUS_CONNECTED,
     RAFT_NODE_STATUS_CONNECTING,
-    RAFT_NODE_STATUS_DISCONNECTING
+    RAFT_NODE_STATUS_DISCONNECTING,
 };
-
-/**
-* Copyright (c) 2013, Willem-Hendrik Thiart
-* Use of this source code is governed by a BSD-style license that can be
-* found in the LICENSE file.
-*
-* @file
-* @author Willem Thiart himself@willemthiart.com
-*/
 
 enum class raft_node_id : int {};
 
@@ -74,15 +67,9 @@ struct raft_entry_data_t
 /** Entry that is stored in the server's entry log. */
 struct raft_entry_t
 {
-    /** the entry's term at the point it was created */
-    unsigned int term;
-
-    /** the entry's unique ID */
-    unsigned int id;
-
-    /** type of entry */
-    raft_logtype_e type;
-
+    unsigned int term;      /**< the entry's term at the point it was created */
+    unsigned int id;        /**< the entry's unique ID */
+    raft_logtype_e type;    /**< type of entry */
     raft_entry_data_t data;
 };
 
@@ -95,14 +82,10 @@ typedef raft_entry_t msg_entry_t;
  * Indicates to client if entry was committed or not. */
 struct msg_entry_response_t
 {
-    /** the entry's unique ID */
-    unsigned int id;
+    unsigned int id;    /**< the entry's unique ID */
+    int term;           /**< the entry's term */
+    std::size_t idx;    /**< the entry's index */
 
-    /** the entry's term */
-    int term;
-
-    /** the entry's index */
-    std::size_t idx;
 };
 
 /** Vote request message.
@@ -110,28 +93,20 @@ struct msg_entry_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_requestvote_t
 {
-    /** currentTerm, to force other leader/candidate to step down */
-    int term;
+    int term;                       /**< currentTerm, to force other leader/candidate to step down */
+    raft_node_id candidate_id;      /**< candidate requesting vote */
+    std::size_t last_log_idx;       /**< index of candidate's last log entry */
+    std::size_t last_log_term;      /**< term of candidate's last log entry */
 
-    /** candidate requesting vote */
-    raft_node_id candidate_id;
-
-    /** index of candidate's last log entry */
-    std::size_t last_log_idx;
-
-    /** term of candidate's last log entry */
-    std::size_t last_log_term;
 };
 
 /** Vote request response message.
  * Indicates if node has accepted the server's vote request. */
 struct msg_requestvote_response_t
 {
-    /** currentTerm, for candidate to update itself */
-    int term;
+    int term;                           /**< currentTerm, for candidate to update itself */
+    raft_request_vote vote_granted;     /**< true means candidate received vote */
 
-    /** true means candidate received vote */
-    raft_request_vote vote_granted;
 };
 
 /** Appendentries message.
@@ -140,26 +115,12 @@ struct msg_requestvote_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_t
 {
-    /** currentTerm, to force other leader/candidate to step down */
-    int term;
-
-    /** the index of the log just before the newest entry for the node who
-     * receives this message */
-    std::size_t prev_log_idx;
-
-    /** the term of the log just before the newest entry for the node who
-     * receives this message */
-    int prev_log_term;
-
-    /** the index of the entry that has been appended to the majority of the
-     * cluster. Entries up to this index will be applied to the FSM */
-    std::size_t leader_commit;
-
-    /** number of entries within this message */
-    std::size_t n_entries;
-
-    /** array of entries within this message */
-    const msg_entry_t* entries;
+    int term;                   /**< currentTerm, to force other leader/candidate to step down */
+    std::size_t prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
+    int prev_log_term;          /**< the term of the log just before the newest entry for the node who receives this message */
+    std::size_t leader_commit;  /**< the index of the entry that has been appended to the majority of the cluster. Entries up to this index will be applied to the FSM */
+    std::size_t n_entries;      /**< number of entries within this message */
+    const msg_entry_t* entries; /**< array of entries within this message */
 };
 
 /** Appendentries response message.
@@ -167,21 +128,16 @@ struct msg_appendentries_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_response_t
 {
-    /** currentTerm, to force other leader/candidate to step down */
-    int term;
-
-    /** true if follower contained entry matching prevLogidx and prevLogTerm */
-    bool success;
+    int term;                   /**< currentTerm, to force other leader/candidate to step down */
+    bool success;               /**< true if follower contained entry matching prevLogidx and prevLogTerm */
 
     /* Non-Raft fields follow: */
     /* Having the following fields allows us to do less book keeping in
      * regards to full fledged RPC */
 
-    /** This is the highest log IDX we've received and appended to our log */
-    std::size_t current_idx;
+    std::size_t current_idx;    /**< This is the highest log IDX we've received and appended to our log */
+    std::size_t first_idx;      /**< The first idx that we received within the appendentries message */
 
-    /** The first idx that we received within the appendentries message */
-    std::size_t first_idx;
 } ;
 
 class Raft;

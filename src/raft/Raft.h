@@ -21,53 +21,23 @@ class Raft
     struct raft_server_private_t
     {
         /* Persistent state: */
-
-        /* the server's best guess of what the current term is
-        * starts at zero */
-        int current_term;
-
-        /* The candidate the server voted for in its current term,
-        * or Nil if it hasn't voted for any.  */
-        bmcl::Option<raft_node_id> voted_for;
-
-        /* the log which is replicated */
-        RaftLog log;
+        int current_term;                       /**< the server's best guess of what the current term is starts at zero */
+        bmcl::Option<raft_node_id> voted_for;   /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
+        RaftLog log;                            /**< the log which is replicated */
 
         /* Volatile state: */
-
-        /* idx of highest log entry known to be committed */
-        std::size_t commit_idx;
-
-        /* idx of highest log entry applied to state machine */
-        std::size_t last_applied_idx;
-
-        /* follower/leader/candidate indicator */
-        raft_state_e state;
-
-        /* amount of time left till timeout */
-        std::chrono::milliseconds timeout_elapsed;
-
+        std::size_t commit_idx;                                 /**< idx of highest log entry known to be committed */
+        std::size_t last_applied_idx;                           /**< idx of highest log entry applied to state machine */
+        raft_state_e state;                                     /**< follower/leader/candidate indicator */
+        std::chrono::milliseconds timeout_elapsed;              /**< amount of time left till timeout */
         std::vector<RaftNode> nodes;
-
         std::chrono::milliseconds election_timeout;
         std::chrono::milliseconds request_timeout;
-
-        /* what this node thinks is the node ID of the current leader, or -1 if
-        * there isn't a known current leader. */
-        bmcl::Option<raft_node_id> current_leader;
-
-        /* callbacks */
-        raft_cbs_t cb;
-
-        /* my node ID */
-        bmcl::Option<raft_node_id> node;
-
-        /* the log which has a voting cfg change */
-        bmcl::Option<std::size_t> voting_cfg_change_log_idx;
-
-        /* our membership with the cluster is confirmed (ie. configuration log was
-        * committed) */
-        raft_node_status connected;
+        bmcl::Option<raft_node_id> current_leader;              /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
+        raft_cbs_t cb;                                          /**< callbacks */
+        bmcl::Option<raft_node_id> node;                        /**< my node ID */
+        bmcl::Option<std::size_t> voting_cfg_change_log_idx;    /**< the log which has a voting cfg change */
+        raft_node_status connected;                             /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
 
     friend class RaftLog;
