@@ -85,7 +85,6 @@ struct msg_entry_response_t
     unsigned int id;    /**< the entry's unique ID */
     int term;           /**< the entry's term */
     std::size_t idx;    /**< the entry's index */
-
 };
 
 /** Vote request message.
@@ -97,7 +96,6 @@ struct msg_requestvote_t
     raft_node_id candidate_id;      /**< candidate requesting vote */
     std::size_t last_log_idx;       /**< index of candidate's last log entry */
     std::size_t last_log_term;      /**< term of candidate's last log entry */
-
 };
 
 /** Vote request response message.
@@ -106,7 +104,6 @@ struct msg_requestvote_response_t
 {
     int term;                           /**< currentTerm, for candidate to update itself */
     raft_request_vote vote_granted;     /**< true means candidate received vote */
-
 };
 
 /** Appendentries message.
@@ -137,7 +134,6 @@ struct msg_appendentries_response_t
 
     std::size_t current_idx;    /**< This is the highest log IDX we've received and appended to our log */
     std::size_t first_idx;      /**< The first idx that we received within the appendentries message */
-
 } ;
 
 class Raft;

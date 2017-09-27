@@ -43,14 +43,12 @@ std::size_t RaftLog::log_get_current_idx() const
 
 bmcl::Option<RaftError> RaftLog::log_append_entry(Raft* raft, const raft_entry_t& c)
 {
-    int e = 0;
-
     if (raft)
     {
         const raft_cbs_t& cb = raft->get_callbacks();
         if (cb.log_offer)
         {
-            e = cb.log_offer(raft, c, log_get_current_idx() + 1);
+            RaftError e = (RaftError)cb.log_offer(raft, c, log_get_current_idx() + 1);
             raft->raft_offer_log(c, log_get_current_idx() + 1);
             if (e == RaftError::Shutdown)
                 return RaftError::Shutdown;

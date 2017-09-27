@@ -75,9 +75,10 @@ void Sender::sender_poll_msgs()
         {
         case raft_message_type_e::RAFT_MSG_APPENDENTRIES:
         {
-            msg_appendentries_response_t response;
             EXPECT_EQ(sizeof(msg_appendentries_t), m.data.size());
-            me.raft->raft_recv_appendentries(m.sender, *(msg_appendentries_t*)m.data.data(), &response);
+            auto r = me.raft->raft_recv_appendentries(m.sender, *(msg_appendentries_t*)m.data.data());
+            EXPECT_TRUE(r.isOk());
+            msg_appendentries_response_t response = r.unwrap();
             __append_msg(&me, &response, sizeof(response), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE, me.raft->raft_get_my_node().unwrap());
         }
         break;
@@ -87,9 +88,10 @@ void Sender::sender_poll_msgs()
             break;
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE:
         {
-            msg_requestvote_response_t response;
             EXPECT_EQ(sizeof(msg_requestvote_t), m.data.size());
-            me.raft->raft_recv_requestvote(m.sender, *(msg_requestvote_t*)m.data.data(), &response);
+            auto r = me.raft->raft_recv_requestvote(m.sender, *(msg_requestvote_t*)m.data.data());
+            EXPECT_TRUE(r.isOk());
+            msg_requestvote_response_t response = r.unwrap();
             __append_msg(&me, &response, sizeof(response), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE, me.raft->raft_get_my_node().unwrap());
         }
         break;
@@ -99,9 +101,10 @@ void Sender::sender_poll_msgs()
             break;
         case raft_message_type_e::RAFT_MSG_ENTRY:
         {
-            msg_entry_response_t response;
             EXPECT_EQ(sizeof(msg_entry_t), m.data.size());
-            me.raft->raft_recv_entry(*(msg_entry_t*)m.data.data(), &response);
+            auto r = me.raft->raft_recv_entry(*(msg_entry_t*)m.data.data());
+            EXPECT_TRUE(r.isOk());
+            msg_entry_response_t response = r.unwrap();
             __append_msg(&me, (msg_entry_t *)&response, sizeof(response), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE, me.raft->raft_get_my_node().unwrap());
         }
         break;

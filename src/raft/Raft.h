@@ -12,6 +12,7 @@
 #include <chrono>
 #include <functional>
 #include <bmcl/Option.h>
+#include <bmcl/Result.h>
 #include "Types.h"
 #include "Log.h"
 #include "Node.h"
@@ -43,6 +44,7 @@ class Raft
     friend class RaftLog;
 public:
     Raft();
+    Raft(const raft_cbs_t& funcs);
     Raft(void* user_data, raft_node_id id);
     void raft_set_callbacks(const raft_cbs_t& funcs);
     bmcl::Option<RaftNode&> raft_add_node(void* user_data, raft_node_id id, bool is_self);
@@ -53,11 +55,11 @@ public:
     void raft_set_request_timeout(std::chrono::milliseconds msec);
     bmcl::Option<RaftError> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
-    bmcl::Option<RaftError> raft_recv_appendentries(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_t& ae, msg_appendentries_response_t *r);
+    bmcl::Result<msg_appendentries_response_t, RaftError> raft_recv_appendentries(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_t& ae);
     bmcl::Option<RaftError> raft_recv_appendentries_response(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_response_t& r);
-    bmcl::Option<RaftError> raft_recv_requestvote(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_t& vr, msg_requestvote_response_t *r);
+    bmcl::Result<msg_requestvote_response_t, RaftError> raft_recv_requestvote(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_t& vr);
     bmcl::Option<RaftError> raft_recv_requestvote_response(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_response_t& r);
-    bmcl::Option<RaftError> raft_recv_entry(const msg_entry_t& ety, msg_entry_response_t *r);
+    bmcl::Result<msg_entry_response_t, RaftError> raft_recv_entry(const msg_entry_t& ety);
 
     bool raft_is_my_node(raft_node_id id) const;
     bmcl::Option<raft_node_id> raft_get_my_nodeid() const;
