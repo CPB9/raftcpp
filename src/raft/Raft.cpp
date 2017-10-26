@@ -45,7 +45,7 @@ void Raft::__log(const bmcl::Option<const RaftNode&> node, const char *fmt, ...)
     _me.cb.log(this, node, buf);
 }
 
-Raft::Raft()
+Raft::Raft(raft_node_id id, bool is_voting, const raft_cbs_t& funcs)
 {
     _me.cb = { 0 };
     _me.commit_idx = 0;
@@ -56,17 +56,12 @@ Raft::Raft()
     _me.request_timeout = std::chrono::milliseconds(200);
     _me.election_timeout = std::chrono::milliseconds(1000);
     raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
-}
 
-Raft::Raft(const raft_cbs_t& funcs) : Raft{}
-{
+    auto r = raft_add_node(id);
+    assert(r.isSome());
+    r.unwrap().raft_node_set_voting(is_voting);
+    _me.node = r.unwrap().raft_node_get_id();
     raft_set_callbacks(funcs);
-}
-
-
-Raft::Raft(void* user_data, raft_node_id id) : Raft{}
-{
-    raft_add_node(user_data, id, true);
 }
 
 void Raft::raft_set_callbacks(const raft_cbs_t& funcs)
@@ -751,35 +746,26 @@ bmcl::Option<RaftError> Raft::raft_send_appendentries_all()
     return bmcl::None;
 }
 
-bmcl::Option<RaftNode&> Raft::raft_add_node(void* udata, raft_node_id id, bool is_self)
+bmcl::Option<RaftNode&> Raft::raft_add_node(raft_node_id id)
 {
     /* set to voting if node already exists */
     bmcl::Option<RaftNode&> node = raft_get_node(id);
     if (node.isSome())
     {
-        if (!node->raft_node_is_voting())
-        {
-            node->raft_node_set_voting(true);
-            return node;
-        }
-        else
-            /* we shouldn't add a node twice */
-            return bmcl::None;
+        node->raft_node_set_voting(true);
+        return node;
     }
 
-    _me.nodes.emplace_back(RaftNode(udata, id));
-    if (is_self)
-        _me.node = _me.nodes.back().raft_node_get_id();
-
+    _me.nodes.emplace_back(RaftNode(id));
     return _me.nodes.back();
 }
 
-bmcl::Option<RaftNode&> Raft::raft_add_non_voting_node(void* udata, raft_node_id id, bool is_self)
+bmcl::Option<RaftNode&> Raft::raft_add_non_voting_node(raft_node_id id)
 {
     if (raft_get_node(id).isSome())
         return bmcl::None;
 
-    bmcl::Option<RaftNode&> node = raft_add_node(udata, id, is_self);
+    bmcl::Option<RaftNode&> node = raft_add_node(id);
     if (node.isNone())
         return bmcl::None;
 
@@ -886,13 +872,13 @@ void Raft::raft_offer_log(const raft_entry_t& ety, const std::size_t idx)
     case raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE:
             if (!is_self)
             {
-                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(NULL, node_id, is_self);
+                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(node_id);
                 assert(node.isSome());
             }
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_ADD_NODE:
-            node = raft_add_node(NULL, node_id, is_self);
+            node = raft_add_node(node_id);
             assert(node.isSome());
             assert(node->raft_node_is_voting());
             break;
@@ -929,8 +915,7 @@ void Raft::raft_pop_log(const raft_entry_t& ety, const std::size_t idx)
 
         case raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE:
             {
-                bool is_self = raft_is_my_node(node_id);
-                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(NULL, node_id, is_self);
+                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(node_id);
                 assert(node.isSome());
             }
             break;

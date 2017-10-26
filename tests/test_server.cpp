@@ -40,23 +40,23 @@ raft_cbs_t generic_funcs()
 
 TEST(TestServer, voted_for_records_who_we_voted_for)
 {
-    Raft r(nullptr, raft_node_id(2));
+    Raft r(raft_node_id(1), true);
     r.raft_set_callbacks(generic_funcs());
-    r.raft_vote_for_nodeid(raft_node_id(2));
-    EXPECT_EQ(raft_node_id(2), r.raft_get_voted_for());
+    r.raft_vote_for_nodeid(raft_node_id(1));
+    EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
 }
 
 TEST(TestServer, get_my_node)
 {
-    Raft r(nullptr, raft_node_id(1));
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(2));
     EXPECT_EQ(raft_node_id(1), r.raft_get_my_nodeid());
     EXPECT_NE(raft_node_id(2), r.raft_get_my_nodeid());
 }
 
 TEST(TestServer, idx_starts_at_1)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(0, r.raft_get_current_idx());
 
     raft_entry_t ety = {0};
@@ -70,13 +70,13 @@ TEST(TestServer, idx_starts_at_1)
 
 TEST(TestServer, currentterm_defaults_to_0)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(0, r.raft_get_current_term());
 }
 
 TEST(TestServer, set_currentterm_sets_term)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_callbacks(generic_funcs());
     r.raft_set_current_term(5);
     EXPECT_EQ(5, r.raft_get_current_term());
@@ -84,67 +84,67 @@ TEST(TestServer, set_currentterm_sets_term)
 
 TEST(TestServer, voting_results_in_voting)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_callbacks(generic_funcs());
-    r.raft_add_node(nullptr, raft_node_id(1), false);
-    r.raft_add_node(nullptr, raft_node_id(9), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(9));
 
-    r.raft_vote_for_nodeid(raft_node_id(1));
-    EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
+    r.raft_vote_for_nodeid(raft_node_id(2));
+    EXPECT_EQ(raft_node_id(2), r.raft_get_voted_for());
     r.raft_vote_for_nodeid(raft_node_id(9));
     EXPECT_EQ(raft_node_id(9), r.raft_get_voted_for());
 }
 
 TEST(TestServer, add_node_makes_non_voting_node_voting)
 {
-    Raft r;
-    bmcl::Option<RaftNode&> n1 = r.raft_add_non_voting_node(nullptr, raft_node_id(9), false);
+    Raft r(raft_node_id(1), true);
+    bmcl::Option<RaftNode&> n1 = r.raft_add_non_voting_node(raft_node_id(9));
 
     EXPECT_TRUE(n1.isSome());
     EXPECT_FALSE(n1->raft_node_is_voting());
-    r.raft_add_node(nullptr, raft_node_id(9), false);
+    r.raft_add_node(raft_node_id(9));
     EXPECT_TRUE(n1->raft_node_is_voting());
     EXPECT_EQ(1, r.raft_get_num_nodes());
 }
 
 TEST(TestServer, add_node_with_already_existing_id_is_not_allowed)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(9), false);
-    r.raft_add_node(nullptr, raft_node_id(11), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(9));
+    r.raft_add_node(raft_node_id(11));
 
-    EXPECT_FALSE(r.raft_add_node(nullptr, raft_node_id(9), false).isSome());
-    EXPECT_FALSE(r.raft_add_node(nullptr, raft_node_id(11), false).isSome());
+    EXPECT_FALSE(r.raft_add_node(raft_node_id(9)).isSome());
+    EXPECT_FALSE(r.raft_add_node(raft_node_id(11)).isSome());
 }
 
 TEST(TestServer, add_non_voting_node_with_already_existing_id_is_not_allowed)
 {
-    Raft r;
-    r.raft_add_non_voting_node(nullptr, raft_node_id(9), false);
-    r.raft_add_non_voting_node(nullptr, raft_node_id(11), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_non_voting_node(raft_node_id(9));
+    r.raft_add_non_voting_node(raft_node_id(11));
 
-    EXPECT_FALSE(r.raft_add_non_voting_node(nullptr, raft_node_id(9), false).isSome());
-    EXPECT_FALSE(r.raft_add_non_voting_node(nullptr, raft_node_id(11), false).isSome());
+    EXPECT_FALSE(r.raft_add_non_voting_node(raft_node_id(9)).isSome());
+    EXPECT_FALSE(r.raft_add_non_voting_node(raft_node_id(11)).isSome());
 }
 
 TEST(TestServer, add_non_voting_node_with_already_existing_voting_id_is_not_allowed)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(9), false);
-    r.raft_add_node(nullptr, raft_node_id(11), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(9));
+    r.raft_add_node(raft_node_id(11));
 
-    EXPECT_FALSE(r.raft_add_non_voting_node(nullptr, raft_node_id(9), false).isSome());
-    EXPECT_FALSE(r.raft_add_non_voting_node(nullptr, raft_node_id(11), false).isSome());
+    EXPECT_FALSE(r.raft_add_non_voting_node(raft_node_id(9)).isSome());
+    EXPECT_FALSE(r.raft_add_non_voting_node(raft_node_id(11)).isSome());
 }
 
 TEST(TestServer, remove_node)
 {
-    Raft r;
-    bmcl::Option<RaftNode&> n1 = r.raft_add_node(nullptr, raft_node_id(1), false);
-    bmcl::Option<RaftNode&> n2 = r.raft_add_node(nullptr, raft_node_id(9), false);
+    Raft r(raft_node_id(1), true);
+    bmcl::Option<RaftNode&> n1 = r.raft_add_node(raft_node_id(2));
+    bmcl::Option<RaftNode&> n2 = r.raft_add_node(raft_node_id(9));
 
-    r.raft_remove_node(raft_node_id(1));
-    EXPECT_FALSE(r.raft_get_node(raft_node_id(1)).isSome());
+    r.raft_remove_node(raft_node_id(2));
+    EXPECT_FALSE(r.raft_get_node(raft_node_id(2)).isSome());
     EXPECT_TRUE(r.raft_get_node(raft_node_id(9)).isSome());
     r.raft_remove_node(raft_node_id(9));
     EXPECT_FALSE(r.raft_get_node(raft_node_id(9)).isSome());
@@ -152,7 +152,7 @@ TEST(TestServer, remove_node)
 
 TEST(TestServer, election_start_increments_term)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_callbacks(generic_funcs());
     r.raft_set_current_term(1);
     r.raft_election_start();
@@ -161,26 +161,26 @@ TEST(TestServer, election_start_increments_term)
 
 TEST(TestServer, set_state)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     EXPECT_EQ(raft_state_e::RAFT_STATE_LEADER, r.raft_get_state());
 }
 
 TEST(TestServer, starts_as_follower)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(raft_state_e::RAFT_STATE_FOLLOWER, r.raft_get_state());
 }
 
 TEST(TestServer, starts_with_election_timeout_of_1000ms)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(std::chrono::milliseconds(1000), r.raft_get_election_timeout());
 }
 
 TEST(TestServer, starts_with_request_timeout_of_200ms)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(std::chrono::milliseconds(200), r.raft_get_request_timeout());
 }
 
@@ -194,7 +194,7 @@ TEST(TestServer, entry_append_increases_logidx)
     ety.id = 1;
     ety.term = 1;
 
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(0, r.raft_get_current_idx());
     r.raft_append_entry(ety);
     EXPECT_EQ(1, r.raft_get_current_idx());
@@ -210,7 +210,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
     ety.id = 1;
     ety.term = 1;
 
-    Raft r;
+    Raft r(raft_node_id(1), true);
     EXPECT_EQ(0, r.raft_get_current_idx());
     r.raft_append_entry(ety);
     EXPECT_EQ(1, r.raft_get_current_idx());
@@ -218,8 +218,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
 
 TEST(TestServer, append_entry_is_retrievable)
 {
-    Raft r;
-    r.raft_set_callbacks(generic_funcs());
+    Raft r(raft_node_id(1), true, generic_funcs());
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
 
     r.raft_set_current_term(5);
@@ -250,7 +249,7 @@ TEST(TestServer, append_entry_user_can_set_data_buf)
     funcs.log_offer = __raft_logentry_offer;
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
     r.raft_set_current_term(5);
     raft_entry_t ety = {0};
@@ -297,7 +296,7 @@ TEST(TestServer, entry_is_retrieveable_using_idx)
     char *str = "aaa";
     char *str2 = "bbb";
 
-    Raft r;
+    Raft r(raft_node_id(1), true);
 
     raft_entry_t e1 = {0};
     e1.term = 1;
@@ -321,7 +320,7 @@ TEST(TestServer, entry_is_retrieveable_using_idx)
 
 TEST(TestServer, wont_apply_entry_if_we_dont_have_entry_to_apply)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_commit_idx(0);
     r.raft_set_last_applied_idx(0);
 
@@ -332,10 +331,9 @@ TEST(TestServer, wont_apply_entry_if_we_dont_have_entry_to_apply)
 
 TEST(TestServer, wont_apply_entry_if_there_isnt_a_majority)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_commit_idx(0);
     r.raft_set_last_applied_idx(0);
 
@@ -364,7 +362,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
     funcs.persist_term = __raft_persist_term;
     funcs.applylog = __raft_applylog;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
 
     /* must be follower */
     r.raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
@@ -392,7 +390,7 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
     raft_cbs_t funcs = {0};
     funcs.applylog = __raft_applylog;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
     r.raft_set_last_applied_idx(0);
 
     raft_entry_t ety = {0};
@@ -408,7 +406,7 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
 
 TEST(TestServer, periodic_elapses_election_timeout)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     /* we don't want to set the timeout to zero */
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());
@@ -427,10 +425,8 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -441,8 +437,7 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
 
 TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_voting_node)
 {
-    Raft r;
-    r.raft_add_non_voting_node(nullptr, raft_node_id(1), 1);
+    Raft r(raft_node_id(1), false);
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -454,9 +449,8 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_vo
 
 TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting_nodes)
 {
-    Raft r;
-    r.raft_add_non_voting_node(nullptr, raft_node_id(1), true);
-    r.raft_add_non_voting_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), false);
+    r.raft_add_non_voting_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -467,8 +461,7 @@ TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting
 
 TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_node)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true);
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -482,10 +475,8 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_non_voting_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_non_voting_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -496,8 +487,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
 
 TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true);
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_become_leader();
     EXPECT_EQ(0, r.raft_get_commit_idx());
@@ -517,8 +507,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 
 TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true);
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_become_leader();
     EXPECT_EQ(0, r.raft_get_commit_idx());
@@ -543,18 +532,16 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 
 TEST(TestServer, cfg_sets_num_nodes)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(2));
 
     EXPECT_EQ(2, r.raft_get_num_nodes());
 }
 
 TEST(TestServer, cant_get_node_we_dont_have)
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(2));
 
     EXPECT_FALSE(r.raft_get_node(raft_node_id(0)).isSome());
     EXPECT_TRUE(r.raft_get_node(raft_node_id(1)).isSome());
@@ -588,9 +575,8 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_g
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
     EXPECT_EQ(0, r.raft_get_nvotes_for_me());
 
@@ -608,9 +594,8 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(3);
     EXPECT_EQ(0, r.raft_get_nvotes_for_me());
 
@@ -629,9 +614,8 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
     funcs.send_requestvote = __raft_send_requestvote;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
     EXPECT_EQ(0, r.raft_get_nvotes_for_me());
     EXPECT_EQ(1, r.raft_get_current_term());
@@ -655,9 +639,8 @@ TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
     EXPECT_EQ(0, r.raft_get_nvotes_for_me());
 
@@ -677,9 +660,8 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(2);
 
     /* term is less than current term */
@@ -697,9 +679,8 @@ TEST(TestServer, leader_recv_requestvote_does_not_step_down)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
     r.raft_vote_for_nodeid(raft_node_id(1));
     r.raft_become_leader();
@@ -720,9 +701,8 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
     /* term is less than current term */
@@ -740,9 +720,8 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
@@ -764,9 +743,8 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_become_candidate();
     r.raft_set_current_term(1);
     EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
@@ -789,9 +767,8 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_become_candidate();
     r.raft_set_current_term(1);
     EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
@@ -816,10 +793,9 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(0), false);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(0));
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
     /* vote for self */
@@ -847,7 +823,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
 
 TEST(TestFollower, becomes_follower_is_follower)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_become_follower();
     EXPECT_TRUE(r.raft_is_follower());
 }
@@ -858,8 +834,7 @@ TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true, funcs);
 
     r.raft_vote_for_nodeid(raft_node_id(1));
     EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
@@ -873,9 +848,8 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     /* no leader known at this point */
     EXPECT_FALSE(r.raft_get_current_leader().isSome());
 
@@ -898,9 +872,8 @@ TEST(TestFollower, recv_appendentries_does_not_need_node)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     msg_appendentries_t ae = {0};
     ae.term = 1;
     auto aer = r.raft_recv_appendentries(bmcl::None, ae);
@@ -914,9 +887,8 @@ TEST(TestFollower, recv_appendentries_updates_currentterm_if_term_gt_currentterm
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     /*  older currentterm */
     r.raft_set_current_term(1);
@@ -945,9 +917,8 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
 
@@ -972,13 +943,11 @@ TEST(TestFollower, recv_appendentries_increases_log)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_entry_t ety = {0};
     char *str = "aaa";
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
 
     r.raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
 
@@ -1017,14 +986,11 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_entry_t ety = {0};
     char *str = "aaa";
-
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
 
     /* term is different from appendentries */
     r.raft_set_current_term(2);
@@ -1097,9 +1063,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_current_term(1);
 
@@ -1144,9 +1109,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_current_term(1);
 
@@ -1185,9 +1149,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_current_term(1);
 
@@ -1223,9 +1186,8 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
 
@@ -1252,9 +1214,8 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
     msg_appendentries_t ae = { 0 };
@@ -1298,9 +1259,8 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_appendentries_t ae = { 0 };
     ae.term = 1;
@@ -1347,9 +1307,8 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_appendentries_t ae = { 0 };
     ae.term = 1;
@@ -1395,9 +1354,8 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_current_term(1);
 
     raft_entry_t ety = {0};
@@ -1437,13 +1395,11 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     /*  1 second election timeout */
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
 
     /*  1.001 seconds have passed */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -1461,10 +1417,8 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     /*  request vote */
     /*  vote indicates candidate's log is not complete compared to follower */
@@ -1513,9 +1467,8 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_appendentries_t ae = { 0 };
     ae.term = 1;
@@ -1579,9 +1532,8 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     msg_appendentries_t ae = { 0 };
     ae.term = 1;
@@ -1682,8 +1634,7 @@ TEST(TestCandidate, becomes_candidate_is_candidate)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-
+    Raft r(raft_node_id(1), true, funcs);
     r.raft_become_candidate();
     EXPECT_TRUE(r.raft_is_candidate());
 }
@@ -1695,7 +1646,7 @@ TEST(TestFollower, becoming_candidate_increments_current_term)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
 
     EXPECT_EQ(0, r.raft_get_current_term());
     r.raft_become_candidate();
@@ -1709,8 +1660,7 @@ TEST(TestFollower, becoming_candidate_votes_for_self)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true, funcs);
 
     EXPECT_FALSE(r.raft_get_voted_for().isSome());
     r.raft_become_candidate();
@@ -1725,7 +1675,7 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
+    Raft r(raft_node_id(1), true, funcs);
 
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());
@@ -1744,11 +1694,9 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), true);
 
     r.raft_periodic(std::chrono::milliseconds(900));
 
@@ -1762,7 +1710,7 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
@@ -1771,9 +1719,8 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     funcs.send_requestvote = [&sender](Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) {return sender.sender_requestvote(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
 
     /* set term so we can check it gets included in the outbound message */
     r.raft_set_current_term(2);
@@ -1807,9 +1754,8 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
     msg_requestvote_response_t vr = {0};
@@ -1840,12 +1786,11 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
     funcs.send_requestvote = __raft_send_requestvote;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
-    r.raft_add_node(nullptr, raft_node_id(4), false);
-    r.raft_add_node(nullptr, raft_node_id(5), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
+    r.raft_add_node(raft_node_id(4));
+    r.raft_add_node(raft_node_id(5));
     EXPECT_EQ(5, r.raft_get_num_nodes());
 
     /* vote for self */
@@ -1875,9 +1820,8 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_vote_for_nodeid(raft_node_id(1));
 
@@ -1892,7 +1836,7 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
 /* Candidate 5.2 */
 TEST(TestCandidate, requestvote_includes_logidx)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
@@ -1901,8 +1845,7 @@ TEST(TestCandidate, requestvote_includes_logidx)
     funcs.persist_vote = __raft_persist_vote;
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
 
     r.raft_set_current_term(5);
@@ -1936,9 +1879,8 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_current_term(1);
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
@@ -1963,9 +1905,8 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
     r.raft_vote_for_nodeid(bmcl::None);
@@ -1993,9 +1934,8 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     funcs.persist_vote = __raft_persist_vote;
     funcs.send_requestvote = __raft_send_requestvote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_current_term(1);
     r.raft_become_candidate();
@@ -2028,7 +1968,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
 
 TEST(TestLeader, becomes_leader_is_leader)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_become_leader();
     EXPECT_TRUE(r.raft_is_leader());
 }
@@ -2039,8 +1979,7 @@ TEST(TestLeader, becomes_leader_does_not_clear_voted_for)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
+    Raft r(raft_node_id(1), true, funcs);
     r.raft_vote_for_nodeid(raft_node_id(1));
     EXPECT_EQ(raft_node_id(1), r.raft_get_voted_for());
     r.raft_become_leader();
@@ -2052,10 +1991,9 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
 
     /* candidate to leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
@@ -2073,17 +2011,15 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
 /* 5.2 */
 TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
 
     /* candidate to leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
@@ -2111,9 +2047,8 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     /* I am the leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2136,9 +2071,8 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
 
 void TestRaft_non_leader_recv_entry_msg_fails()
 {
-    Raft r;
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
 
@@ -2157,16 +2091,14 @@ void TestRaft_non_leader_recv_entry_msg_fails()
 /* 5.3 */
 TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
 {
-
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* i'm leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2186,15 +2118,14 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
 
 TEST(TestLeader, sends_appendentries_with_leader_commit)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
 
     r.raft_set_callbacks(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* i'm leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2226,15 +2157,14 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
 
 TEST(TestLeader, sends_appendentries_with_prevLogIdx)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
 
     r.raft_set_callbacks(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true); /* me */
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* i'm leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2290,15 +2220,14 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
 
 TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
 
     r.raft_set_callbacks(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* i'm leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2337,15 +2266,14 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 /* 5.3 */
 TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistency)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* i'm leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2369,9 +2297,8 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     raft_cbs_t funcs = {0};
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     EXPECT_EQ(0, r.raft_get_log_count());
 
@@ -2419,7 +2346,7 @@ void T_estRaft_leader_doesnt_append_entry_if_unique_id_is_duplicate()
 
 TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_have_entry_and_atleast_one_newer_entry)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2428,11 +2355,10 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
-    r.raft_add_node(nullptr, raft_node_id(4), false);
-    r.raft_add_node(nullptr, raft_node_id(5), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
+    r.raft_add_node(raft_node_id(4));
+    r.raft_add_node(raft_node_id(5));
     r.raft_set_callbacks(funcs);
 
     /* I'm the leader */
@@ -2497,7 +2423,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
 
 TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_nodes_majority)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2506,11 +2432,10 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
-    r.raft_add_non_voting_node(nullptr, raft_node_id(4), false);
-    r.raft_add_non_voting_node(nullptr, raft_node_id(5), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
+    r.raft_add_non_voting_node(raft_node_id(4));
+    r.raft_add_non_voting_node(raft_node_id(5));
 
     /* I'm the leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2547,7 +2472,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
 
 TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_idx)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2555,9 +2480,8 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_callbacks(funcs);
 
     /* I'm the leader */
@@ -2608,7 +2532,7 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
 
 TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_of_old_terms_with_majority)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2617,11 +2541,10 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
-    r.raft_add_node(nullptr, raft_node_id(4), false);
-    r.raft_add_node(nullptr, raft_node_id(5), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
+    r.raft_add_node(raft_node_id(4));
+    r.raft_add_node(raft_node_id(5));
     r.raft_set_callbacks(funcs);
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2700,7 +2623,7 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
 
 TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2708,8 +2631,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_callbacks(funcs);
 
     r.raft_set_current_term(2);
@@ -2786,7 +2708,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
 TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2794,8 +2716,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_callbacks(funcs);
 
     r.raft_set_current_term(2);
@@ -2889,7 +2810,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
 TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -2897,9 +2818,8 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_callbacks(funcs);
 
     /* I'm the leader */
@@ -2941,10 +2861,9 @@ TEST(TestLeader, recv_appendentries_response_without_node_fails)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
 
     /* I'm the leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -2962,7 +2881,7 @@ TEST(TestLeader, recv_appendentries_response_without_node_fails)
 
 TEST(TestLeader, recv_entry_resets_election_timeout)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
 
@@ -2986,9 +2905,8 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     funcs.persist_term = __raft_persist_term;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     r.raft_set_current_term(1);
@@ -3015,9 +2933,8 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     funcs.persist_term = __raft_persist_term;
     funcs.send_appendentries = __raft_send_appendentries;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     r.raft_set_current_term(1);
@@ -3064,7 +2981,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
 
 TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3072,8 +2989,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     r.raft_set_current_term(1);
@@ -3109,7 +3025,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 
 TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to_0)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3117,8 +3033,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
     r.raft_set_callbacks(funcs);
 
     /* I'm the leader */
@@ -3155,7 +3070,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
 
 TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3163,8 +3078,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* I'm the leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -3186,7 +3100,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 
 TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3194,8 +3108,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    r.raft_add_node(raft_node_id(2));
 
     /* I'm the leader */
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
@@ -3220,9 +3133,8 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     r.raft_set_current_term(5);
@@ -3248,9 +3160,8 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
 
-    Raft r(funcs);
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
+    Raft r(raft_node_id(1), true, funcs);
+    r.raft_add_node(raft_node_id(2));
 
     r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     r.raft_set_current_term(5);
@@ -3267,16 +3178,15 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
 
 TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());
@@ -3323,7 +3233,7 @@ void T_estRaft_leader_sends_appendentries_when_receive_entry_msg()
 
 TEST(TestLeader, recv_requestvote_responds_without_granting)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3333,9 +3243,8 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());
@@ -3358,7 +3267,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
 
 TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
@@ -3368,9 +3277,8 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
     r.raft_set_callbacks(funcs);
 
-    r.raft_add_node(nullptr, raft_node_id(1), true);
-    r.raft_add_node(nullptr, raft_node_id(2), false);
-    r.raft_add_node(nullptr, raft_node_id(3), false);
+    r.raft_add_node(raft_node_id(2));
+    r.raft_add_node(raft_node_id(3));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());

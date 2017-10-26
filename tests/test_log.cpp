@@ -51,7 +51,7 @@ TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 
 TEST(TestLog, delete)
 {
-    Raft r;
+    Raft r(raft_node_id(1), true);
     RaftLog l;
     raft_entry_t e1, e2, e3;
 

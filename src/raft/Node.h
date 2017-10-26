@@ -22,9 +22,8 @@ class RaftNode
     };
 
 public:
-    RaftNode(void* udata, raft_node_id id)
+    explicit RaftNode(raft_node_id id)
     {
-        _me.udata = udata;
         _me.next_idx = 1;
         _me.match_idx = 0;
         _me.id = id;
@@ -36,9 +35,6 @@ public:
 
     std::size_t raft_node_get_match_idx() const { return _me.match_idx; }
     void raft_node_set_match_idx(std::size_t matchIdx) { _me.match_idx = matchIdx; }
-
-    void* raft_node_get_udata() const { return _me.udata; }
-    void raft_node_set_udata(void* udata) { _me.udata = udata; }
 
     bool raft_node_has_vote_for_me() const { return _me.flags.test(RAFT_NODE_VOTED_FOR_ME); }
     void raft_node_vote_for_me(bool vote) { _me.flags.set(RAFT_NODE_VOTED_FOR_ME, vote); }
@@ -54,7 +50,6 @@ public:
 private:
     struct raft_node_private_t
     {
-        void* udata;
         std::size_t next_idx;
         std::size_t match_idx;
         raft_node_id id;

@@ -27,9 +27,9 @@ TEST(TestScenario, leader_appears)
 
         for (const auto& j : sender)
         {
-            r[i].raft_add_node(&sender[0], (raft_node_id)1, i==0);
-            r[i].raft_add_node(&sender[1], (raft_node_id)2, i==1);
-            r[i].raft_add_node(&sender[2], (raft_node_id)3, i==2);
+            r[i].raft_add_node(&sender[0], raft_node_id(1), i==0);
+            r[i].raft_add_node(&sender[1], raft_node_id(2), i==1);
+            r[i].raft_add_node(&sender[2], raft_node_id(3), i==2);
         }
     }
 

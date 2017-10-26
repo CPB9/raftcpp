@@ -43,12 +43,10 @@ class Raft
 
     friend class RaftLog;
 public:
-    Raft();
-    Raft(const raft_cbs_t& funcs);
-    Raft(void* user_data, raft_node_id id);
+    explicit Raft(raft_node_id id, bool is_voting, const raft_cbs_t& funcs = raft_cbs_t{});
     void raft_set_callbacks(const raft_cbs_t& funcs);
-    bmcl::Option<RaftNode&> raft_add_node(void* user_data, raft_node_id id, bool is_self);
-    bmcl::Option<RaftNode&> raft_add_non_voting_node(void* user_data, raft_node_id id, bool is_self);
+    bmcl::Option<RaftNode&> raft_add_node(raft_node_id id);
+    bmcl::Option<RaftNode&> raft_add_non_voting_node(raft_node_id id);
     void raft_remove_node(raft_node_id id);
     void raft_remove_node(const bmcl::Option<RaftNode&>& node);
     void raft_set_election_timeout(std::chrono::milliseconds msec);
