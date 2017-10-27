@@ -97,8 +97,8 @@ TEST(TestServer, voting_results_in_voting)
 
 TEST(TestServer, add_node_makes_non_voting_node_voting)
 {
-    Raft r(raft_node_id(1), true);
-    bmcl::Option<RaftNode&> n1 = r.raft_add_non_voting_node(raft_node_id(9));
+    Raft r(raft_node_id(9), false);
+    bmcl::Option<RaftNode&> n1 = r.raft_get_node(raft_node_id(9));
 
     EXPECT_TRUE(n1.isSome());
     EXPECT_FALSE(n1->raft_node_is_voting());
@@ -1675,7 +1675,7 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
 
-    Raft r(raft_node_id(1), true, funcs);
+    Raft r(raft_node_id(1), false, funcs);
 
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
     EXPECT_EQ(0, r.raft_get_timeout_elapsed().count());
@@ -1758,10 +1758,6 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     r.raft_add_node(raft_node_id(2));
     r.raft_set_election_timeout(std::chrono::milliseconds(1000));
 
-    msg_requestvote_response_t vr = {0};
-    vr.term = 0;
-    vr.vote_granted = raft_request_vote::GRANTED;
-
     /* server wants to be leader, so becomes candidate */
     r.raft_become_candidate();
     EXPECT_EQ(1, r.raft_get_current_term());
@@ -1771,6 +1767,9 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     EXPECT_EQ(2, r.raft_get_current_term());
 
     /*  receiving this vote gives the server majority */
+//    msg_requestvote_response_t vr = {0};
+//    vr.term = 0;
+//    vr.vote_granted = raft_request_vote::GRANTED;
 //    raft_recv_requestvote_response(r,1,&vr);
 //    EXPECT_TRUE(r.raft_is_leader());
 }

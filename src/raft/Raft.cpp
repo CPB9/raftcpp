@@ -752,6 +752,8 @@ bmcl::Option<RaftNode&> Raft::raft_add_node(raft_node_id id)
     bmcl::Option<RaftNode&> node = raft_get_node(id);
     if (node.isSome())
     {
+        if (node->raft_node_is_voting())
+            return bmcl::None;
         node->raft_node_set_voting(true);
         return node;
     }
