@@ -136,8 +136,8 @@ bmcl::Option<RaftError> Raft::raft_periodic(std::chrono::milliseconds msec_since
     /* Only one voting node means it's safe for us to become the leader */
     if (1 == raft_get_num_voting_nodes())
     {
-        bmcl::Option<RaftNode&> node = raft_get_my_node();
-        if (node.isSome() && node->raft_node_is_voting() && !raft_is_leader())
+        const RaftNode& node = raft_get_my_node();
+        if (node.raft_node_is_voting() && !raft_is_leader())
             raft_become_leader();
     }
 
@@ -150,8 +150,8 @@ bmcl::Option<RaftError> Raft::raft_periodic(std::chrono::milliseconds msec_since
     {
         if (1 < raft_get_num_voting_nodes())
         {
-            bmcl::Option<RaftNode&> node = raft_get_my_node();
-            if (node.isSome() && node->raft_node_is_voting())
+            const RaftNode& node = raft_get_my_node();
+            if (node.raft_node_is_voting())
                 raft_election_start();
         }
     }
@@ -415,7 +415,7 @@ static bool __should_grant_vote(Raft* me, const msg_requestvote_t& vr)
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
 
-    if (!me->raft_get_my_node()->raft_node_is_voting())
+    if (!me->raft_get_my_node().raft_node_is_voting())
         return false;
 
     if (vr.term < me->raft_get_current_term())
@@ -555,7 +555,7 @@ bmcl::Option<RaftError> Raft::raft_recv_requestvote_response(bmcl::Option<raft_n
             break;
 
         case raft_request_vote::UNKNOWN_NODE:
-            if (raft_get_my_node()->raft_node_is_voting() && _me.connected == raft_node_status::RAFT_NODE_STATUS_DISCONNECTING)
+            if (raft_get_my_node().raft_node_is_voting() && _me.connected == raft_node_status::RAFT_NODE_STATUS_DISCONNECTING)
                 return RaftError::Shutdown;
             break;
 
@@ -621,7 +621,6 @@ bmcl::Option<RaftError> Raft::raft_send_requestvote(const RaftNode& node)
 {
     msg_requestvote_t rv;
 
-    assert(_me.node.isSome());
     assert(node.raft_node_get_id_as_option() != _me.node);
 
     __log(node, "sending requestvote to: %d", node);
@@ -629,7 +628,7 @@ bmcl::Option<RaftError> Raft::raft_send_requestvote(const RaftNode& node)
     rv.term = _me.current_term;
     rv.last_log_idx = raft_get_current_idx();
     rv.last_log_term = raft_get_last_log_term().unwrapOr(0);
-    rv.candidate_id = raft_get_my_nodeid().unwrap();
+    rv.candidate_id = raft_get_my_nodeid();
     assert(_me.cb.send_requestvote);
     return _me.cb.send_requestvote(this, node, rv);
 }
@@ -961,10 +960,10 @@ void Raft::raft_set_request_timeout(std::chrono::milliseconds millisec)
 
 bool Raft::raft_is_my_node(raft_node_id id) const
 {
-    return (_me.node.isSome() && _me.node.unwrap() == id);
+    return (_me.node == id);
 }
 
-bmcl::Option<raft_node_id> Raft::raft_get_my_nodeid() const
+raft_node_id Raft::raft_get_my_nodeid() const
 {
     return _me.node;
 }
@@ -1080,9 +1079,11 @@ bmcl::Option<RaftNode&> Raft::raft_get_node(raft_node_id nodeid)
     return bmcl::None;
 }
 
-bmcl::Option<RaftNode&> Raft::raft_get_my_node()
+const RaftNode& Raft::raft_get_my_node()
 {
-    return raft_get_node(raft_get_my_nodeid());
+    const auto& n = raft_get_node(raft_get_my_nodeid());
+    assert(n.isSome());
+    return n.unwrap();
 }
 
 bmcl::Option<RaftNode&> Raft::raft_get_node_from_idx(std::size_t idx)

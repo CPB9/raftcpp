@@ -6,45 +6,55 @@
 TEST(TestScenario, leader_appears)
 {
     std::vector<Raft> r;
-    std::vector<Sender> sender;
+    Sender sender;
 
-    r.resize(3);
-    for (std::size_t i = 0; i < 3; ++i)
+    const std::size_t Count = 3;
+    for (std::size_t i = 0; i < Count; ++i)
     {
-        sender.emplace_back(&r[i]);
+        r.emplace_back(Raft(raft_node_id(i), true));
+        Raft& rx = r.back();
+
+        for(std::size_t j = 1; j < Count; ++j)
+        {
+            rx.raft_add_node(raft_node_id((i + j) % Count));
+        }
+        rx.raft_set_election_timeout(std::chrono::milliseconds(500));
     }
 
     for (std::size_t i = 0; i < 3; ++i)
     {
-        r[i].raft_set_election_timeout(std::chrono::milliseconds(500));
+        sender.add(&r[i]);
+    }
+
+    for (std::size_t i = 0; i < 3; ++i)
+    {
         raft_cbs_t funcs = { 0 };
-        Sender* s = &sender[i];
-        funcs.send_requestvote = [s](const Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) { return s->sender_requestvote(node, msg); };
-        funcs.send_appendentries = [s](const Raft* raft, const RaftNode& node, const msg_appendentries_t& msg) { return s->sender_appendentries(node, msg); };
-        funcs.persist_term = [s](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
-        funcs.persist_vote = [s](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
+        funcs.send_requestvote = [&sender](const Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, node, msg); };
+        funcs.send_appendentries = [&sender](const Raft* raft, const RaftNode& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
+        funcs.persist_term = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
+        funcs.persist_vote = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
         r[i].raft_set_callbacks(funcs);
 
-        for (const auto& j : sender)
-        {
-            r[i].raft_add_node(&sender[0], raft_node_id(1), i==0);
-            r[i].raft_add_node(&sender[1], raft_node_id(2), i==1);
-            r[i].raft_add_node(&sender[2], raft_node_id(3), i==2);
-        }
     }
 
     /* NOTE: important for 1st node to send vote request before others */
-    r[0].raft_periodic(std::chrono::milliseconds(1000));
+    //r[0].raft_periodic(std::chrono::milliseconds(1000));
 
-    for (std::size_t i = 0; i < 20; i++)
+    std::size_t i;
+    for (i = 0; i < 20; i++)
     {
+        std::cout << i << " " << i*100;
 one_more_time:
 
         for (std::size_t j = 0; j < 3; j++)
-            sender[j].sender_poll_msgs();
+        {
+            std::cout << " (" << r[j].raft_get_current_term() << ", "<< (int)r[j].raft_get_state()<< ")";
+            sender.sender_poll_msgs(raft_node_id(j));
+        }
+        std::cout << std::endl;
 
         for (std::size_t j = 0; j < 3; j++)
-            if (sender[j].sender_msgs_available())
+            if (sender.sender_msgs_available(raft_node_id(j)))
                 goto one_more_time;
 
         for (std::size_t j = 0; j < 3; j++)

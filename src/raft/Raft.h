@@ -36,7 +36,7 @@ class Raft
         std::chrono::milliseconds request_timeout;
         bmcl::Option<raft_node_id> current_leader;              /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
         raft_cbs_t cb;                                          /**< callbacks */
-        bmcl::Option<raft_node_id> node;                        /**< my node ID */
+        raft_node_id node;                                      /**< my node ID */
         bmcl::Option<std::size_t> voting_cfg_change_log_idx;    /**< the log which has a voting cfg change */
         raft_node_status connected;                             /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
@@ -60,8 +60,8 @@ public:
     bmcl::Result<msg_entry_response_t, RaftError> raft_recv_entry(const msg_entry_t& ety);
 
     bool raft_is_my_node(raft_node_id id) const;
-    bmcl::Option<raft_node_id> raft_get_my_nodeid() const;
-    bmcl::Option<RaftNode&> raft_get_my_node();
+    raft_node_id raft_get_my_nodeid() const;
+    const RaftNode& raft_get_my_node();
 
     bmcl::Option<raft_node_id> raft_get_current_leader() const;
     bmcl::Option<RaftNode&> raft_get_current_leader_node();

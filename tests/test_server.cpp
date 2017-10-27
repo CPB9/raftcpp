@@ -1716,7 +1716,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
-    funcs.send_requestvote = [&sender](Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) {return sender.sender_requestvote(node, msg); };
+    funcs.send_requestvote = [&sender](Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -1731,7 +1731,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     bmcl::Option<msg_t> msg;
     msg_requestvote_t* rv;
     /* 2 nodes = 2 vote requests */
-    msg = sender.sender_poll_msg_data();
+    msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -1739,7 +1739,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     EXPECT_EQ(3, rv->term);
 
     /*  TODO: there should be more items */
-    msg = sender.sender_poll_msg_data();
+    msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -1839,7 +1839,7 @@ TEST(TestCandidate, requestvote_includes_logidx)
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
-    funcs.send_requestvote = [&sender](Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) {return sender.sender_requestvote(node, msg); };
+    funcs.send_requestvote = [&sender](Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) {return sender.sender_requestvote(raft, node, msg); };
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
     r.raft_set_callbacks(funcs);
@@ -1862,7 +1862,7 @@ TEST(TestCandidate, requestvote_includes_logidx)
     r.raft_append_entry(ety);
     r.raft_send_requestvote(raft_node_id(2));
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     msg_requestvote_t* rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -2014,7 +2014,7 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2028,12 +2028,12 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     bmcl::Option<msg_t> msg;
     msg_appendentries_t* ae;
 
-    msg = sender.sender_poll_msg_data();
+    msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
 
-    msg = sender.sender_poll_msg_data();
+    msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -2094,7 +2094,7 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2109,7 +2109,7 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     /* receive appendentries messages */
     r.raft_send_appendentries(p.unwrap());
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     msg_appendentries_t* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -2121,7 +2121,7 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
 
     r.raft_set_callbacks(funcs);
     r.raft_add_node(raft_node_id(2));
@@ -2146,7 +2146,7 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     /* receive appendentries messages */
     r.raft_send_appendentries(raft_node_id(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         msg_appendentries_t* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2160,7 +2160,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
 
     r.raft_set_callbacks(funcs);
     r.raft_add_node(raft_node_id(2));
@@ -2171,7 +2171,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* receive appendentries messages */
     r.raft_send_appendentries(raft_node_id(2));
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     msg_appendentries_t* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -2192,7 +2192,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     n->raft_node_set_next_idx(1);
     r.raft_send_appendentries(n.unwrap());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2208,7 +2208,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     n->raft_node_set_next_idx(2);
     r.raft_send_appendentries(raft_node_id(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2223,7 +2223,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
 
     r.raft_set_callbacks(funcs);
     r.raft_add_node(raft_node_id(2));
@@ -2235,7 +2235,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     r.raft_send_appendentries(raft_node_id(2));
     msg_appendentries_t*  ae;;
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2253,7 +2253,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     r.raft_append_entry(ety);
     r.raft_send_appendentries(n.unwrap());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2269,7 +2269,7 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
     Sender sender(&r);
 
     raft_cbs_t funcs = {0};
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2280,7 +2280,7 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
     /* receive appendentries messages */
     r.raft_send_appendentries(raft_node_id(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         msg_appendentries_t* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2351,7 +2351,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     raft_cbs_t funcs = { 0 };
     funcs.applylog = __raft_applylog;
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2428,7 +2428,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     raft_cbs_t funcs = { 0 };
     funcs.applylog = __raft_applylog;
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2476,7 +2476,7 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2537,7 +2537,7 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     raft_cbs_t funcs = { 0 };
     funcs.applylog = __raft_applylog;
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2627,7 +2627,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2662,7 +2662,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     EXPECT_EQ(5, node->raft_node_get_next_idx());
 
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2673,7 +2673,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
      * server will be waiting for response */
     r.raft_send_appendentries(raft_node_id(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2693,7 +2693,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2702,7 +2702,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
         EXPECT_EQ(1, ae->prev_log_idx);
     }
 
-    EXPECT_FALSE(sender.sender_poll_msg_data().isSome());
+    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
@@ -2712,7 +2712,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2746,7 +2746,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     EXPECT_TRUE(node.isSome());
     EXPECT_EQ(5, node->raft_node_get_next_idx());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2757,7 +2757,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
      * server will be waiting for response */
     r.raft_send_appendentries(raft_node_id(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2776,7 +2776,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2795,7 +2795,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -2804,7 +2804,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_EQ(2, ae->prev_log_idx);
     }
 
-    EXPECT_FALSE(sender.sender_poll_msg_data().isSome());
+    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
@@ -2814,7 +2814,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -2839,8 +2839,8 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     r.raft_send_appendentries(raft_node_id(2));
     r.raft_send_appendentries(raft_node_id(3));
 
-    EXPECT_TRUE(sender.sender_poll_msg_data().isSome());
-    EXPECT_TRUE(sender.sender_poll_msg_data().isSome());
+    EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
+    EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
 
     r.raft_become_follower();
 
@@ -2852,7 +2852,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     aer.current_idx = 1;
     aer.first_idx = 1;
     EXPECT_TRUE(r.raft_recv_appendentries_response(raft_node_id(2), aer).isSome());
-    EXPECT_FALSE(sender.sender_poll_msg_data().isSome());
+    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_without_node_fails)
@@ -2985,7 +2985,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3017,7 +3017,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 
     /* check if the slow node got sent this appendentries */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data();
+        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_FALSE(msg.isSome());
     }
 }
@@ -3029,7 +3029,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3074,7 +3074,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3104,7 +3104,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
 
     raft_cbs_t funcs = { 0 };
     funcs.persist_term = __raft_persist_term;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3181,7 +3181,7 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     Sender sender(&r);
 
     raft_cbs_t funcs = { 0 };
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3199,26 +3199,26 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
 
     /* receive appendentries messages for both nodes */
     {
-        msg = sender.sender_poll_msg_data();
+        msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
     }
     {
-        msg = sender.sender_poll_msg_data();
+        msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
     }
     {
-        msg = sender.sender_poll_msg_data();
+        msg = sender.sender_poll_msg_data(r);
         EXPECT_FALSE(msg.isSome());
     }
 
     /* force request timeout */
     r.raft_periodic(std::chrono::milliseconds(501));
     {
-        msg = sender.sender_poll_msg_data();
+        msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -3239,7 +3239,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     funcs.persist_vote = __raft_persist_vote;
     funcs.persist_term = __raft_persist_term;
     funcs.send_requestvote = __raft_send_requestvote;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
@@ -3273,7 +3273,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     funcs.persist_vote = __raft_persist_vote;
     funcs.persist_term = __raft_persist_term;
     funcs.send_requestvote = __raft_send_requestvote;
-    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(node, msg); };
+    funcs.send_appendentries = [&sender](Raft * raft, const RaftNode & node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
     r.raft_set_callbacks(funcs);
 
     r.raft_add_node(raft_node_id(2));
