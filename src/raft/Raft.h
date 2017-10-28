@@ -71,17 +71,17 @@ public:
     void set_current_term(std::size_t term);
     std::size_t get_nvotes_for_me() const;
     inline bmcl::Option<node_id> get_voted_for() const { return _me.voted_for; }
-    void vote_for_nodeid(bmcl::Option<node_id> nodeid);
+    void vote_for_nodeid(node_id nodeid);
     inline bool is_already_voted() const { return _me.voted_for.isSome(); }
     static bool raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes);
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
-    bmcl::Result<msg_appendentries_response_t, Error> raft_recv_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae);
-    bmcl::Option<Error> raft_recv_appendentries_response(bmcl::Option<node_id> nodeid, const msg_appendentries_response_t& r);
-    bmcl::Result<msg_requestvote_response_t, Error> raft_recv_requestvote(bmcl::Option<node_id> nodeid, const msg_requestvote_t& vr);
-    bmcl::Option<Error> raft_recv_requestvote_response(bmcl::Option<node_id> nodeid, const msg_requestvote_response_t& r);
-    bmcl::Result<msg_entry_response_t, Error> raft_recv_entry(const msg_entry_t& ety);
+    bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae);
+    bmcl::Option<Error> accept_appendentries_response(bmcl::Option<node_id> nodeid, const msg_appendentries_response_t& r);
+    bmcl::Result<msg_requestvote_response_t, Error> accept_requestvote(bmcl::Option<node_id> nodeid, const msg_requestvote_t& vr);
+    bmcl::Option<Error> accept_requestvote_response(bmcl::Option<node_id> nodeid, const msg_requestvote_response_t& r);
+    bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
 
     inline bmcl::Option<node_id> get_current_leader() const { return _me.current_leader; }
     inline bmcl::Option<Node&> get_current_leader_node() { return get_node(_me.current_leader); }
@@ -108,11 +108,11 @@ public:
     void become_candidate();
     void become_follower();
     void election_start();
-    bmcl::Option<Error> raft_send_requestvote(const bmcl::Option<node_id>& node);
-    bmcl::Option<Error> raft_send_requestvote(const Node& node);
-    bmcl::Option<Error> raft_send_appendentries(const bmcl::Option<node_id>& node);
-    bmcl::Option<Error> raft_send_appendentries(const Node& node);
-    bmcl::Option<Error> raft_send_appendentries_all();
+    bmcl::Option<Error> send_requestvote(const bmcl::Option<node_id>& node);
+    bmcl::Option<Error> send_requestvote(const Node& node);
+    bmcl::Option<Error> send_appendentries(const bmcl::Option<node_id>& node);
+    bmcl::Option<Error> send_appendentries(const Node& node);
+    bmcl::Option<Error> send_appendentries_all();
     bmcl::Option<Error> raft_apply_entry();
     void set_state(raft_state_e state);
 

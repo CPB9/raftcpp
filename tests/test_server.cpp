@@ -438,7 +438,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
     EXPECT_EQ(0, r.get_commit_idx());
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.get_log_count());
     EXPECT_EQ(1, r.get_commit_idx());
@@ -456,11 +456,11 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     ety.type = logtype_e::ADD_NODE;
 
     /* receive entry */
-    EXPECT_TRUE(r.raft_recv_entry(ety).isOk());
+    EXPECT_TRUE(r.accept_entry(ety).isOk());
     EXPECT_EQ(1, r.get_log_count());
 
     ety.id = 2;
-    auto cr = r.raft_recv_entry(ety);
+    auto cr = r.accept_entry(ety);
     EXPECT_TRUE(cr.isErr());
     EXPECT_EQ(raft::Error::OneVotiongChangeOnly, cr.unwrapErr());
     EXPECT_EQ(1, r.get_commit_idx());
@@ -519,7 +519,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_g
     msg_requestvote_response_t rvr = {0};
     rvr.term = 1;
     rvr.vote_granted = raft_request_vote::NOT_GRANTED;
-    bmcl::Option<raft::Error> e = r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
@@ -538,7 +538,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_
     msg_requestvote_response_t rvr = { 0 };
     rvr.term = 2;
     rvr.vote_granted = raft_request_vote::GRANTED;
-    r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
 
@@ -563,7 +563,7 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
     msg_requestvote_response_t rvr = { 0 };
     rvr.term = 2;
     rvr.vote_granted = raft_request_vote::GRANTED;
-    bmcl::Option<raft::Error> e = r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(2, r.get_nvotes_for_me());
 }
@@ -585,7 +585,7 @@ TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
     msg_requestvote_response_t rvr = { 0 };
     rvr.term = 1;
     rvr.vote_granted = raft_request_vote::GRANTED;
-    r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
 
@@ -603,7 +603,7 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
     /* term is less than current term */
     msg_requestvote_t rv = {0};
     rv.term = 1;
-    auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
     EXPECT_TRUE(rvr.isOk());
     EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
 }
@@ -625,7 +625,7 @@ TEST(TestServer, leader_recv_requestvote_does_not_step_down)
     /* term is less than current term */
     msg_requestvote_t rv = {0};
     rv.term = 1;
-    EXPECT_TRUE(r.raft_recv_requestvote(raft::node_id(2), rv).isOk());
+    EXPECT_TRUE(r.accept_requestvote(raft::node_id(2), rv).isOk());
     EXPECT_EQ(raft::node_id(1), r.get_current_leader());
 }
 
@@ -645,7 +645,7 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
     msg_requestvote_t rv = {0};
     rv.term = 2;
     rv.last_log_idx = 1;
-    auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
     EXPECT_TRUE(rvr.isOk());
     EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
 }
@@ -666,7 +666,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     msg_requestvote_t rv = { 0 };
     rv.term = 2;
     rv.last_log_idx = 1;
-    auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
     EXPECT_TRUE(rvr.isOk());
     EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
@@ -690,7 +690,7 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
     rv.candidate_id = raft::node_id(2);
     rv.term = 2;
     rv.last_log_idx = 1;
-    EXPECT_TRUE(r.raft_recv_requestvote(raft::node_id(2), rv).isOk());
+    EXPECT_TRUE(r.accept_requestvote(raft::node_id(2), rv).isOk());
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(raft::node_id(2), r.get_voted_for());
@@ -714,7 +714,7 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
     rv.candidate_id = raft::node_id(3);
     rv.term = 2;
     rv.last_log_idx = 1;
-    auto rvr = r.raft_recv_requestvote(bmcl::None, rv);
+    auto rvr = r.accept_requestvote(bmcl::None, rv);
     EXPECT_TRUE(rvr.isOk());
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
@@ -743,7 +743,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     rv.last_log_idx = 1;
     rv.last_log_term = 1;
     {
-        auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
         EXPECT_TRUE(rvr.isOk());
         EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
     }
@@ -751,7 +751,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     /* vote for ID 0 */
     r.vote_for_nodeid(raft::node_id(0));
     {
-        auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
         EXPECT_TRUE(rvr.isOk());
         EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
     }
@@ -795,7 +795,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
 
     /*  higher current term */
     r.set_current_term(5);
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_FALSE(aer.unwrap().success);
@@ -812,7 +812,7 @@ TEST(TestFollower, recv_appendentries_does_not_need_node)
     r.add_node(raft::node_id(2));
     msg_appendentries_t ae = {0};
     ae.term = 1;
-    auto aer = r.raft_recv_appendentries(bmcl::None, ae);
+    auto aer = r.accept_appendentries(bmcl::None, ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
 }
@@ -837,7 +837,7 @@ TEST(TestFollower, recv_appendentries_updates_currentterm_if_term_gt_currentterm
     ae.term = 2;
 
     /*  appendentry has newer term, so we change our currentterm */
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_TRUE(aer.unwrap().success);
@@ -869,7 +869,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
     ae.leader_commit = 5;
     ae.n_entries = 0;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_EQ(0, r.get_log_count());
 }
@@ -900,7 +900,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
     ae.entries = &ety;
     ae.n_entries = 1;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(1, r.get_log_count());
@@ -934,7 +934,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
     ae.n_entries = 1;
 
     /* trigger reply */
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     /* reply is false */
@@ -994,7 +994,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     ae.entries = &mety;
     ae.n_entries = 1;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, r.get_log_count());
@@ -1036,7 +1036,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     ae.entries = &mety;
     ae.n_entries = 1;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(1, r.get_log_count());
@@ -1070,7 +1070,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     ae.entries = &e;
     ae.n_entries = 1;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, r.get_log_count());
@@ -1100,7 +1100,7 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
     ae.entries = e;
     ae.n_entries = 2;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, r.get_log_count());
@@ -1125,14 +1125,14 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     ae.n_entries = 1;
 
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
 
     /* still successful even when no raft_append_entry() happened! */
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
         EXPECT_EQ(1, r.get_log_count());
@@ -1140,7 +1140,7 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
 
     /* lets get the server to append 2 now! */
     ae.n_entries = 2;
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, r.get_log_count());
@@ -1166,7 +1166,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
     ae.n_entries = 4;
 
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1179,7 +1179,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
     ae.leader_commit = 5;
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1204,7 +1204,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     ae.entries = e;
     ae.n_entries = 4;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1217,7 +1217,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     ae.leader_commit = 3;
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1244,7 +1244,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     ae.prev_log_idx = 0;
     ae.leader_commit = 0;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_FALSE(aer.unwrap().success);
         EXPECT_EQ(1, aer.unwrap().current_idx);
@@ -1252,7 +1252,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
 
     /* try again with a higher current_idx */
     r.append_entry(raft_entry_t(1, 2, raft::raft_entry_data_t("aaa", 4)));
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_FALSE(aer.unwrap().success);
     EXPECT_EQ(2, aer.unwrap().current_idx);
@@ -1306,7 +1306,7 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
     /* vote not granted */
     {
-        auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
         EXPECT_TRUE(rvr.isOk());
         EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
     }
@@ -1319,7 +1319,7 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
     rv.last_log_idx = 1;
     rv.last_log_term = 3;
     {
-        auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
         EXPECT_TRUE(rvr.isOk());
         EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
     }
@@ -1342,7 +1342,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     ae.entries = &e1;
     ae.n_entries = 1;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
     }
 
@@ -1358,7 +1358,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     ae.entries = e2;
     ae.n_entries = 4;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
     }
 
@@ -1371,7 +1371,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     ae.prev_log_idx = 1;
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1396,7 +1396,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     ae.entries = &e[0];
     ae.n_entries = 1;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
     }
 
@@ -1410,7 +1410,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     ae.n_entries = 4;
     ae.leader_commit = 4;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
     }
 
@@ -1424,7 +1424,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     ae.n_entries = 5;
     ae.leader_commit = 4;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1443,7 +1443,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     ae.n_entries = 3;
     ae.leader_commit = 4;
     {
-        auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+        auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1524,7 +1524,7 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 
     msg_appendentries_t ae = {0};
     ae.term = 1;
-    auto aer = r.raft_recv_appendentries(raft::node_id(1), ae);
+    auto aer = r.accept_appendentries(raft::node_id(1), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 }
@@ -1624,13 +1624,13 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
     vr.term = 1;
     vr.vote_granted = raft_request_vote::GRANTED;
     /* get one vote */
-    r.raft_recv_requestvote_response(raft::node_id(2), vr);
+    r.accept_requestvote_response(raft::node_id(2), vr);
     EXPECT_EQ(2, r.get_nvotes_for_me());
     EXPECT_FALSE(r.is_leader());
 
     /* get another vote
      * now has majority (ie. 3/5 votes) */
-    r.raft_recv_requestvote_response(raft::node_id(3), vr);
+    r.accept_requestvote_response(raft::node_id(3), vr);
     EXPECT_TRUE(r.is_leader());
 }
 
@@ -1647,7 +1647,7 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
     r.vote_for_nodeid(raft::node_id(1));
 
     msg_requestvote_t rv = {0};
-    auto rvr = r.raft_recv_requestvote(raft::node_id(2), rv);
+    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
     EXPECT_TRUE(rvr.isOk());
 
     /* we've vote already, so won't respond with a vote granted... */
@@ -1674,7 +1674,7 @@ TEST(TestCandidate, requestvote_includes_logidx)
     r.append_entry(raft_entry_t(1, 100, raft::raft_entry_data_t("aaa", 4)));
     r.append_entry(raft_entry_t(1, 101, raft::raft_entry_data_t("aaa", 4)));
     r.append_entry(raft_entry_t(3, 102, raft::raft_entry_data_t("aaa", 4)));
-    r.raft_send_requestvote(raft::node_id(2));
+    r.send_requestvote(raft::node_id(2));
 
     bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1697,7 +1697,7 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
 
     r.set_current_term(1);
     r.set_state(raft_state_e::CANDIDATE);
-    r.vote_for_nodeid(bmcl::None);
+    r.vote_for_nodeid(raft::node_id(2));
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
     EXPECT_EQ(1, r.get_current_term());
@@ -1705,7 +1705,7 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     msg_requestvote_response_t rvr = { 0 };
     rvr.term = 2;
     rvr.vote_granted = raft_request_vote::NOT_GRANTED;
-    r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_FALSE(r.get_voted_for().isSome());
@@ -1722,7 +1722,7 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     r.add_node(raft::node_id(2));
 
     r.set_state(raft_state_e::CANDIDATE);
-    r.vote_for_nodeid(bmcl::None);
+    //r.vote_for_nodeid(bmcl::None);
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
     EXPECT_EQ(0, r.get_current_term());
@@ -1730,7 +1730,7 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     /* receive recent appendentries */
     msg_appendentries_t ae = {0};
     ae.term = 1;
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(r.is_follower());
     /* after accepting a leader, it's available as the last known leader */
@@ -1760,7 +1760,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     ae.prev_log_idx = 1;
     ae.prev_log_term = 1;
 
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_FALSE(r.is_candidate());
@@ -1868,7 +1868,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     EXPECT_EQ(0, r.get_log_count());
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.get_log_count());
 
@@ -1887,7 +1887,7 @@ void TestRaft_non_leader_recv_entry_msg_fails()
     msg_entry_t ety(0, 1, raft::raft_entry_data_t("aaa", 4));
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(ety);
+    auto cr = r.accept_entry(ety);
     EXPECT_TRUE(cr.isErr());
     EXPECT_EQ(raft::Error::NotLeader, cr.unwrapErr());
 }
@@ -1912,7 +1912,7 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     p->set_next_idx(4);
 
     /* receive appendentries messages */
-    r.raft_send_appendentries(p.unwrap());
+    r.send_appendentries(p.unwrap());
 
     bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1942,7 +1942,7 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     r.set_commit_idx(10);
 
     /* receive appendentries messages */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1967,7 +1967,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     r.set_state(raft_state_e::LEADER);
 
     /* receive appendentries messages */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
 
     bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1982,7 +1982,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* receive appendentries messages */
     r.append_entry(msg_entry_t(2, 100, raft::raft_entry_data_t("aaa", 4)));
     n->set_next_idx(1);
-    r.raft_send_appendentries(n.unwrap());
+    r.send_appendentries(n.unwrap());
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1998,7 +1998,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* set next_idx */
     /* receive appendentries messages */
     n->set_next_idx(2);
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2024,7 +2024,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     r.set_state(raft_state_e::LEADER);
 
     /* receive appendentries messages */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     msg_appendentries_t*  ae;;
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
@@ -2038,7 +2038,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     bmcl::Option<raft::Node&> n = r.get_node(raft::node_id(2));
     n->set_next_idx(1);
     r.append_entry(msg_entry_t(1, 100, raft::raft_entry_data_t("aaa", 4)));
-    r.raft_send_appendentries(n.unwrap());
+    r.send_appendentries(n.unwrap());
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2065,7 +2065,7 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
     r.set_state(raft_state_e::LEADER);
 
     /* receive appendentries messages */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2088,7 +2088,7 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     r.set_state(raft_state_e::LEADER);
     EXPECT_EQ(0, r.get_log_count());
 
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.get_log_count());
 }
@@ -2156,8 +2156,8 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
 
     /* receive mock success responses */
     msg_appendentries_response_t aer = {0};
@@ -2165,9 +2165,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(0, r.get_commit_idx());
-    r.raft_recv_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), aer);
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(1, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2177,17 +2177,17 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     /* send appendentries -
      * server will be waiting for response */
 
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
 
     /* receive mock success responses */
     aer.term = 1;
     aer.success = true;
     aer.current_idx = 2;
     aer.first_idx = 2;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(1, r.get_commit_idx());
-    r.raft_recv_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), aer);
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(2, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2223,7 +2223,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
 
     /* receive mock success responses */
     msg_appendentries_response_t aer = { 0 };
@@ -2231,7 +2231,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(1, r.get_commit_idx());
     /* leader will now have majority followers who have appended this log */
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2271,7 +2271,7 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(1, r.get_node(raft::node_id(2))->get_match_idx());
 
     /* receive msg 2 */
@@ -2279,7 +2279,7 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     aer.success = true;
     aer.current_idx = 2;
     aer.first_idx = 2;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(2, r.get_node(raft::node_id(2))->get_match_idx());
 
     /* receive msg 1 - because of duplication ie. unreliable network */
@@ -2287,7 +2287,7 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(2, r.get_node(raft::node_id(2))->get_match_idx());
 }
 
@@ -2321,17 +2321,17 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
     /* receive mock success responses */
     msg_appendentries_response_t aer = { 0 };
     aer.term = 1;
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(0, r.get_commit_idx());
-    r.raft_recv_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), aer);
     EXPECT_EQ(0, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.get_last_applied_idx());
@@ -2339,32 +2339,32 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     /* SECOND entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
     /* receive mock success responses */
     aer.term = 1;
     aer.success = true;
     aer.current_idx = 2;
     aer.first_idx = 2;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(0, r.get_commit_idx());
-    r.raft_recv_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), aer);
     EXPECT_EQ(0, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.get_last_applied_idx());
 
     /* THIRD entry log application */
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
     /* receive mock success responses
      * let's say that the nodes have majority within leader's current term */
     aer.term = 2;
     aer.success = true;
     aer.current_idx = 3;
     aer.first_idx = 3;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(0, r.get_commit_idx());
-    r.raft_recv_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), aer);
     EXPECT_EQ(3, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.get_last_applied_idx());
@@ -2414,7 +2414,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2431,7 +2431,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     aer.term = 2;
     aer.success = false;
     aer.current_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(2, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2487,7 +2487,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2503,7 +2503,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     aer.term = 2;
     aer.success = false;
     aer.current_idx = 4;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(4, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2522,7 +2522,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     aer.term = 2;
     aer.success = false;
     aer.current_idx = 4;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(3, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2563,8 +2563,8 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     /* append entries - we need two */
     r.append_entry(msg_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
 
-    r.raft_send_appendentries(raft::node_id(2));
-    r.raft_send_appendentries(raft::node_id(3));
+    r.send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(3));
 
     EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
     EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
@@ -2578,7 +2578,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    EXPECT_TRUE(r.raft_recv_appendentries_response(raft::node_id(2), aer).isSome());
+    EXPECT_TRUE(r.accept_appendentries_response(raft::node_id(2), aer).isSome());
     EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
@@ -2602,7 +2602,7 @@ TEST(TestLeader, recv_appendentries_response_without_node_fails)
     aer.success = true;
     aer.current_idx = 0;
     aer.first_idx = 0;
-    EXPECT_TRUE(r.raft_recv_appendentries_response(bmcl::None, aer).isSome());
+    EXPECT_TRUE(r.accept_appendentries_response(bmcl::None, aer).isSome());
 }
 
 TEST(TestLeader, recv_entry_resets_election_timeout)
@@ -2614,7 +2614,7 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
     r.raft_periodic(std::chrono::milliseconds(900));
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 }
@@ -2633,7 +2633,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     r.set_commit_idx(0);
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(0, r.msg_entry_response_committed(cr.unwrap()));
 
@@ -2655,7 +2655,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     r.set_commit_idx(0);
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(0, r.msg_entry_response_committed(cr.unwrap()));
     EXPECT_EQ(1, cr.unwrap().term);
@@ -2673,7 +2673,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     msg_entry_t e(2, 999, raft::raft_entry_data_t("aaa", 4));
     ae.entries = &e;
     ae.n_entries = 1;
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_TRUE(aer.unwrap().success);
@@ -2705,7 +2705,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     r.append_entry(msg_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
 
     /* receive entry */
-    auto cr = r.raft_recv_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("bbb", 4)));
+    auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("bbb", 4)));
     EXPECT_TRUE(cr.isOk());
 
     /* check if the slow node got sent this appendentries */
@@ -2738,7 +2738,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
 
     /* send appendentries -
      * server will be waiting for response */
-    r.raft_send_appendentries(raft::node_id(2));
+    r.send_appendentries(raft::node_id(2));
 
     /* receive mock success response */
     msg_appendentries_response_t aer;
@@ -2749,9 +2749,9 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     aer.first_idx = 0;
     bmcl::Option<raft::Node&> p = r.get_node(raft::node_id(2));
     EXPECT_TRUE(p.isSome());
-    r.raft_recv_appendentries_response(p->get_id(), aer);
+    r.accept_appendentries_response(p->get_id(), aer);
     EXPECT_EQ(1, p->get_next_idx());
-    r.raft_recv_appendentries_response(p->get_id(), aer);
+    r.accept_appendentries_response(p->get_id(), aer);
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2781,7 +2781,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
     aer.success = true;
     aer.current_idx = 0;
     aer.first_idx = 0;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2811,7 +2811,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     aer.success = true;
     aer.current_idx = 1;
     aer.first_idx = 1;
-    r.raft_recv_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), aer);
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2833,7 +2833,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
     ae.term = 6;
     ae.prev_log_idx = 6;
     ae.prev_log_term = 5;
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     /* after more recent appendentries from node 1, node 0 should
@@ -2857,7 +2857,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
     ae.term = 6;
     ae.prev_log_idx = 5;
     ae.prev_log_term = 5;
-    auto aer = r.raft_recv_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_TRUE(r.is_follower());
@@ -2941,13 +2941,13 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     msg_requestvote_response_t rvr = {0};
     rvr.term = 1;
     rvr.vote_granted = raft_request_vote::GRANTED;
-    r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
     msg_requestvote_t rv = {0};
     rv.term = 1;
-    auto opt = r.raft_recv_requestvote(raft::node_id(3), rv);
+    auto opt = r.accept_requestvote(raft::node_id(3), rv);
     EXPECT_TRUE(opt.isOk());
     EXPECT_EQ(raft_request_vote::NOT_GRANTED, opt.unwrap().vote_granted);
 }
@@ -2975,12 +2975,12 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     msg_requestvote_response_t rvr = {0};
     rvr.term = 1;
     rvr.vote_granted = raft_request_vote::GRANTED;
-    r.raft_recv_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), rvr);
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
     msg_requestvote_t rv = {0};
     rv.term = 2;
-    EXPECT_TRUE(r.raft_recv_requestvote(raft::node_id(3), rv).isOk());
+    EXPECT_TRUE(r.accept_requestvote(raft::node_id(3), rv).isOk());
     EXPECT_TRUE(r.is_follower());
 }

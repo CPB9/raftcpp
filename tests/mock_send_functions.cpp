@@ -91,7 +91,7 @@ void Sender::sender_poll_msgs(raft::node_id from)
         case raft_message_type_e::RAFT_MSG_APPENDENTRIES:
         {
             EXPECT_EQ(sizeof(msg_appendentries_t), m.data.size());
-            auto r = s.raft->raft_recv_appendentries(m.sender, *(msg_appendentries_t*)m.data.data());
+            auto r = s.raft->accept_appendentries(m.sender, *(msg_appendentries_t*)m.data.data());
             EXPECT_TRUE(r.isOk());
             msg_appendentries_response_t response = r.unwrap();
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE);
@@ -99,12 +99,12 @@ void Sender::sender_poll_msgs(raft::node_id from)
         break;
         case raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE:
             EXPECT_EQ(sizeof(msg_appendentries_response_t), m.data.size());
-            s.raft->raft_recv_appendentries_response(m.sender, *(msg_appendentries_response_t*)m.data.data());
+            s.raft->accept_appendentries_response(m.sender, *(msg_appendentries_response_t*)m.data.data());
             break;
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE:
         {
             EXPECT_EQ(sizeof(msg_requestvote_t), m.data.size());
-            auto r = s.raft->raft_recv_requestvote(m.sender, *(msg_requestvote_t*)m.data.data());
+            auto r = s.raft->accept_requestvote(m.sender, *(msg_requestvote_t*)m.data.data());
             EXPECT_TRUE(r.isOk());
             msg_requestvote_response_t response = r.unwrap();
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
@@ -112,12 +112,12 @@ void Sender::sender_poll_msgs(raft::node_id from)
         break;
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE:
             EXPECT_EQ(sizeof(msg_requestvote_response_t), m.data.size());
-            s.raft->raft_recv_requestvote_response(m.sender, *(msg_requestvote_response_t*)m.data.data());
+            s.raft->accept_requestvote_response(m.sender, *(msg_requestvote_response_t*)m.data.data());
             break;
         case raft_message_type_e::RAFT_MSG_ENTRY:
         {
             EXPECT_EQ(sizeof(msg_entry_t), m.data.size());
-            auto r = s.raft->raft_recv_entry(*(msg_entry_t*)m.data.data());
+            auto r = s.raft->accept_entry(*(msg_entry_t*)m.data.data());
             EXPECT_TRUE(r.isOk());
             msg_entry_response_t response = r.unwrap();
             __append_msg(me, m.sender, (msg_entry_t *)&response, sizeof(response), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);

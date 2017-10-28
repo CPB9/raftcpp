@@ -59,7 +59,7 @@ enum class node_status
     DISCONNECTING,
 };
 
-enum class node_id : int {};
+enum class node_id : std::size_t {};
 
 struct raft_entry_data_t
 {
@@ -197,7 +197,7 @@ using func_log_f = std::function<void(const Server* raft, const bmcl::Option<con
  * @param[in] raft The Raft server making this callback
  * @param[in] voted_for The node we voted for
  * @return 0 on success */
-using func_persist_int_f = std::function<bmcl::Option<Error>(Server* raft, int node)>;
+using func_persist_int_f = std::function<bmcl::Option<Error>(Server* raft, std::size_t node)>;
 
 /** Callback for saving log entry changes.
  *
