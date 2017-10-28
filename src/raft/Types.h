@@ -63,8 +63,10 @@ enum class node_id : int {};
 
 struct raft_entry_data_t
 {
-    void *buf;
-    unsigned int len;
+    raft_entry_data_t() : buf(nullptr), len(0) {}
+    raft_entry_data_t(void* buf, std::size_t len) : buf(buf), len(len) {}
+    void* buf;
+    std::size_t len;
 };
 
 /** Entry that is stored in the server's entry log. */
