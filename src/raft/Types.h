@@ -13,7 +13,10 @@
 #include <functional>
 #include <bmcl/Option.h>
 
-enum class RaftError : int
+namespace raft
+{
+
+enum class Error : int
 {
     Any = -1,
     NotLeader = -2,
@@ -32,31 +35,31 @@ enum class raft_request_vote
 
 enum class raft_state_e
 {
-    RAFT_STATE_NONE,
-    RAFT_STATE_FOLLOWER,
-    RAFT_STATE_CANDIDATE,
-    RAFT_STATE_LEADER
+    NONE,
+    FOLLOWER,
+    CANDIDATE,
+    LEADER
 } ;
 
-enum class raft_logtype_e
+enum class logtype_e
 {
-    RAFT_LOGTYPE_NORMAL,
-    RAFT_LOGTYPE_ADD_NONVOTING_NODE,
-    RAFT_LOGTYPE_ADD_NODE,
-    RAFT_LOGTYPE_DEMOTE_NODE,
-    RAFT_LOGTYPE_REMOVE_NODE,
-    RAFT_LOGTYPE_NUM,
+    NORMAL,
+    ADD_NONVOTING_NODE,
+    ADD_NODE,
+    DEMOTE_NODE,
+    REMOVE_NODE,
+    NUM,
 };
 
-enum class raft_node_status
+enum class node_status
 {
-    RAFT_NODE_STATUS_DISCONNECTED,
-    RAFT_NODE_STATUS_CONNECTED,
-    RAFT_NODE_STATUS_CONNECTING,
-    RAFT_NODE_STATUS_DISCONNECTING,
+    DISCONNECTED,
+    CONNECTED,
+    CONNECTING,
+    DISCONNECTING,
 };
 
-enum class raft_node_id : int {};
+enum class node_id : int {};
 
 struct raft_entry_data_t
 {
@@ -69,21 +72,21 @@ struct raft_entry_t
 {
     unsigned int term;      /**< the entry's term at the point it was created */
     unsigned int id;        /**< the entry's unique ID */
-    raft_logtype_e type;    /**< type of entry */
+    logtype_e type;    /**< type of entry */
     raft_entry_data_t data;
 
     inline bool is_voting_cfg_change() const
     {
-        return raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == type || raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == type;
+        return logtype_e::ADD_NODE == type || logtype_e::DEMOTE_NODE == type;
     }
 
     inline bool is_cfg_change() const
     {
         return (
-            raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == type ||
-            raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE == type ||
-            raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == type ||
-            raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE == type);
+            logtype_e::ADD_NODE == type ||
+            logtype_e::ADD_NONVOTING_NODE == type ||
+            logtype_e::DEMOTE_NODE == type ||
+            logtype_e::REMOVE_NODE == type);
     }
 
 };
@@ -108,7 +111,7 @@ struct msg_entry_response_t
 struct msg_requestvote_t
 {
     int term;                       /**< currentTerm, to force other leader/candidate to step down */
-    raft_node_id candidate_id;      /**< candidate requesting vote */
+    node_id candidate_id;      /**< candidate requesting vote */
     std::size_t last_log_idx;       /**< index of candidate's last log entry */
     std::size_t last_log_term;      /**< term of candidate's last log entry */
 };
@@ -151,29 +154,29 @@ struct msg_appendentries_response_t
     std::size_t first_idx;      /**< The first idx that we received within the appendentries message */
 } ;
 
-class Raft;
-class RaftNode;
+class Server;
+class Node;
 
 /** Callback for sending request vote messages.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node's ID that we are sending this message to
  * @param[in] msg The request vote message to be sent
  * @return 0 on success */
-using func_send_requestvote_f = std::function<bmcl::Option<RaftError>(Raft* raft, const RaftNode& node, const msg_requestvote_t& msg)>;
+using func_send_requestvote_f = std::function<bmcl::Option<Error>(Server* raft, const Node& node, const msg_requestvote_t& msg)>;
 
 /** Callback for sending append entries messages.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node's ID that we are sending this message to
  * @param[in] msg The appendentries message to be sent
  * @return 0 on success */
-using func_send_appendentries_f = std::function<bmcl::Option<RaftError>(Raft* raft, const RaftNode& node, const msg_appendentries_t& msg)>;
+using func_send_appendentries_f = std::function<bmcl::Option<Error>(Server* raft, const Node& node, const msg_appendentries_t& msg)>;
 
 /** Callback for detecting when non-voting nodes have obtained enough logs.
  * This triggers only when there are no pending configuration changes.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node
  * @return 0 does not want to be notified again; otherwise -1 */
-using func_node_has_sufficient_logs_f = std::function<bool(Raft* raft, const RaftNode& node)>;
+using func_node_has_sufficient_logs_f = std::function<bool(Server* raft, const Node& node)>;
 
 #ifndef HAVE_FUNC_LOG
 #define HAVE_FUNC_LOG
@@ -183,7 +186,7 @@ using func_node_has_sufficient_logs_f = std::function<bool(Raft* raft, const Raf
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node that is the subject of this log. Could be NULL.
  * @param[in] buf The buffer that was logged */
-using func_log_f = std::function<void(const Raft* raft, const bmcl::Option<const RaftNode&> node, const char *buf)>;
+using func_log_f = std::function<void(const Server* raft, const bmcl::Option<const Node&> node, const char *buf)>;
 #endif
 
 /** Callback for saving who we voted for to disk.
@@ -191,7 +194,7 @@ using func_log_f = std::function<void(const Raft* raft, const bmcl::Option<const
  * @param[in] raft The Raft server making this callback
  * @param[in] voted_for The node we voted for
  * @return 0 on success */
-using func_persist_int_f = std::function<bmcl::Option<RaftError>(Raft* raft, int node)>;
+using func_persist_int_f = std::function<bmcl::Option<Error>(Server* raft, int node)>;
 
 /** Callback for saving log entry changes.
  *
@@ -213,7 +216,7 @@ using func_persist_int_f = std::function<bmcl::Option<RaftError>(Raft* raft, int
  *    the memory is temporary.
  * @param[in] entry_idx The entries index in the log
  * @return 0 on success */
-using func_logentry_event_f = std::function<int(const Raft* raft, const raft_entry_t& entry, int entry_idx)>;
+using func_logentry_event_f = std::function<int(const Server* raft, const raft_entry_t& entry, int entry_idx)>;
 
 struct raft_cbs_t
 {
@@ -267,3 +270,4 @@ struct raft_cbs_t
     func_log_f log;
 };
 
+}

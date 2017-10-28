@@ -3,10 +3,13 @@
 #include <bmcl/Option.h>
 #include "Types.h"
 
-class Raft;
+namespace raft
+{
+
+class Server;
 
 
-class RaftLog
+class Logger
 {
     struct log_private_t
     {   /* we compact the log, and thus need to increment the Base Log Index */
@@ -22,7 +25,7 @@ public:
     * Don't add entry if we've already added this entry (based off ID)
     * Don't add entries with ID=0
     * @return 0 if unsucessful; 1 otherwise */
-    bmcl::Option<RaftError> log_append_entry(Raft* raft, const raft_entry_t& c);
+    bmcl::Option<Error> log_append_entry(Server* raft, const raft_entry_t& c);
 
     /**
     * @return number of entries held within log */
@@ -30,7 +33,7 @@ public:
 
     /**
     * Delete all logs from this log onwards */
-    void log_delete(Raft* raft, std::size_t idx);
+    void log_delete(Server* raft, std::size_t idx);
 
     /**
     * Empty the queue. */
@@ -39,7 +42,7 @@ public:
     /**
     * Remove oldest entry
     * @return oldest entry */
-    bmcl::Option<raft_entry_t> log_poll(Raft* raft);
+    bmcl::Option<raft_entry_t> log_poll(Server* raft);
 
     bmcl::Option<const raft_entry_t*> log_get_from_idx(std::size_t idx, std::size_t *n_etys) const;
 
@@ -54,3 +57,5 @@ public:
 private:
     log_private_t _me;
 };
+
+}

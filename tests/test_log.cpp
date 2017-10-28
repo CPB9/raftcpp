@@ -3,16 +3,17 @@
 #include "raft/Raft.h"
 #include "raft/Log.h"
 
+using namespace raft;
 
 TEST(TestLog, new_is_empty)
 {
-    RaftLog l;
+    raft::Logger l;
     EXPECT_EQ(0, l.log_count());
 }
 
 TEST(TestLog, append_is_not_empty)
 {
-    RaftLog l;
+    raft::Logger l;
     raft_entry_t e;
 
     e.id = 1;
@@ -23,7 +24,7 @@ TEST(TestLog, append_is_not_empty)
 
 TEST(TestLog, get_at_idx)
 {
-    RaftLog l;
+    raft::Logger l;
     raft_entry_t e1, e2, e3;
 
     e1.id = 1;
@@ -41,7 +42,7 @@ TEST(TestLog, get_at_idx)
 
 TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 {
-    RaftLog l;
+    raft::Logger l;
     raft_entry_t e1;
 
     e1.id = 1;
@@ -51,14 +52,14 @@ TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 
 TEST(TestLog, delete)
 {
-    Raft r(raft_node_id(1), true);
-    RaftLog l;
+    raft::Server r(raft::node_id(1), true);
+    raft::Logger l;
     raft_entry_t e1, e2, e3;
 
     std::deque<raft_entry_t> queue;
 
     raft_cbs_t funcs = {0};
-    funcs.log_pop = [&queue](const Raft* raft, const raft_entry_t& entry, int entry_idx) -> int
+    funcs.log_pop = [&queue](const raft::Server* raft, const raft_entry_t& entry, int entry_idx) -> int
     {
         queue.push_back(entry);
         return 0;
@@ -92,7 +93,7 @@ TEST(TestLog, delete)
 
 TEST(TestLog, delete_onwards)
 {
-    RaftLog l;
+    raft::Logger l;
     raft_entry_t e1, e2, e3;
 
     e1.id = 1;
@@ -114,7 +115,7 @@ TEST(TestLog, delete_onwards)
 
 TEST(TestLog, peektail)
 {
-    RaftLog l;
+    raft::Logger l;
     raft_entry_t e1, e2, e3;
 
     e1.id = 1;

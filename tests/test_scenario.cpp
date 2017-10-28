@@ -3,20 +3,22 @@
 #include "raft/Log.h"
 #include "mock_send_functions.h"
 
+using namespace raft;
+
 TEST(TestScenario, leader_appears)
 {
-    std::vector<Raft> r;
+    std::vector<raft::Server> r;
     Sender sender;
 
     const std::size_t Count = 3;
     for (std::size_t i = 0; i < Count; ++i)
     {
-        r.emplace_back(Raft(raft_node_id(i), true));
-        Raft& rx = r.back();
+        r.emplace_back(raft::Server(raft::node_id(i), true));
+        raft::Server& rx = r.back();
 
         for(std::size_t j = 1; j < Count; ++j)
         {
-            rx.add_node(raft_node_id((i + j) % Count));
+            rx.add_node(raft::node_id((i + j) % Count));
         }
         rx.set_election_timeout(std::chrono::milliseconds(500));
     }
@@ -29,10 +31,10 @@ TEST(TestScenario, leader_appears)
     for (std::size_t i = 0; i < 3; ++i)
     {
         raft_cbs_t funcs = { 0 };
-        funcs.send_requestvote = [&sender](const Raft* raft, const RaftNode& node, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, node, msg); };
-        funcs.send_appendentries = [&sender](const Raft* raft, const RaftNode& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
-        funcs.persist_term = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
-        funcs.persist_vote = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
+        funcs.send_requestvote = [&sender](const raft::Server* raft, const raft::Node& node, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, node, msg); };
+        funcs.send_appendentries = [&sender](const raft::Server* raft, const raft::Node& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
+        funcs.persist_term = [&sender](raft::Server * raft, int node) -> bmcl::Option<raft::Error> { return bmcl::None; };
+        funcs.persist_vote = [&sender](raft::Server * raft, int node) -> bmcl::Option<raft::Error> { return bmcl::None; };
         r[i].set_callbacks(funcs);
 
     }
@@ -49,12 +51,12 @@ one_more_time:
         for (std::size_t j = 0; j < 3; j++)
         {
             std::cout << " (" << r[j].get_current_term() << ", "<< (int)r[j].get_state()<< ")";
-            sender.sender_poll_msgs(raft_node_id(j));
+            sender.sender_poll_msgs(raft::node_id(j));
         }
         std::cout << std::endl;
 
         for (std::size_t j = 0; j < 3; j++)
-            if (sender.sender_msgs_available(raft_node_id(j)))
+            if (sender.sender_msgs_available(raft::node_id(j)))
                 goto one_more_time;
 
         for (std::size_t j = 0; j < 3; j++)

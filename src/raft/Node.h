@@ -12,7 +12,10 @@
 #include <bitset>
 #include "Types.h"
 
-class RaftNode
+namespace raft
+{
+
+class Node
 {
     enum BitFlags
     {
@@ -22,7 +25,7 @@ class RaftNode
     };
 
 public:
-    explicit RaftNode(raft_node_id id)
+    explicit Node(node_id id)
     {
         _me.next_idx = 1;
         _me.match_idx = 0;
@@ -30,7 +33,7 @@ public:
         _me.flags.set(RAFT_NODE_VOTING, true);
     }
 
-    raft_node_id get_id() const { return _me.id; }
+    node_id get_id() const { return _me.id; }
 
     std::size_t get_next_idx() const { return _me.next_idx; }
     void set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _me.next_idx = nextIdx < 1 ? 1 : nextIdx; }
@@ -48,12 +51,14 @@ public:
     bool has_sufficient_logs() const { return _me.flags.test(RAFT_NODE_HAS_SUFFICIENT_LOG); }
 
 private:
-    struct raft_node_private_t
+    struct node_private_t
     {
         std::size_t next_idx;
         std::size_t match_idx;
-        raft_node_id id;
+        node_id id;
         std::bitset<8> flags;
     };
-    raft_node_private_t _me;
+    node_private_t _me;
 };
+
+}

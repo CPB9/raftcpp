@@ -17,41 +17,41 @@
 #include "Raft.h"
 
 
-#define INITIAL_CAPACITY 10
+namespace raft
+{
 
-
-void RaftLog::log_clear()
+void Logger::log_clear()
 {
     _me.entries.clear();
     _me.base = 0;
 }
 
-std::size_t RaftLog::log_count() const
+std::size_t Logger::log_count() const
 {
     return _me.entries.size();
 }
 
-void RaftLog::log_empty()
+void Logger::log_empty()
 {
     _me.entries.clear();
 }
 
-std::size_t RaftLog::log_get_current_idx() const
+std::size_t Logger::log_get_current_idx() const
 {
     return log_count() + _me.base;
 }
 
-bmcl::Option<RaftError> RaftLog::log_append_entry(Raft* raft, const raft_entry_t& c)
+bmcl::Option<Error> Logger::log_append_entry(Server* raft, const raft_entry_t& c)
 {
     if (raft)
     {
         const raft_cbs_t& cb = raft->get_callbacks();
         if (cb.log_offer)
         {
-            RaftError e = (RaftError)cb.log_offer(raft, c, log_get_current_idx() + 1);
-            raft->raft_offer_log(c, log_get_current_idx() + 1);
-            if (e == RaftError::Shutdown)
-                return RaftError::Shutdown;
+            Error e = (Error)cb.log_offer(raft, c, log_get_current_idx() + 1);
+            raft->offer_log(c, log_get_current_idx() + 1);
+            if (e == Error::Shutdown)
+                return Error::Shutdown;
         }
     }
 
@@ -59,7 +59,7 @@ bmcl::Option<RaftError> RaftLog::log_append_entry(Raft* raft, const raft_entry_t
     return bmcl::None;
 }
 
-bmcl::Option<const raft_entry_t*> RaftLog::log_get_from_idx(std::size_t idx, std::size_t *n_etys) const
+bmcl::Option<const raft_entry_t*> Logger::log_get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
     assert(idx > _me.base);
     /* idx starts at 1 */
@@ -76,7 +76,7 @@ bmcl::Option<const raft_entry_t*> RaftLog::log_get_from_idx(std::size_t idx, std
     return &_me.entries[i];
 }
 
-bmcl::Option<const raft_entry_t&> RaftLog::log_get_at_idx(std::size_t idx) const
+bmcl::Option<const raft_entry_t&> Logger::log_get_at_idx(std::size_t idx) const
 {
     assert(idx > _me.base);
     /* idx starts at 1 */
@@ -90,7 +90,7 @@ bmcl::Option<const raft_entry_t&> RaftLog::log_get_at_idx(std::size_t idx) const
 
 }
 
-void RaftLog::log_delete(Raft* raft, std::size_t idx)
+void Logger::log_delete(Server* raft, std::size_t idx)
 {
     assert(idx > _me.base);
 
@@ -107,12 +107,12 @@ void RaftLog::log_delete(Raft* raft, std::size_t idx)
     {
         if (raft && raft->get_callbacks().log_pop)
             raft->get_callbacks().log_pop(raft, _me.entries.back(), _me.base + _me.entries.size());
-        raft->raft_pop_log(_me.entries.back(), _me.base + _me.entries.size());
+        raft->pop_log(_me.entries.back(), _me.base + _me.entries.size());
         _me.entries.pop_back();
     }
 }
 
-bmcl::Option<raft_entry_t> RaftLog::log_poll(Raft* raft)
+bmcl::Option<raft_entry_t> Logger::log_poll(Server* raft)
 {
     if (_me.entries.empty())
         return bmcl::None;
@@ -125,9 +125,11 @@ bmcl::Option<raft_entry_t> RaftLog::log_poll(Raft* raft)
     return elem;
 }
 
-bmcl::Option<const raft_entry_t&> RaftLog::log_peektail() const
+bmcl::Option<const raft_entry_t&> Logger::log_peektail() const
 {
     if (_me.entries.empty())
         return bmcl::None;
     return _me.entries.back();
+}
+
 }
