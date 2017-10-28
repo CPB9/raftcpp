@@ -14,9 +14,7 @@ TEST(TestLog, new_is_empty)
 TEST(TestLog, append_is_not_empty)
 {
     raft::Logger l;
-    raft_entry_t e;
-
-    e.id = 1;
+    raft_entry_t e(0, 1);
 
     EXPECT_FALSE(l.log_append_entry(nullptr, e).isSome());
     EXPECT_EQ(1, l.log_count());
@@ -25,13 +23,10 @@ TEST(TestLog, append_is_not_empty)
 TEST(TestLog, get_at_idx)
 {
     raft::Logger l;
-    raft_entry_t e1, e2, e3;
+    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    e2.id = 2;
     EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    e3.id = 3;
     EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
     EXPECT_EQ(3, l.log_count());
 
@@ -43,9 +38,8 @@ TEST(TestLog, get_at_idx)
 TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 {
     raft::Logger l;
-    raft_entry_t e1;
+    raft_entry_t e1(0, 1);
 
-    e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
     EXPECT_FALSE(l.log_get_at_idx(2).isSome());
 }
@@ -54,23 +48,20 @@ TEST(TestLog, delete)
 {
     raft::Server r(raft::node_id(1), true);
     raft::Logger l;
-    raft_entry_t e1, e2, e3;
+    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
     std::deque<raft_entry_t> queue;
 
     raft_cbs_t funcs = {0};
-    funcs.log_pop = [&queue](const raft::Server* raft, const raft_entry_t& entry, int entry_idx) -> int
+    funcs.log_pop = [&queue](const raft::Server* raft, const raft_entry_t& entry, std::size_t entry_idx) -> int
     {
         queue.push_back(entry);
         return 0;
     };
     r.set_callbacks(funcs);
 
-    e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    e2.id = 2;
     EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    e3.id = 3;
     EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
     EXPECT_EQ(3, l.log_count());
 
@@ -78,7 +69,7 @@ TEST(TestLog, delete)
 
     raft_entry_t e = queue.front();
     queue.pop_front();
-    unsigned int id = e.id;
+    std::size_t id = e.id;
     EXPECT_EQ(id, e3.id);
 
     EXPECT_EQ(2, l.log_count());
@@ -94,13 +85,10 @@ TEST(TestLog, delete)
 TEST(TestLog, delete_onwards)
 {
     raft::Logger l;
-    raft_entry_t e1, e2, e3;
+    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    e2.id = 2;
     EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    e3.id = 3;
     EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
     EXPECT_EQ(3, l.log_count());
 
@@ -116,13 +104,10 @@ TEST(TestLog, delete_onwards)
 TEST(TestLog, peektail)
 {
     raft::Logger l;
-    raft_entry_t e1, e2, e3;
+    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    e2.id = 2;
     EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    e3.id = 3;
     EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
     EXPECT_EQ(3, l.log_count());
     EXPECT_TRUE(l.log_peektail().isSome());

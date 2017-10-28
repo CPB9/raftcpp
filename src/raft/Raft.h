@@ -25,9 +25,9 @@ class Server
     struct server_private_t
     {
         /* Persistent state: */
-        int current_term;                       /**< the server's best guess of what the current term is starts at zero */
-        bmcl::Option<node_id> voted_for;   /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
-        Logger log;                            /**< the log which is replicated */
+        std::size_t  current_term;              /**< the server's best guess of what the current term is starts at zero */
+        bmcl::Option<node_id> voted_for;        /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
+        Logger log;                             /**< the log which is replicated */
 
         /* Volatile state: */
         std::size_t commit_idx;                                 /**< idx of highest log entry known to be committed */
@@ -67,8 +67,8 @@ public:
     std::size_t get_num_nodes() const { return _me.nodes.size(); }
 
     std::size_t get_num_voting_nodes() const;
-    inline int get_current_term() const { return _me.current_term; }
-    void set_current_term(int term);
+    inline std::size_t get_current_term() const { return _me.current_term; }
+    void set_current_term(std::size_t term);
     std::size_t get_nvotes_for_me() const;
     inline bmcl::Option<node_id> get_voted_for() const { return _me.voted_for; }
     void vote_for_nodeid(bmcl::Option<node_id> nodeid);
@@ -99,7 +99,7 @@ public:
     void set_commit_idx(std::size_t commit_idx);
     bmcl::Option<Error> append_entry(const raft_entry_t& ety);
     int msg_entry_response_committed(const msg_entry_response_t& r) const;
-    bmcl::Option<int> get_last_log_term() const;
+    bmcl::Option<std::size_t> get_last_log_term() const;
     bmcl::Option<Error> apply_all();
 
 public:

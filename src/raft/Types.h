@@ -72,8 +72,9 @@ struct raft_entry_data_t
 /** Entry that is stored in the server's entry log. */
 struct raft_entry_t
 {
-    unsigned int term;      /**< the entry's term at the point it was created */
-    unsigned int id;        /**< the entry's unique ID */
+    raft_entry_t(std::size_t term, std::size_t id, raft_entry_data_t data = raft_entry_data_t{}) : term(term), id(id), type(logtype_e::NORMAL), data(data) {}
+    std::size_t term;      /**< the entry's term at the point it was created */
+    std::size_t id;        /**< the entry's unique ID */
     logtype_e type;    /**< type of entry */
     raft_entry_data_t data;
 
@@ -102,8 +103,8 @@ typedef raft_entry_t msg_entry_t;
  * Indicates to client if entry was committed or not. */
 struct msg_entry_response_t
 {
-    unsigned int id;    /**< the entry's unique ID */
-    int term;           /**< the entry's term */
+    std::size_t id;     /**< the entry's unique ID */
+    std::size_t term;   /**< the entry's term */
     std::size_t idx;    /**< the entry's index */
 };
 
@@ -112,8 +113,8 @@ struct msg_entry_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_requestvote_t
 {
-    int term;                       /**< currentTerm, to force other leader/candidate to step down */
-    node_id candidate_id;      /**< candidate requesting vote */
+    std::size_t  term;              /**< currentTerm, to force other leader/candidate to step down */
+    node_id candidate_id;           /**< candidate requesting vote */
     std::size_t last_log_idx;       /**< index of candidate's last log entry */
     std::size_t last_log_term;      /**< term of candidate's last log entry */
 };
@@ -122,7 +123,7 @@ struct msg_requestvote_t
  * Indicates if node has accepted the server's vote request. */
 struct msg_requestvote_response_t
 {
-    int term;                           /**< currentTerm, for candidate to update itself */
+    std::size_t term;                   /**< currentTerm, for candidate to update itself */
     raft_request_vote vote_granted;     /**< true means candidate received vote */
 };
 
@@ -132,9 +133,9 @@ struct msg_requestvote_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_t
 {
-    int term;                   /**< currentTerm, to force other leader/candidate to step down */
+    std::size_t term;           /**< currentTerm, to force other leader/candidate to step down */
     std::size_t prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
-    int prev_log_term;          /**< the term of the log just before the newest entry for the node who receives this message */
+    std::size_t prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
     std::size_t leader_commit;  /**< the index of the entry that has been appended to the majority of the cluster. Entries up to this index will be applied to the FSM */
     std::size_t n_entries;      /**< number of entries within this message */
     const msg_entry_t* entries; /**< array of entries within this message */
@@ -145,7 +146,7 @@ struct msg_appendentries_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_response_t
 {
-    int term;                   /**< currentTerm, to force other leader/candidate to step down */
+    std::size_t term;           /**< currentTerm, to force other leader/candidate to step down */
     bool success;               /**< true if follower contained entry matching prevLogidx and prevLogTerm */
 
     /* Non-Raft fields follow: */
@@ -218,7 +219,7 @@ using func_persist_int_f = std::function<bmcl::Option<Error>(Server* raft, int n
  *    the memory is temporary.
  * @param[in] entry_idx The entries index in the log
  * @return 0 on success */
-using func_logentry_event_f = std::function<int(const Server* raft, const raft_entry_t& entry, int entry_idx)>;
+using func_logentry_event_f = std::function<int(const Server* raft, const raft_entry_t& entry, std::size_t entry_idx)>;
 
 struct raft_cbs_t
 {

@@ -797,7 +797,7 @@ void Server::vote_for_nodeid(bmcl::Option<node_id> nodeid)
     assert(_me.cb.persist_vote);
     int id = -1;
     if (nodeid.isSome()) id = (int)nodeid.unwrap();
-    _me.cb.persist_vote(this, -1);
+    _me.cb.persist_vote(this, id);
 }
 
 int Server::msg_entry_response_committed(const msg_entry_response_t& r) const
@@ -919,7 +919,7 @@ std::size_t Server::get_num_voting_nodes() const
     return num;
 }
 
-void Server::set_current_term(const int term)
+void Server::set_current_term(std::size_t term)
 {
     if (_me.current_term < term)
     {
@@ -968,7 +968,7 @@ const Node& Server::get_my_node()
     return n.unwrap();
 }
 
-bmcl::Option<int> Server::get_last_log_term() const
+bmcl::Option<std::size_t> Server::get_last_log_term() const
 {
     std::size_t current_idx = get_current_idx();
     if (0 == current_idx)
