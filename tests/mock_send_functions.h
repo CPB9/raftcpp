@@ -44,7 +44,7 @@ class Sender
 {
 public:
     explicit Sender(Raft* r = nullptr) { if (r) add(r); }
-    void add(Raft* r) { _servers[r->raft_get_my_nodeid()].raft = r; }
+    void add(Raft* r) { _servers[r->get_my_nodeid()].raft = r; }
     bool sender_msgs_available(raft_node_id from);
     void sender_poll_msgs(raft_node_id from);
     bmcl::Option<msg_t> sender_poll_msg_data(const Raft& from);

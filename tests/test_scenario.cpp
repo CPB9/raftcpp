@@ -16,9 +16,9 @@ TEST(TestScenario, leader_appears)
 
         for(std::size_t j = 1; j < Count; ++j)
         {
-            rx.raft_add_node(raft_node_id((i + j) % Count));
+            rx.add_node(raft_node_id((i + j) % Count));
         }
-        rx.raft_set_election_timeout(std::chrono::milliseconds(500));
+        rx.set_election_timeout(std::chrono::milliseconds(500));
     }
 
     for (std::size_t i = 0; i < 3; ++i)
@@ -33,7 +33,7 @@ TEST(TestScenario, leader_appears)
         funcs.send_appendentries = [&sender](const Raft* raft, const RaftNode& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
         funcs.persist_term = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
         funcs.persist_vote = [&sender](Raft * raft, int node) -> bmcl::Option<RaftError> { return bmcl::None; };
-        r[i].raft_set_callbacks(funcs);
+        r[i].set_callbacks(funcs);
 
     }
 
@@ -48,7 +48,7 @@ one_more_time:
 
         for (std::size_t j = 0; j < 3; j++)
         {
-            std::cout << " (" << r[j].raft_get_current_term() << ", "<< (int)r[j].raft_get_state()<< ")";
+            std::cout << " (" << r[j].get_current_term() << ", "<< (int)r[j].get_state()<< ")";
             sender.sender_poll_msgs(raft_node_id(j));
         }
         std::cout << std::endl;
@@ -63,7 +63,7 @@ one_more_time:
 
     int leaders = 0;
     for (std::size_t j = 0; j < 3; j++)
-        if (r[j].raft_is_leader())
+        if (r[j].is_leader())
             leaders += 1;
 
     EXPECT_NE(0, leaders);

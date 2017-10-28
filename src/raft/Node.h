@@ -30,23 +30,23 @@ public:
         _me.flags.set(RAFT_NODE_VOTING, true);
     }
 
-    std::size_t raft_node_get_next_idx() const { return _me.next_idx; }
-    void raft_node_set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _me.next_idx = nextIdx < 1 ? 1 : nextIdx; }
+    raft_node_id get_id() const { return _me.id; }
 
-    std::size_t raft_node_get_match_idx() const { return _me.match_idx; }
-    void raft_node_set_match_idx(std::size_t matchIdx) { _me.match_idx = matchIdx; }
+    std::size_t get_next_idx() const { return _me.next_idx; }
+    void set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _me.next_idx = nextIdx < 1 ? 1 : nextIdx; }
 
-    bool raft_node_has_vote_for_me() const { return _me.flags.test(RAFT_NODE_VOTED_FOR_ME); }
-    void raft_node_vote_for_me(bool vote) { _me.flags.set(RAFT_NODE_VOTED_FOR_ME, vote); }
+    std::size_t get_match_idx() const { return _me.match_idx; }
+    void set_match_idx(std::size_t matchIdx) { _me.match_idx = matchIdx; }
 
-    void raft_node_set_voting(bool voting) { _me.flags.set(RAFT_NODE_VOTING, voting); }
-    bool raft_node_is_voting() const { return _me.flags.test(RAFT_NODE_VOTING); }
+    bool has_vote_for_me() const { return _me.flags.test(RAFT_NODE_VOTED_FOR_ME); }
+    void vote_for_me(bool vote) { _me.flags.set(RAFT_NODE_VOTED_FOR_ME, vote); }
 
-    void raft_node_set_has_sufficient_logs() { _me.flags.set(RAFT_NODE_HAS_SUFFICIENT_LOG, true); }
-    bool raft_node_has_sufficient_logs() const { return _me.flags.test(RAFT_NODE_HAS_SUFFICIENT_LOG); }
+    void set_voting(bool voting) { _me.flags.set(RAFT_NODE_VOTING, voting); }
+    bool is_voting() const { return _me.flags.test(RAFT_NODE_VOTING); }
 
-    raft_node_id raft_node_get_id() const { return _me.id; }
-    bmcl::Option<raft_node_id> raft_node_get_id_as_option() const { return _me.id; }
+    void set_has_sufficient_logs() { _me.flags.set(RAFT_NODE_HAS_SUFFICIENT_LOG, true); }
+    bool has_sufficient_logs() const { return _me.flags.test(RAFT_NODE_HAS_SUFFICIENT_LOG); }
+
 private:
     struct raft_node_private_t
     {

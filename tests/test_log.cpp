@@ -63,7 +63,7 @@ TEST(TestLog, delete)
         queue.push_back(entry);
         return 0;
     };
-    r.raft_set_callbacks(funcs);
+    r.set_callbacks(funcs);
 
     e1.id = 1;
     EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());

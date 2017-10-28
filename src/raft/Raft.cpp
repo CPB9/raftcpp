@@ -57,58 +57,45 @@ Raft::Raft(raft_node_id id, bool is_voting, const raft_cbs_t& funcs)
     _me.election_timeout = std::chrono::milliseconds(1000);
     raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
 
-    auto r = raft_add_node(id);
+    auto r = add_node(id);
     assert(r.isSome());
-    r.unwrap().raft_node_set_voting(is_voting);
-    _me.node = r.unwrap().raft_node_get_id();
-    raft_set_callbacks(funcs);
+    r.unwrap().set_voting(is_voting);
+    _me.node = r.unwrap().get_id();
+    set_callbacks(funcs);
 }
 
-void Raft::raft_set_callbacks(const raft_cbs_t& funcs)
-{
-    _me.cb = funcs;
-}
-
-void Raft::raft_delete_entry_from_idx(std::size_t idx)
-{
-    assert(_me.commit_idx < idx);
-    if (_me.voting_cfg_change_log_idx.isSome() && idx <= _me.voting_cfg_change_log_idx.unwrap())
-        _me.voting_cfg_change_log_idx.clear();
-    _me.log.log_delete(this, idx);
-}
-
-void Raft::raft_election_start()
+void Raft::election_start()
 {
     __log(NULL, "election starting: %d %d, term: %d ci: %d",
           _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
-          raft_get_current_idx());
+          get_current_idx());
 
-    raft_become_candidate();
+    become_candidate();
 }
 
-void Raft::raft_become_leader()
+void Raft::become_leader()
 {
-    __log(NULL, "becoming leader term:%d", raft_get_current_term());
+    __log(NULL, "becoming leader term:%d", get_current_term());
 
     raft_set_state(raft_state_e::RAFT_STATE_LEADER);
     for (RaftNode& i: _me.nodes)
     {
-        if (_me.node == i.raft_node_get_id())
+        if (_me.node == i.get_id())
             continue;
-        i.raft_node_set_next_idx(raft_get_current_idx() + 1);
-        i.raft_node_set_match_idx(0);
+        i.set_next_idx(get_current_idx() + 1);
+        i.set_match_idx(0);
         raft_send_appendentries(i);
     }
 }
 
-void Raft::raft_become_candidate()
+void Raft::become_candidate()
 {
     __log(NULL, "becoming candidate");
 
-    raft_set_current_term(raft_get_current_term() + 1);
+    set_current_term(get_current_term() + 1);
     for (RaftNode& i : _me.nodes)
-        i.raft_node_vote_for_me(false);
-    raft_vote_for_nodeid(_me.node);
+        i.vote_for_me(false);
+    vote_for_nodeid(_me.node);
     _me.current_leader.clear();
     raft_set_state(raft_state_e::RAFT_STATE_CANDIDATE);
 
@@ -119,11 +106,11 @@ void Raft::raft_become_candidate()
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
 
     for (const RaftNode& i : _me.nodes)
-        if (_me.node != i.raft_node_get_id() && i.raft_node_is_voting())
+        if (_me.node != i.get_id() && i.is_voting())
             raft_send_requestvote(i);
 }
 
-void Raft::raft_become_follower()
+void Raft::become_follower()
 {
     __log(NULL, "becoming follower");
     raft_set_state(raft_state_e::RAFT_STATE_FOLLOWER);
@@ -134,11 +121,11 @@ bmcl::Option<RaftError> Raft::raft_periodic(std::chrono::milliseconds msec_since
     _me.timeout_elapsed += msec_since_last_period;
 
     /* Only one voting node means it's safe for us to become the leader */
-    if (1 == raft_get_num_voting_nodes())
+    if (1 == get_num_voting_nodes())
     {
-        const RaftNode& node = raft_get_my_node();
-        if (node.raft_node_is_voting() && !raft_is_leader())
-            raft_become_leader();
+        const RaftNode& node = get_my_node();
+        if (node.is_voting() && !is_leader())
+            become_leader();
     }
 
     if (_me.state == raft_state_e::RAFT_STATE_LEADER)
@@ -148,11 +135,11 @@ bmcl::Option<RaftError> Raft::raft_periodic(std::chrono::milliseconds msec_since
     }
     else if (_me.election_timeout <= _me.timeout_elapsed)
     {
-        if (1 < raft_get_num_voting_nodes())
+        if (1 < get_num_voting_nodes())
         {
-            const RaftNode& node = raft_get_my_node();
-            if (node.raft_node_is_voting())
-                raft_election_start();
+            const RaftNode& node = get_my_node();
+            if (node.is_voting())
+                election_start();
         }
     }
 
@@ -162,23 +149,13 @@ bmcl::Option<RaftError> Raft::raft_periodic(std::chrono::milliseconds msec_since
     return bmcl::None;
 }
 
-bmcl::Option<const raft_entry_t&> Raft::raft_get_entry_from_idx(std::size_t etyidx) const
-{
-    return _me.log.log_get_at_idx(etyidx);
-}
-
-bool Raft::raft_voting_change_is_in_progress() const
-{
-    return _me.voting_cfg_change_log_idx.isSome();
-}
-
 bmcl::Option<RaftError> Raft::raft_recv_appendentries_response(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_response_t& r)
 {
-    bmcl::Option<RaftNode&> node = raft_get_node(nodeid);
+    bmcl::Option<RaftNode&> node = get_node(nodeid);
     __log(node,
           "received appendentries response %s ci:%d rci:%d 1stidx:%d",
           r.success ? "SUCCESS" : "fail",
-          raft_get_current_idx(),
+          get_current_idx(),
           r.current_idx,
           r.first_idx);
 
@@ -186,18 +163,18 @@ bmcl::Option<RaftError> Raft::raft_recv_appendentries_response(bmcl::Option<raft
         return RaftError::NodeUnknown;
 
     /* Stale response -- ignore */
-    if (r.current_idx != 0 && r.current_idx <= node->raft_node_get_match_idx())
+    if (r.current_idx != 0 && r.current_idx <= node->get_match_idx())
         return bmcl::None;
 
-    if (!raft_is_leader())
+    if (!is_leader())
         return RaftError::NotLeader;
 
     /* If response contains term T > currentTerm: set currentTerm = T
        and convert to follower (§5.3) */
     if (_me.current_term < r.term)
     {
-        raft_set_current_term(r.term);
-        raft_become_follower();
+        set_current_term(r.term);
+        become_follower();
         return bmcl::None;
     }
     else if (_me.current_term != r.term)
@@ -207,61 +184,59 @@ bmcl::Option<RaftError> Raft::raft_recv_appendentries_response(bmcl::Option<raft
     {
         /* If AppendEntries fails because of log inconsistency:
            decrement nextIndex and retry (§5.3) */
-        std::size_t next_idx = node->raft_node_get_next_idx();
+        std::size_t next_idx = node->get_next_idx();
         assert(0 < next_idx);
         if (r.current_idx < next_idx - 1)
-            node->raft_node_set_next_idx(std::min(r.current_idx + 1, raft_get_current_idx()));
+            node->set_next_idx(std::min(r.current_idx + 1, get_current_idx()));
         else
-            node->raft_node_set_next_idx(next_idx - 1);
+            node->set_next_idx(next_idx - 1);
 
         /* retry */
         raft_send_appendentries(node.unwrap());
         return bmcl::None;
     }
 
-    assert(r.current_idx <= raft_get_current_idx());
+    assert(r.current_idx <= get_current_idx());
 
-    node->raft_node_set_next_idx(r.current_idx + 1);
-    node->raft_node_set_match_idx(r.current_idx);
+    node->set_next_idx(r.current_idx + 1);
+    node->set_match_idx(r.current_idx);
 
-    if (!node->raft_node_is_voting() &&
+    if (!node->is_voting() &&
         !raft_voting_change_is_in_progress() &&
-        raft_get_current_idx() <= r.current_idx + 1 &&
+        get_current_idx() <= r.current_idx + 1 &&
         _me.cb.node_has_sufficient_logs &&
-        false == node->raft_node_has_sufficient_logs()
+        false == node->has_sufficient_logs()
         )
     {
         bool e = _me.cb.node_has_sufficient_logs(this, node.unwrap());
         if (e)
-            node->raft_node_set_has_sufficient_logs();
+            node->set_has_sufficient_logs();
     }
 
     /* Update commit idx */
     std::size_t point = r.current_idx;
     if (point)
     {
-        bmcl::Option<const raft_entry_t&> ety = raft_get_entry_from_idx(point);
+        bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(point);
         assert(ety.isSome());
-        if (raft_get_commit_idx() < point && ety.unwrap().term == _me.current_term)
+        if (get_commit_idx() < point && ety.unwrap().term == _me.current_term)
         {
             std::size_t votes = 1;
             for (const RaftNode& i: _me.nodes)
             {
-                if (_me.node != i.raft_node_get_id_as_option() &&
-                    i.raft_node_is_voting() &&
-                    point <= i.raft_node_get_match_idx())
+                if (_me.node != i.get_id() && i.is_voting() && point <= i.get_match_idx())
                 {
                     votes++;
                 }
             }
 
-            if (raft_get_num_voting_nodes() / 2 < votes)
-                raft_set_commit_idx(point);
+            if (get_num_voting_nodes() / 2 < votes)
+                set_commit_idx(point);
         }
     }
 
     /* Aggressively send remaining entries */
-    if (raft_get_entry_from_idx(node->raft_node_get_next_idx()).isSome())
+    if (get_entry_from_idx(node->get_next_idx()).isSome())
         raft_send_appendentries(node.unwrap());
 
     /* periodic applies committed entries lazily */
@@ -272,14 +247,14 @@ bmcl::Option<RaftError> Raft::raft_recv_appendentries_response(bmcl::Option<raft
 bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentries(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_t& ae)
 {
     msg_appendentries_response_t r = {0};
-    bmcl::Option<RaftNode&> node = raft_get_node(nodeid);
+    bmcl::Option<RaftNode&> node = get_node(nodeid);
 
     _me.timeout_elapsed = std::chrono::milliseconds(0);
 
     if (0 < ae.n_entries)
         __log(node, "recvd appendentries t:%d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
-              raft_get_current_idx(),
+              get_current_idx(),
               ae.leader_commit,
               ae.prev_log_idx,
               ae.prev_log_term,
@@ -287,15 +262,15 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
 
     r.term = _me.current_term;
 
-    if (raft_is_candidate() && _me.current_term == ae.term)
+    if (is_candidate() && _me.current_term == ae.term)
     {
-        raft_become_follower();
+        become_follower();
     }
     else if (_me.current_term < ae.term)
     {
-        raft_set_current_term(ae.term);
+        set_current_term(ae.term);
         r.term = ae.term;
-        raft_become_follower();
+        become_follower();
     }
     else if (ae.term < _me.current_term)
     {
@@ -309,7 +284,7 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
     /* NOTE: the log starts at 1 */
     if (0 < ae.prev_log_idx)
     {
-        bmcl::Option<const raft_entry_t&> e = raft_get_entry_from_idx(ae.prev_log_idx);
+        bmcl::Option<const raft_entry_t&> e = get_entry_from_idx(ae.prev_log_idx);
         if (e.isNone())
         {
             __log(node, "AE no log at prev_idx %d", ae.prev_log_idx);
@@ -318,13 +293,13 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
 
         /* 2. Reply false if log doesn't contain an entry at prevLogIndex
            whose term matches prevLogTerm (§5.3) */
-        if (raft_get_current_idx() < ae.prev_log_idx)
+        if (get_current_idx() < ae.prev_log_idx)
             goto fail_with_current_idx;
 
         if (e.unwrap().term != ae.prev_log_term)
         {
             __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d",
-                e.unwrap().term, ae.prev_log_term, raft_get_current_idx(), ae.prev_log_idx);
+                e.unwrap().term, ae.prev_log_term, get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
             raft_delete_entry_from_idx(ae.prev_log_idx);
             r.current_idx = ae.prev_log_idx - 1;
@@ -335,7 +310,7 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
     /* 3. If an existing entry conflicts with a new one (same index
        but different terms), delete the existing entry and all that
        follow it (§5.3) */
-    if (0 < ae.prev_log_idx && ae.prev_log_idx + 1 < raft_get_current_idx())
+    if (0 < ae.prev_log_idx && ae.prev_log_idx + 1 < get_current_idx())
     {
         /* Heartbeats shouldn't cause logs to be deleted. Heartbeats might be
         * sent before the leader received the last appendentries response */
@@ -352,7 +327,7 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
     {
         const raft_entry_t* ety = &ae.entries[i];
         std::size_t ety_index = ae.prev_log_idx + 1 + i;
-        bmcl::Option<const raft_entry_t&> existing_ety = raft_get_entry_from_idx(ety_index);
+        bmcl::Option<const raft_entry_t&> existing_ety = get_entry_from_idx(ety_index);
         r.current_idx = ety_index;
         if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && _me.commit_idx < ety_index)
         {
@@ -366,7 +341,7 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
     /* Pick up remainder in case of mismatch or missing entry */
     for (; i < ae.n_entries; i++)
     {
-        bmcl::Option<RaftError> e = raft_append_entry(ae.entries[i]);
+        bmcl::Option<RaftError> e = append_entry(ae.entries[i]);
         if (e.isSome())
         {
             if (e.unwrap() == RaftError::Shutdown)
@@ -382,10 +357,10 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
 
     /* 4. If leaderCommit > commitIndex, set commitIndex =
         min(leaderCommit, index of most recent entry) */
-    if (raft_get_commit_idx() < ae.leader_commit)
+    if (get_commit_idx() < ae.leader_commit)
     {
-        std::size_t last_log_idx = std::max<std::size_t>(raft_get_current_idx(), 1);
-        raft_set_commit_idx(std::min(last_log_idx, ae.leader_commit));
+        std::size_t last_log_idx = std::max<std::size_t>(get_current_idx(), 1);
+        set_commit_idx(std::min(last_log_idx, ae.leader_commit));
     }
 
     /* update current leader because we accepted appendentries from it */
@@ -396,16 +371,11 @@ bmcl::Result<msg_appendentries_response_t, RaftError> Raft::raft_recv_appendentr
     return r;
 
 fail_with_current_idx:
-    r.current_idx = raft_get_current_idx();
+    r.current_idx = get_current_idx();
 fail:
     r.success = false;
     r.first_idx = 0;
     return r;
-}
-
-bool Raft::raft_already_voted() const
-{
-    return _me.voted_for.isSome();
 }
 
 static bool __should_grant_vote(Raft* me, const msg_requestvote_t& vr)
@@ -415,25 +385,25 @@ static bool __should_grant_vote(Raft* me, const msg_requestvote_t& vr)
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
 
-    if (!me->raft_get_my_node().raft_node_is_voting())
+    if (!me->get_my_node().is_voting())
         return false;
 
-    if (vr.term < me->raft_get_current_term())
+    if (vr.term < me->get_current_term())
         return false;
 
     /* TODO: if voted for is candiate return 1 (if below checks pass) */
-    if (me->raft_already_voted())
+    if (me->is_already_voted())
         return false;
 
     /* Below we check if log is more up-to-date... */
 
-    std::size_t current_idx = me->raft_get_current_idx();
+    std::size_t current_idx = me->get_current_idx();
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const raft_entry_t&> e = me->raft_get_entry_from_idx(current_idx);
+    bmcl::Option<const raft_entry_t&> e = me->get_entry_from_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
@@ -451,24 +421,24 @@ static bool __should_grant_vote(Raft* me, const msg_requestvote_t& vr)
 bmcl::Result<msg_requestvote_response_t, RaftError> Raft::raft_recv_requestvote(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_t& vr)
 {
     msg_requestvote_response_t r = {0};
-    bmcl::Option<RaftNode&> node = raft_get_node(nodeid);
+    bmcl::Option<RaftNode&> node = get_node(nodeid);
 
     if (node.isNone())
-        node = raft_get_node(vr.candidate_id);
+        node = get_node(vr.candidate_id);
 
-    if (raft_get_current_term() < vr.term)
+    if (get_current_term() < vr.term)
     {
-        raft_set_current_term(vr.term);
-        raft_become_follower();
+        set_current_term(vr.term);
+        become_follower();
     }
 
     if (__should_grant_vote(this, vr))
     {
         /* It shouldn't be possible for a leader or candidate to grant a vote
          * Both states would have voted for themselves */
-        assert(!(raft_is_leader() || raft_is_candidate()));
+        assert(!(is_leader() || is_candidate()));
 
-        raft_vote_for_nodeid(vr.candidate_id);
+        vote_for_nodeid(vr.candidate_id);
         r.vote_granted = raft_request_vote::GRANTED;
 
         /* there must be in an election. */
@@ -498,7 +468,7 @@ done:
           r.vote_granted == raft_request_vote::GRANTED ? "granted" :
           r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
 
-    r.term = raft_get_current_term();
+    r.term = get_current_term();
     return r;
 }
 
@@ -512,23 +482,23 @@ bool Raft::raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes)
 
 bmcl::Option<RaftError> Raft::raft_recv_requestvote_response(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_response_t& r)
 {
-    bmcl::Option<RaftNode&> node = raft_get_node(nodeid);
+    bmcl::Option<RaftNode&> node = get_node(nodeid);
 
     __log(node, "node responded to requestvote status: %s",
           r.vote_granted == raft_request_vote::GRANTED ? "granted" :
           r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
 
-    if (!raft_is_candidate())
+    if (!is_candidate())
         return bmcl::None;
 
-    if (raft_get_current_term() < r.term)
+    if (get_current_term() < r.term)
     {
-        raft_set_current_term(r.term);
-        raft_become_follower();
+        set_current_term(r.term);
+        become_follower();
         return bmcl::None;
     }
 
-    if (raft_get_current_term() != r.term)
+    if (get_current_term() != r.term)
     {
         /* The node who voted for us would have obtained our term.
          * Therefore this is an old message we should ignore.
@@ -546,16 +516,16 @@ bmcl::Option<RaftError> Raft::raft_recv_requestvote_response(bmcl::Option<raft_n
     {
         case raft_request_vote::GRANTED:
             if (node.isSome())
-                node->raft_node_vote_for_me(true);
-            if (Raft::raft_votes_is_majority(raft_get_num_voting_nodes(), raft_get_nvotes_for_me()))
-                raft_become_leader();
+                node->vote_for_me(true);
+            if (Raft::raft_votes_is_majority(get_num_voting_nodes(), get_nvotes_for_me()))
+                become_leader();
             break;
 
         case raft_request_vote::NOT_GRANTED:
             break;
 
         case raft_request_vote::UNKNOWN_NODE:
-            if (raft_get_my_node().raft_node_is_voting() && _me.connected == raft_node_status::RAFT_NODE_STATUS_DISCONNECTING)
+            if (get_my_node().is_voting() && _me.connected == raft_node_status::RAFT_NODE_STATUS_DISCONNECTING)
                 return RaftError::Shutdown;
             break;
 
@@ -569,50 +539,50 @@ bmcl::Option<RaftError> Raft::raft_recv_requestvote_response(bmcl::Option<raft_n
 bmcl::Result<msg_entry_response_t, RaftError> Raft::raft_recv_entry(const msg_entry_t& e)
 {
     /* Only one voting cfg change at a time */
-    if (raft_entry_is_voting_cfg_change(e))
+    if (e.is_voting_cfg_change())
         if (raft_voting_change_is_in_progress())
             return RaftError::OneVotiongChangeOnly;
 
-    if (!raft_is_leader())
+    if (!is_leader())
         return RaftError::NotLeader;
 
     __log(NULL, "received entry t:%d id: %d idx: %d",
-        _me.current_term, e.id, raft_get_current_idx() + 1);
+        _me.current_term, e.id, get_current_idx() + 1);
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;
-    raft_append_entry(ety);
+    append_entry(ety);
     for (const RaftNode& i: _me.nodes)
     {
-        if (_me.node == i.raft_node_get_id_as_option() || !i.raft_node_is_voting())
+        if (_me.node == i.get_id() || !i.is_voting())
             continue;
 
         /* Only send new entries.
          * Don't send the entry to peers who are behind, to prevent them from
          * becoming congested. */
-        std::size_t next_idx = i.raft_node_get_next_idx();
-        if (next_idx == raft_get_current_idx())
+        std::size_t next_idx = i.get_next_idx();
+        if (next_idx == get_current_idx())
             raft_send_appendentries(i);
     }
 
     /* if we're the only node, we can consider the entry committed */
-    if (1 == raft_get_num_voting_nodes())
-        raft_set_commit_idx(raft_get_current_idx());
+    if (1 == get_num_voting_nodes())
+        set_commit_idx(get_current_idx());
 
     msg_entry_response_t r = {0};
     r.id = e.id;
-    r.idx = raft_get_current_idx();
+    r.idx = get_current_idx();
     r.term = _me.current_term;
 
-    if (raft_entry_is_voting_cfg_change(e))
-        _me.voting_cfg_change_log_idx = raft_get_current_idx();
+    if (e.is_voting_cfg_change())
+        _me.voting_cfg_change_log_idx = get_current_idx();
 
     return r;
 }
 
 bmcl::Option<RaftError> Raft::raft_send_requestvote(const bmcl::Option<raft_node_id>& node)
 {
-    bmcl::Option<RaftNode&> n = raft_get_node(node);
+    bmcl::Option<RaftNode&> n = get_node(node);
     if (n.isNone()) return RaftError::NodeUnknown;
     return raft_send_requestvote(n.unwrap());
 }
@@ -621,23 +591,36 @@ bmcl::Option<RaftError> Raft::raft_send_requestvote(const RaftNode& node)
 {
     msg_requestvote_t rv;
 
-    assert(node.raft_node_get_id_as_option() != _me.node);
+    assert(node.get_id() != _me.node);
 
     __log(node, "sending requestvote to: %d", node);
 
     rv.term = _me.current_term;
-    rv.last_log_idx = raft_get_current_idx();
-    rv.last_log_term = raft_get_last_log_term().unwrapOr(0);
-    rv.candidate_id = raft_get_my_nodeid();
+    rv.last_log_idx = get_current_idx();
+    rv.last_log_term = get_last_log_term().unwrapOr(0);
+    rv.candidate_id = get_my_nodeid();
     assert(_me.cb.send_requestvote);
     return _me.cb.send_requestvote(this, node, rv);
 }
 
-bmcl::Option<RaftError> Raft::raft_append_entry(const raft_entry_t& ety)
+void Raft::raft_delete_entry_from_idx(std::size_t idx)
 {
-    if (raft_entry_is_voting_cfg_change(ety))
-        _me.voting_cfg_change_log_idx = raft_get_current_idx();
+    assert(_me.commit_idx < idx);
+    if (_me.voting_cfg_change_log_idx.isSome() && idx <= _me.voting_cfg_change_log_idx.unwrap())
+        _me.voting_cfg_change_log_idx.clear();
+    _me.log.log_delete(this, idx);
+}
+
+bmcl::Option<RaftError> Raft::append_entry(const raft_entry_t& ety)
+{
+    if (ety.is_voting_cfg_change())
+        _me.voting_cfg_change_log_idx = get_current_idx();
     return _me.log.log_append_entry(this, ety);
+}
+
+bmcl::Option<const raft_entry_t *> Raft::raft_get_entries_from_idx(std::size_t idx, std::size_t* n_etys) const
+{
+    return _me.log.log_get_from_idx(idx, n_etys);
 }
 
 bmcl::Option<RaftError> Raft::raft_apply_entry()
@@ -648,7 +631,7 @@ bmcl::Option<RaftError> Raft::raft_apply_entry()
 
     std::size_t log_idx = _me.last_applied_idx + 1;
 
-    bmcl::Option<const raft_entry_t&> ety = raft_get_entry_from_idx(log_idx);
+    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(log_idx);
     if (ety.isNone())
         return RaftError::Any;
 
@@ -666,12 +649,12 @@ bmcl::Option<RaftError> Raft::raft_apply_entry()
     if (raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == ety.unwrap().type)
     {
         raft_node_id node_id = (raft_node_id)_me.cb.log_get_node_id(this, ety.unwrap(), log_idx);
-        bmcl::Option<RaftNode&> node = raft_get_node(node_id);
+        bmcl::Option<RaftNode&> node = get_node(node_id);
         assert(node.isSome());
         if (node.isSome())
         {
-            node->raft_node_set_has_sufficient_logs();
-            if (node->raft_node_get_id_as_option() == raft_get_my_nodeid())
+            node->set_has_sufficient_logs();
+            if (node->get_id() == _me.node)
                 _me.connected = raft_node_status::RAFT_NODE_STATUS_CONNECTED;
         }
     }
@@ -683,44 +666,39 @@ bmcl::Option<RaftError> Raft::raft_apply_entry()
     return bmcl::None;
 }
 
-bmcl::Option<const raft_entry_t *> Raft::raft_get_entries_from_idx(std::size_t idx, std::size_t* n_etys) const
-{
-    return _me.log.log_get_from_idx(idx, n_etys);
-}
-
 bmcl::Option<RaftError> Raft::raft_send_appendentries(const bmcl::Option<raft_node_id>& node)
 {
-    bmcl::Option<RaftNode&> n = raft_get_node(node);
+    bmcl::Option<RaftNode&> n = get_node(node);
     if (n.isNone()) return RaftError::NodeUnknown;
     return raft_send_appendentries(n.unwrap());
 }
 
 bmcl::Option<RaftError> Raft::raft_send_appendentries(const RaftNode& node)
 {
-    assert(node.raft_node_get_id_as_option() != _me.node);
+    assert(node.get_id() != _me.node);
 
     msg_appendentries_t ae = {0};
     ae.term = _me.current_term;
-    ae.leader_commit = raft_get_commit_idx();
+    ae.leader_commit = get_commit_idx();
     ae.prev_log_idx = 0;
     ae.prev_log_term = 0;
 
-    std::size_t next_idx = node.raft_node_get_next_idx();
+    std::size_t next_idx = node.get_next_idx();
 
     ae.entries = raft_get_entries_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
 
     /* previous log is the log just before the new logs */
     if (1 < next_idx)
     {
-        bmcl::Option<const raft_entry_t&> prev_ety = raft_get_entry_from_idx(next_idx - 1);
+        bmcl::Option<const raft_entry_t&> prev_ety = get_entry_from_idx(next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
             ae.prev_log_term = prev_ety.unwrap().term;
     }
 
     __log(node, "sending appendentries node: ci:%d comi:%d t:%d lc:%d pli:%d plt:%d",
-          raft_get_current_idx(),
-          raft_get_commit_idx(),
+          get_current_idx(),
+          get_commit_idx(),
           ae.term,
           ae.leader_commit,
           ae.prev_log_idx,
@@ -735,7 +713,7 @@ bmcl::Option<RaftError> Raft::raft_send_appendentries_all()
     _me.timeout_elapsed = std::chrono::milliseconds(0);
     for (const RaftNode& i: _me.nodes)
     {
-        if (_me.node != i.raft_node_get_id_as_option())
+        if (_me.node != i.get_id())
         {
             bmcl::Option<RaftError> e = raft_send_appendentries(i);
             if (e.isSome())
@@ -745,15 +723,15 @@ bmcl::Option<RaftError> Raft::raft_send_appendentries_all()
     return bmcl::None;
 }
 
-bmcl::Option<RaftNode&> Raft::raft_add_node(raft_node_id id)
+bmcl::Option<RaftNode&> Raft::add_node(raft_node_id id)
 {
     /* set to voting if node already exists */
-    bmcl::Option<RaftNode&> node = raft_get_node(id);
+    bmcl::Option<RaftNode&> node = get_node(id);
     if (node.isSome())
     {
-        if (node->raft_node_is_voting())
+        if (node->is_voting())
             return bmcl::None;
-        node->raft_node_set_voting(true);
+        node->set_voting(true);
         return node;
     }
 
@@ -761,24 +739,24 @@ bmcl::Option<RaftNode&> Raft::raft_add_node(raft_node_id id)
     return _me.nodes.back();
 }
 
-bmcl::Option<RaftNode&> Raft::raft_add_non_voting_node(raft_node_id id)
+bmcl::Option<RaftNode&> Raft::add_non_voting_node(raft_node_id id)
 {
-    if (raft_get_node(id).isSome())
+    if (get_node(id).isSome())
         return bmcl::None;
 
-    bmcl::Option<RaftNode&> node = raft_add_node(id);
+    bmcl::Option<RaftNode&> node = add_node(id);
     if (node.isNone())
         return bmcl::None;
 
-    node->raft_node_set_voting(false);
+    node->set_voting(false);
     return node;
 }
 
-void Raft::raft_remove_node(raft_node_id nodeid)
+void Raft::remove_node(raft_node_id nodeid)
 {
     for (std::size_t i = 0; i < _me.nodes.size(); i++)
     {
-        if (_me.nodes[i].raft_node_get_id() == nodeid)
+        if (_me.nodes[i].get_id() == nodeid)
         {
             _me.nodes.erase(_me.nodes.begin() + i);
             return;
@@ -787,31 +765,30 @@ void Raft::raft_remove_node(raft_node_id nodeid)
     assert(false);
 }
 
-void Raft::raft_remove_node(const bmcl::Option<RaftNode&>& node)
+void Raft::remove_node(const bmcl::Option<RaftNode&>& node)
 {
     if (node.isNone())
         return;
-    raft_remove_node(node->raft_node_get_id());
+    remove_node(node->get_id());
 }
 
-std::size_t Raft::raft_get_nvotes_for_me()
+std::size_t Raft::get_nvotes_for_me() const
 {
     std::size_t votes = 0;
 
     for (const RaftNode& i: _me.nodes)
     {
-        if (_me.node != i.raft_node_get_id_as_option() && i.raft_node_is_voting())
-            if (i.raft_node_has_vote_for_me())
-                votes += 1;
+        if (_me.node != i.get_id() && i.is_voting() && i.has_vote_for_me())
+            votes += 1;
     }
 
-    if (_me.voted_for == raft_get_my_nodeid())
+    if (_me.voted_for == _me.node)
         votes += 1;
 
     return votes;
 }
 
-void Raft::raft_vote_for_nodeid(bmcl::Option<raft_node_id> nodeid)
+void Raft::vote_for_nodeid(bmcl::Option<raft_node_id> nodeid)
 {
     _me.voted_for = nodeid;
     assert(_me.cb.persist_vote);
@@ -820,21 +797,21 @@ void Raft::raft_vote_for_nodeid(bmcl::Option<raft_node_id> nodeid)
     _me.cb.persist_vote(this, -1);
 }
 
-int Raft::raft_msg_entry_response_committed(const msg_entry_response_t& r) const
+int Raft::msg_entry_response_committed(const msg_entry_response_t& r) const
 {
-    bmcl::Option<const raft_entry_t&> ety = raft_get_entry_from_idx(r.idx);
+    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(r.idx);
     if (ety.isNone())
         return 0;
 
     /* entry from another leader has invalidated this entry message */
     if (r.term != ety.unwrap().term)
         return -1;
-    return r.idx <= raft_get_commit_idx();
+    return r.idx <= get_commit_idx();
 }
 
-bmcl::Option<RaftError> Raft::raft_apply_all()
+bmcl::Option<RaftError> Raft::apply_all()
 {
-    while (raft_get_last_applied_idx() < raft_get_commit_idx())
+    while (get_last_applied_idx() < get_commit_idx())
     {
         bmcl::Option<RaftError> e = raft_apply_entry();
         if (e.isSome())
@@ -844,53 +821,38 @@ bmcl::Option<RaftError> Raft::raft_apply_all()
     return bmcl::None;
 }
 
-bool Raft::raft_entry_is_voting_cfg_change(const raft_entry_t& ety)
-{
-    return raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == ety.type ||
-        raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == ety.type;
-}
-
-bool Raft::raft_entry_is_cfg_change(const raft_entry_t& ety)
-{
-    return (
-        raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == ety.type ||
-        raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE == ety.type ||
-        raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == ety.type ||
-        raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE == ety.type);
-}
-
 void Raft::raft_offer_log(const raft_entry_t& ety, const std::size_t idx)
 {
-    if (!raft_entry_is_cfg_change(ety))
+    if (!ety.is_cfg_change())
         return;
 
     raft_node_id node_id = (raft_node_id)_me.cb.log_get_node_id(this, ety, idx);
-    bmcl::Option<RaftNode&> node = raft_get_node(node_id);
-    bool is_self = raft_is_my_node(node_id);
+    bmcl::Option<RaftNode&> node = get_node(node_id);
+    bool is_self = is_my_node(node_id);
 
     switch (ety.type)
     {
     case raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE:
             if (!is_self)
             {
-                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(node_id);
+                bmcl::Option<RaftNode&> node = add_non_voting_node(node_id);
                 assert(node.isSome());
             }
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_ADD_NODE:
-            node = raft_add_node(node_id);
+            node = add_node(node_id);
             assert(node.isSome());
-            assert(node->raft_node_is_voting());
+            assert(node->is_voting());
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE:
-            node->raft_node_set_voting(false);
+            node->set_voting(false);
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE:
             if (node.isSome())
-                raft_remove_node(node->raft_node_get_id());
+                remove_node(node->get_id());
             break;
 
         default:
@@ -900,7 +862,7 @@ void Raft::raft_offer_log(const raft_entry_t& ety, const std::size_t idx)
 
 void Raft::raft_pop_log(const raft_entry_t& ety, const std::size_t idx)
 {
-    if (!raft_entry_is_cfg_change(ety))
+    if (!ety.is_cfg_change())
         return;
 
     raft_node_id node_id = (raft_node_id)_me.cb.log_get_node_id(this, ety, idx);
@@ -909,30 +871,30 @@ void Raft::raft_pop_log(const raft_entry_t& ety, const std::size_t idx)
     {
         case raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE:
             {
-                bmcl::Option<RaftNode&> node = raft_get_node(node_id);
-                node->raft_node_set_voting(true);
+                bmcl::Option<RaftNode&> node = get_node(node_id);
+                node->set_voting(true);
             }
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE:
             {
-                bmcl::Option<RaftNode&> node = raft_add_non_voting_node(node_id);
+                bmcl::Option<RaftNode&> node = add_non_voting_node(node_id);
                 assert(node.isSome());
             }
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE:
             {
-                bool is_self = raft_is_my_node(node_id);
-                raft_remove_node(node_id);
+                bool is_self = is_my_node(node_id);
+                remove_node(node_id);
                 assert(!is_self);
             }
             break;
 
         case raft_logtype_e::RAFT_LOGTYPE_ADD_NODE:
             {
-                bmcl::Option<RaftNode&> node = raft_get_node(node_id);
-                node->raft_node_set_voting(false);
+                bmcl::Option<RaftNode&> node = get_node(node_id);
+                node->set_voting(false);
             }
             break;
 
@@ -943,71 +905,18 @@ void Raft::raft_pop_log(const raft_entry_t& ety, const std::size_t idx)
 }
 
 
-
-
 //properties
 
-
-void Raft::raft_set_election_timeout(std::chrono::milliseconds millisec)
-{
-    _me.election_timeout = millisec;
-}
-
-void Raft::raft_set_request_timeout(std::chrono::milliseconds millisec)
-{
-    _me.request_timeout = millisec;
-}
-
-bool Raft::raft_is_my_node(raft_node_id id) const
-{
-    return (_me.node == id);
-}
-
-raft_node_id Raft::raft_get_my_nodeid() const
-{
-    return _me.node;
-}
-
-std::chrono::milliseconds Raft::raft_get_election_timeout() const
-{
-    return _me.election_timeout;
-}
-
-std::chrono::milliseconds Raft::raft_get_request_timeout() const
-{
-    return _me.request_timeout;
-}
-
-std::size_t Raft::raft_get_num_nodes()
-{
-    return _me.nodes.size();
-}
-
-std::size_t Raft::raft_get_num_voting_nodes()
+std::size_t Raft::get_num_voting_nodes() const
 {
     std::size_t num = 0;
     for (const RaftNode& i: _me.nodes)
-        if (i.raft_node_is_voting())
+        if (i.is_voting())
             num++;
     return num;
 }
 
-std::chrono::milliseconds Raft::raft_get_timeout_elapsed() const
-{
-    return _me.timeout_elapsed;
-}
-
-std::size_t Raft::raft_get_log_count()
-{
-    return _me.log.log_count();
-}
-
-bmcl::Option<raft_node_id> Raft::raft_get_voted_for()
-{
-    return _me.voted_for;
-}
-
-void Raft::raft_set_current_term(const int term)
+void Raft::set_current_term(const int term)
 {
     if (_me.current_term < term)
     {
@@ -1018,36 +927,11 @@ void Raft::raft_set_current_term(const int term)
     }
 }
 
-int Raft::raft_get_current_term() const
-{
-    return _me.current_term;
-}
-
-std::size_t Raft::raft_get_current_idx() const
-{
-    return _me.log.log_get_current_idx();
-}
-
-void Raft::raft_set_commit_idx(std::size_t idx)
+void Raft::set_commit_idx(std::size_t idx)
 {
     assert(_me.commit_idx <= idx);
-    assert(idx <= raft_get_current_idx());
+    assert(idx <= get_current_idx());
     _me.commit_idx = idx;
-}
-
-void Raft::raft_set_last_applied_idx(std::size_t idx)
-{
-    _me.last_applied_idx = idx;
-}
-
-std::size_t Raft::raft_get_last_applied_idx() const
-{
-    return _me.last_applied_idx;
-}
-
-std::size_t Raft::raft_get_commit_idx() const
-{
-    return _me.commit_idx;
 }
 
 void Raft::raft_set_state(raft_state_e state)
@@ -1058,82 +942,40 @@ void Raft::raft_set_state(raft_state_e state)
     _me.state = state;
 }
 
-raft_state_e Raft::raft_get_state() const
-{
-    return _me.state;
-}
-
-bmcl::Option<RaftNode&> Raft::raft_get_node(bmcl::Option<raft_node_id> id)
+bmcl::Option<RaftNode&> Raft::get_node(bmcl::Option<raft_node_id> id)
 {
     if (id.isNone()) return bmcl::None;
-    return raft_get_node(id.unwrap());
+    return get_node(id.unwrap());
 }
 
-bmcl::Option<RaftNode&> Raft::raft_get_node(raft_node_id nodeid)
+bmcl::Option<RaftNode&> Raft::get_node(raft_node_id nodeid)
 {
     for (RaftNode& i : _me.nodes)
     {
-        if (nodeid == i.raft_node_get_id())
+        if (nodeid == i.get_id())
             return i;
     }
     return bmcl::None;
 }
 
-const RaftNode& Raft::raft_get_my_node()
+const RaftNode& Raft::get_my_node()
 {
-    const auto& n = raft_get_node(raft_get_my_nodeid());
+    const auto& n = get_node(_me.node);
     assert(n.isSome());
     return n.unwrap();
 }
 
-bmcl::Option<RaftNode&> Raft::raft_get_node_from_idx(std::size_t idx)
+bmcl::Option<int> Raft::get_last_log_term() const
 {
-    if (idx >= _me.nodes.size())
-        return bmcl::None;
-    return _me.nodes[idx];
-}
-
-bmcl::Option<raft_node_id> Raft::raft_get_current_leader() const
-{
-    return _me.current_leader;
-}
-
-bmcl::Option<RaftNode&> Raft::raft_get_current_leader_node()
-{
-    return raft_get_node(_me.current_leader);
-}
-
-bool Raft::raft_is_follower() const
-{
-    return raft_get_state() == raft_state_e::RAFT_STATE_FOLLOWER;
-}
-
-bool Raft::raft_is_leader() const
-{
-    return raft_get_state() == raft_state_e::RAFT_STATE_LEADER;
-}
-
-bool Raft::raft_is_candidate() const
-{
-    return raft_get_state() == raft_state_e::RAFT_STATE_CANDIDATE;
-}
-
-bmcl::Option<int> Raft::raft_get_last_log_term() const
-{
-    std::size_t current_idx = raft_get_current_idx();
+    std::size_t current_idx = get_current_idx();
     if (0 == current_idx)
         return bmcl::None;
 
-    bmcl::Option<const raft_entry_t&> ety = raft_get_entry_from_idx(current_idx);
+    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(current_idx);
     if (ety.isNone())
         return bmcl::None;
 
     return ety.unwrap().term;
-}
-
-raft_node_status Raft::raft_is_connected() const
-{
-    return _me.connected;
 }
 
 

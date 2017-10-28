@@ -10,7 +10,7 @@ bmcl::Option<RaftError> Sender::__append_msg(const raft_node_id& from, const raf
 
     assert(_servers[from].raft);
 
-    _servers[from].outbox.emplace_back(data, len, type, f->raft_get_my_nodeid());
+    _servers[from].outbox.emplace_back(data, len, type, f->get_my_nodeid());
 
     /* give to peer */
     if (peer)
@@ -25,7 +25,7 @@ bmcl::Option<RaftError> Sender::__append_msg(const raft_node_id& from, const raf
 
 bmcl::Option<RaftError> Sender::sender_requestvote(const Raft * from, const RaftNode & to, const msg_requestvote_t& msg)
 {
-    return __append_msg(from->raft_get_my_nodeid(), to.raft_node_get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
+    return __append_msg(from->get_my_nodeid(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
 }
 
 bmcl::Option<RaftError> Sender::sender_requestvote_response(const raft_node_id& from, const raft_node_id& to, const msg_requestvote_response_t& msg)
@@ -39,7 +39,7 @@ bmcl::Option<RaftError> Sender::sender_appendentries(const Raft * from, const Ra
     memcpy(entries, msg.entries, sizeof(msg_entry_t) * msg.n_entries);
     msg_appendentries_t tmp = msg;
     tmp.entries = entries;
-    return __append_msg(from->raft_get_my_nodeid(), to.raft_node_get_id(), &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
+    return __append_msg(from->get_my_nodeid(), to.get_id(), &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
 }
 
 bmcl::Option<RaftError> Sender::sender_appendentries_response(const raft_node_id& from, const raft_node_id& to, const msg_appendentries_response_t& msg)
@@ -54,7 +54,7 @@ bmcl::Option<RaftError> Sender::sender_entries_response(const raft_node_id& from
 
 bmcl::Option<msg_t> Sender::sender_poll_msg_data(const Raft& from)
 {
-    return sender_poll_msg_data(from.raft_get_my_nodeid());
+    return sender_poll_msg_data(from.get_my_nodeid());
 }
 
 bmcl::Option<msg_t> Sender::sender_poll_msg_data(raft_node_id from)
@@ -82,7 +82,7 @@ void Sender::sender_poll_msgs(raft_node_id from)
         assert(false);
         return;
     }
-    raft_node_id me = s.raft->raft_get_my_nodeid();
+    raft_node_id me = s.raft->get_my_nodeid();
 
     for(const msg_t& m: s.inbox)
     {

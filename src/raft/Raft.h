@@ -44,13 +44,34 @@ class Raft
     friend class RaftLog;
 public:
     explicit Raft(raft_node_id id, bool is_voting, const raft_cbs_t& funcs = raft_cbs_t{});
-    void raft_set_callbacks(const raft_cbs_t& funcs);
-    bmcl::Option<RaftNode&> raft_add_node(raft_node_id id);
-    bmcl::Option<RaftNode&> raft_add_non_voting_node(raft_node_id id);
-    void raft_remove_node(raft_node_id id);
-    void raft_remove_node(const bmcl::Option<RaftNode&>& node);
-    void raft_set_election_timeout(std::chrono::milliseconds msec);
-    void raft_set_request_timeout(std::chrono::milliseconds msec);
+    inline bool is_my_node(raft_node_id id) const { return (_me.node == id); }
+    inline raft_node_id get_my_nodeid() const { return _me.node; }
+    inline void set_callbacks(const raft_cbs_t& funcs) { _me.cb = funcs; }
+    inline const raft_cbs_t& get_callbacks() const { return _me.cb; }
+    inline void set_election_timeout(std::chrono::milliseconds msec) {_me.election_timeout = msec;}
+    inline void set_request_timeout(std::chrono::milliseconds msec) { _me.request_timeout = msec; }
+    inline std::chrono::milliseconds get_timeout_elapsed() const { return _me.timeout_elapsed; }
+    inline std::chrono::milliseconds get_request_timeout() const { return _me.request_timeout; }
+    inline std::chrono::milliseconds get_election_timeout() const { return _me.election_timeout; }
+
+    const RaftNode& get_my_node();
+    bmcl::Option<RaftNode&> add_node(raft_node_id id);
+    bmcl::Option<RaftNode&> add_non_voting_node(raft_node_id id);
+    void remove_node(raft_node_id id);
+    void remove_node(const bmcl::Option<RaftNode&>& node);
+    bmcl::Option<RaftNode&> get_node(raft_node_id id);
+    bmcl::Option<RaftNode&> get_node(bmcl::Option<raft_node_id> id);
+    std::size_t get_num_nodes() const { return _me.nodes.size(); }
+
+    std::size_t get_num_voting_nodes() const;
+    inline int get_current_term() const { return _me.current_term; }
+    void set_current_term(int term);
+    std::size_t get_nvotes_for_me() const;
+    inline bmcl::Option<raft_node_id> get_voted_for() const { return _me.voted_for; }
+    void vote_for_nodeid(bmcl::Option<raft_node_id> nodeid);
+    inline bool is_already_voted() const { return _me.voted_for.isSome(); }
+    static bool raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes);
+
     bmcl::Option<RaftError> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
     bmcl::Result<msg_appendentries_response_t, RaftError> raft_recv_appendentries(bmcl::Option<raft_node_id> nodeid, const msg_appendentries_t& ae);
@@ -59,53 +80,31 @@ public:
     bmcl::Option<RaftError> raft_recv_requestvote_response(bmcl::Option<raft_node_id> nodeid, const msg_requestvote_response_t& r);
     bmcl::Result<msg_entry_response_t, RaftError> raft_recv_entry(const msg_entry_t& ety);
 
-    bool raft_is_my_node(raft_node_id id) const;
-    raft_node_id raft_get_my_nodeid() const;
-    const RaftNode& raft_get_my_node();
+    inline bmcl::Option<raft_node_id> get_current_leader() const { return _me.current_leader; }
+    inline bmcl::Option<RaftNode&> get_current_leader_node() { return get_node(_me.current_leader); }
+    inline bool is_follower() const { return get_state() == raft_state_e::RAFT_STATE_FOLLOWER; }
+    inline bool is_leader() const { return get_state() == raft_state_e::RAFT_STATE_LEADER; }
+    inline bool is_candidate() const { return get_state() == raft_state_e::RAFT_STATE_CANDIDATE; }
+    inline raft_state_e get_state() const { return _me.state; }
 
-    bmcl::Option<raft_node_id> raft_get_current_leader() const;
-    bmcl::Option<RaftNode&> raft_get_current_leader_node();
-
-    bmcl::Option<RaftNode&> raft_get_node(raft_node_id id);
-    bmcl::Option<RaftNode&> raft_get_node(bmcl::Option<raft_node_id> id);
-
-    std::chrono::milliseconds raft_get_election_timeout() const;
-    std::size_t raft_get_num_nodes();
-    std::size_t raft_get_num_voting_nodes();
-    std::size_t raft_get_log_count();
-    int raft_get_current_term() const;
-    std::size_t raft_get_current_idx() const;
-    std::size_t raft_get_commit_idx() const;
-    bool raft_is_follower() const;
-    bool raft_is_leader() const;
-    bool raft_is_candidate() const;
-    std::chrono::milliseconds raft_get_timeout_elapsed() const;
-    std::chrono::milliseconds raft_get_request_timeout() const;
-    std::size_t raft_get_last_applied_idx() const;
-    bmcl::Option<const raft_entry_t&> raft_get_entry_from_idx(std::size_t idx) const;
-    bmcl::Option<RaftNode&> raft_get_node_from_idx(std::size_t idx);
-    std::size_t raft_get_nvotes_for_me();
-    bmcl::Option<raft_node_id> raft_get_voted_for();
-    void raft_vote_for_nodeid(bmcl::Option<raft_node_id> nodeid);
-    void raft_set_current_term(const int term);
-    void raft_set_commit_idx(std::size_t commit_idx);
-    void raft_set_last_applied_idx(std::size_t idx);
-    bmcl::Option<RaftError> raft_append_entry(const raft_entry_t& ety);
-    int raft_msg_entry_response_committed(const msg_entry_response_t& r) const;
-    raft_state_e raft_get_state() const;
-    bmcl::Option<int> raft_get_last_log_term() const;
-    bmcl::Option<RaftError> raft_apply_all();
-    void raft_become_leader();
-    static bool raft_entry_is_voting_cfg_change(const raft_entry_t& ety);
-    static bool raft_entry_is_cfg_change(const raft_entry_t& ety);
-    bool raft_already_voted() const;
-    raft_node_status raft_is_connected() const;
+    inline std::size_t get_log_count() const { return _me.log.log_count(); }
+    inline std::size_t get_current_idx() const { return _me.log.log_get_current_idx(); }
+    inline bmcl::Option<const raft_entry_t&> get_entry_from_idx(std::size_t etyidx) const { return _me.log.log_get_at_idx(etyidx); }
+    inline std::size_t get_commit_idx() const { return _me.commit_idx; }
+    inline std::size_t get_last_applied_idx() const { return _me.last_applied_idx; }
+    inline void set_last_applied_idx(std::size_t idx) { _me.last_applied_idx = idx; }
+    void set_commit_idx(std::size_t commit_idx);
+    bmcl::Option<RaftError> append_entry(const raft_entry_t& ety);
+    int msg_entry_response_committed(const msg_entry_response_t& r) const;
+    bmcl::Option<int> get_last_log_term() const;
+    bmcl::Option<RaftError> apply_all();
 
 public:
 
-    void raft_election_start();
-    void raft_become_candidate();
-    void raft_become_follower();
+    void become_leader();
+    void become_candidate();
+    void become_follower();
+    void election_start();
     bmcl::Option<RaftError> raft_send_requestvote(const bmcl::Option<raft_node_id>& node);
     bmcl::Option<RaftError> raft_send_requestvote(const RaftNode& node);
     bmcl::Option<RaftError> raft_send_appendentries(const bmcl::Option<raft_node_id>& node);
@@ -114,13 +113,11 @@ public:
     bmcl::Option<RaftError> raft_apply_entry();
     void raft_set_state(raft_state_e state);
 
-    static bool raft_votes_is_majority(std::size_t nnodes, std::size_t nvotes);
     void raft_pop_log(const raft_entry_t& ety, const std::size_t idx);
     void raft_offer_log(const raft_entry_t& ety, const std::size_t idx);
     void raft_delete_entry_from_idx(std::size_t idx);
-    bool raft_voting_change_is_in_progress() const;
+    bool raft_voting_change_is_in_progress() const { return _me.voting_cfg_change_log_idx.isSome(); }
     bmcl::Option<const raft_entry_t*> raft_get_entries_from_idx(std::size_t idx, std::size_t* n_etys) const;
-    const raft_cbs_t& get_callbacks() const { return _me.cb; }
 
     void __log(const bmcl::Option<RaftNode&> node, const char *fmt, ...);
     void __log(const bmcl::Option<const RaftNode&> node, const char *fmt, ...) const;

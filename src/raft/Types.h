@@ -71,6 +71,21 @@ struct raft_entry_t
     unsigned int id;        /**< the entry's unique ID */
     raft_logtype_e type;    /**< type of entry */
     raft_entry_data_t data;
+
+    inline bool is_voting_cfg_change() const
+    {
+        return raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == type || raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == type;
+    }
+
+    inline bool is_cfg_change() const
+    {
+        return (
+            raft_logtype_e::RAFT_LOGTYPE_ADD_NODE == type ||
+            raft_logtype_e::RAFT_LOGTYPE_ADD_NONVOTING_NODE == type ||
+            raft_logtype_e::RAFT_LOGTYPE_DEMOTE_NODE == type ||
+            raft_logtype_e::RAFT_LOGTYPE_REMOVE_NODE == type);
+    }
+
 };
 
 /** Message sent from client to server.
