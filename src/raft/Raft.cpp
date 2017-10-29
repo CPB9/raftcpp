@@ -419,13 +419,29 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
     return false;
 }
 
-bmcl::Result<msg_requestvote_response_t, Error> Server::accept_requestvote(bmcl::Option<node_id> nodeid, const msg_requestvote_t& vr)
+msg_requestvote_response_t Server::prepare_requestvote_response_t(const msg_requestvote_t& vr, raft_request_vote vote)
 {
-    msg_requestvote_response_t r = {0};
-    bmcl::Option<Node&> node = get_node(nodeid);
+    __log(get_node(vr.candidate_id), "node requested vote: %d replying: %s",
+        vr.candidate_id,
+        vote == raft_request_vote::GRANTED ? "granted" :
+        vote == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
 
+    return msg_requestvote_response_t(get_current_term(), _me.node, vote);
+}
+
+msg_requestvote_response_t Server::accept_requestvote(const msg_requestvote_t& vr)
+{
+    bmcl::Option<Node&> node = get_node(vr.candidate_id);
     if (node.isNone())
-        node = get_node(vr.candidate_id);
+    {
+        assert(false);
+        /* It's possible the candidate node has been removed from the cluster but
+        * hasn't received the appendentries that confirms the removal. Therefore
+        * the node is partitioned and still thinks its part of the cluster. It
+        * will eventually send a requestvote. This is error response tells the
+        * node that it might be removed. */
+        return prepare_requestvote_response_t(vr, raft_request_vote::UNKNOWN_NODE);
+    }
 
     if (get_current_term() < vr.term)
     {
@@ -433,44 +449,20 @@ bmcl::Result<msg_requestvote_response_t, Error> Server::accept_requestvote(bmcl:
         become_follower();
     }
 
-    if (__should_grant_vote(this, vr))
-    {
-        /* It shouldn't be possible for a leader or candidate to grant a vote
-         * Both states would have voted for themselves */
-        assert(!is_leader() && !is_candidate());
+    if (!__should_grant_vote(this, vr))
+        return prepare_requestvote_response_t(vr, raft_request_vote::NOT_GRANTED);
 
-        vote_for_nodeid(vr.candidate_id);
-        r.vote_granted = raft_request_vote::GRANTED;
+    /* It shouldn't be possible for a leader or candidate to grant a vote
+        * Both states would have voted for themselves */
+    assert(!is_leader() && !is_candidate());
 
-        /* there must be in an election. */
-        _me.current_leader.clear();
+    vote_for_nodeid(vr.candidate_id);
 
-        _me.timeout_elapsed = std::chrono::milliseconds(0);
-    }
-    else
-    {
-        /* It's possible the candidate node has been removed from the cluster but
-         * hasn't received the appendentries that confirms the removal. Therefore
-         * the node is partitioned and still thinks its part of the cluster. It
-         * will eventually send a requestvote. This is error response tells the
-         * node that it might be removed. */
-        if (node.isNone())
-        {
-            r.vote_granted = raft_request_vote::UNKNOWN_NODE;
-            goto done;
-        }
-        else
-            r.vote_granted = raft_request_vote::NOT_GRANTED;
-    }
+    /* there must be in an election. */
+    _me.current_leader.clear();
+    _me.timeout_elapsed = std::chrono::milliseconds(0);
 
-done:
-    __log(node, "node requested vote: %d replying: %s",
-          node,
-          r.vote_granted == raft_request_vote::GRANTED ? "granted" :
-          r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
-
-    r.term = get_current_term();
-    return r;
+    return prepare_requestvote_response_t(vr, raft_request_vote::GRANTED);
 }
 
 bool Server::raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes)
@@ -542,7 +534,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
     /* Only one voting cfg change at a time */
     if (e.is_voting_cfg_change())
         if (voting_change_is_in_progress())
-            return Error::OneVotiongChangeOnly;
+            return Error::OneVotingChangeOnly;
 
     if (!is_leader())
         return Error::NotLeader;
@@ -590,18 +582,10 @@ bmcl::Option<Error> Server::send_requestvote(const bmcl::Option<node_id>& node)
 
 bmcl::Option<Error> Server::send_requestvote(const Node& node)
 {
-    msg_requestvote_t rv;
-
     assert(node.get_id() != _me.node);
-
-    __log(node, "sending requestvote to: %d", node);
-
-    rv.term = _me.current_term;
-    rv.last_log_idx = get_current_idx();
-    rv.last_log_term = get_last_log_term().unwrapOr(0);
-    rv.candidate_id = get_my_nodeid();
     assert(_me.cb.send_requestvote);
-    return _me.cb.send_requestvote(this, node, rv);
+    __log(node, "sending requestvote to: %d", node);
+    return _me.cb.send_requestvote(this, node, msg_requestvote_t(_me.current_term, _me.node, get_current_idx(), get_last_log_term().unwrapOr(0)));
 }
 
 void Server::delete_entry_from_idx(std::size_t idx)

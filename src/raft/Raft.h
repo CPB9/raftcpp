@@ -79,7 +79,7 @@ public:
 
     bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae);
     bmcl::Option<Error> accept_appendentries_response(bmcl::Option<node_id> nodeid, const msg_appendentries_response_t& r);
-    bmcl::Result<msg_requestvote_response_t, Error> accept_requestvote(bmcl::Option<node_id> nodeid, const msg_requestvote_t& vr);
+    msg_requestvote_response_t accept_requestvote(const msg_requestvote_t& vr);
     bmcl::Option<Error> accept_requestvote_response(bmcl::Option<node_id> nodeid, const msg_requestvote_response_t& r);
     bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
 
@@ -122,8 +122,10 @@ public:
     inline bool voting_change_is_in_progress() const { return _me.voting_cfg_change_log_idx.isSome(); }
     bmcl::Option<const raft_entry_t*> get_entries_from_idx(std::size_t idx, std::size_t* n_etys) const;
 
+private:
     void __log(const bmcl::Option<Node&> node, const char *fmt, ...);
     void __log(const bmcl::Option<const Node&> node, const char *fmt, ...) const;
+    msg_requestvote_response_t prepare_requestvote_response_t(const msg_requestvote_t& vr, raft_request_vote vote);
 
     server_private_t _me;
 };

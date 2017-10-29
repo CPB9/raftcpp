@@ -20,7 +20,7 @@ enum class Error : int
 {
     Any = -1,
     NotLeader = -2,
-    OneVotiongChangeOnly = -3,
+    OneVotingChangeOnly = -3,
     Shutdown = -4,
     NodeUnknown,
 };
@@ -113,6 +113,10 @@ struct msg_entry_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_requestvote_t
 {
+    msg_requestvote_t(std::size_t term, node_id candidate_id, std::size_t last_log_idx, std::size_t last_log_term)
+        :term(term), candidate_id(candidate_id), last_log_idx(last_log_idx), last_log_term(last_log_term)
+    {
+    }
     std::size_t  term;              /**< currentTerm, to force other leader/candidate to step down */
     node_id candidate_id;           /**< candidate requesting vote */
     std::size_t last_log_idx;       /**< index of candidate's last log entry */
@@ -123,7 +127,9 @@ struct msg_requestvote_t
  * Indicates if node has accepted the server's vote request. */
 struct msg_requestvote_response_t
 {
+    msg_requestvote_response_t(std::size_t term, node_id responser, raft_request_vote vote) : term(term), responser(responser), vote_granted(vote) {}
     std::size_t term;                   /**< currentTerm, for candidate to update itself */
+    node_id responser;
     raft_request_vote vote_granted;     /**< true means candidate received vote */
 };
 

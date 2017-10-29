@@ -6,12 +6,12 @@
 
 using namespace raft;
 
-static bmcl::Option<raft::Error> __raft_persist_term(raft::Server* raft, const int val)
+static bmcl::Option<raft::Error> __raft_persist_term(raft::Server* raft, std::size_t val)
 {
     return bmcl::None;
 }
 
-static bmcl::Option<raft::Error> __raft_persist_vote(raft::Server* raft, const int val)
+static bmcl::Option<raft::Error> __raft_persist_vote(raft::Server* raft, std::size_t val)
 {
     return bmcl::None;
 }
@@ -462,7 +462,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     ety.id = 2;
     auto cr = r.accept_entry(ety);
     EXPECT_TRUE(cr.isErr());
-    EXPECT_EQ(raft::Error::OneVotiongChangeOnly, cr.unwrapErr());
+    EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
     EXPECT_EQ(1, r.get_commit_idx());
 }
 
@@ -516,10 +516,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_g
     r.set_current_term(1);
     EXPECT_EQ(0, r.get_nvotes_for_me());
 
-    msg_requestvote_response_t rvr = {0};
-    rvr.term = 1;
-    rvr.vote_granted = raft_request_vote::NOT_GRANTED;
-    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), rvr);
+    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(1, raft::node_id(2), raft_request_vote::NOT_GRANTED));
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
@@ -535,10 +532,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_
     r.set_current_term(3);
     EXPECT_EQ(0, r.get_nvotes_for_me());
 
-    msg_requestvote_response_t rvr = { 0 };
-    rvr.term = 2;
-    rvr.vote_granted = raft_request_vote::GRANTED;
-    r.accept_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(2, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
 
@@ -560,10 +554,7 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(1, r.get_nvotes_for_me());
 
-    msg_requestvote_response_t rvr = { 0 };
-    rvr.term = 2;
-    rvr.vote_granted = raft_request_vote::GRANTED;
-    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), rvr);
+    bmcl::Option<raft::Error> e = r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(2, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(2, r.get_nvotes_for_me());
 }
@@ -582,10 +573,7 @@ TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
 
     r.become_leader();
 
-    msg_requestvote_response_t rvr = { 0 };
-    rvr.term = 1;
-    rvr.vote_granted = raft_request_vote::GRANTED;
-    r.accept_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(1, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_EQ(0, r.get_nvotes_for_me());
 }
 
@@ -601,11 +589,8 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
     r.set_current_term(2);
 
     /* term is less than current term */
-    msg_requestvote_t rv = {0};
-    rv.term = 1;
-    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-    EXPECT_TRUE(rvr.isOk());
-    EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
+    msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(1, raft::node_id(2), 0, 0));
+    EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.vote_granted);
 }
 
 TEST(TestServer, leader_recv_requestvote_does_not_step_down)
@@ -623,9 +608,7 @@ TEST(TestServer, leader_recv_requestvote_does_not_step_down)
     EXPECT_TRUE(r.is_leader());
 
     /* term is less than current term */
-    msg_requestvote_t rv = {0};
-    rv.term = 1;
-    EXPECT_TRUE(r.accept_requestvote(raft::node_id(2), rv).isOk());
+    r.accept_requestvote(msg_requestvote_t(1, raft::node_id(2), 0, 0));
     EXPECT_EQ(raft::node_id(1), r.get_current_leader());
 }
 
@@ -642,12 +625,8 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
     r.set_current_term(1);
 
     /* term is less than current term */
-    msg_requestvote_t rv = {0};
-    rv.term = 2;
-    rv.last_log_idx = 1;
-    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-    EXPECT_TRUE(rvr.isOk());
-    EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
+    msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(2, raft::node_id(2), 1, 0));
+    EXPECT_EQ(raft_request_vote::GRANTED, rvr.vote_granted);
 }
 
 TEST(TestServer, recv_requestvote_reset_timeout)
@@ -663,12 +642,8 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     r.set_election_timeout(std::chrono::milliseconds(1000));
     r.raft_periodic(std::chrono::milliseconds(900));
 
-    msg_requestvote_t rv = { 0 };
-    rv.term = 2;
-    rv.last_log_idx = 1;
-    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-    EXPECT_TRUE(rvr.isOk());
-    EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
+    msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(2, raft::node_id(2), 1, 0));
+    EXPECT_EQ(raft_request_vote::GRANTED, rvr.vote_granted);
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 }
 
@@ -686,11 +661,7 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
     EXPECT_EQ(raft::node_id(1), r.get_voted_for());
 
     /* current term is less than term */
-    msg_requestvote_t rv = { 0 };
-    rv.candidate_id = raft::node_id(2);
-    rv.term = 2;
-    rv.last_log_idx = 1;
-    EXPECT_TRUE(r.accept_requestvote(raft::node_id(2), rv).isOk());
+    r.accept_requestvote(msg_requestvote_t(2, raft::node_id(2), 1, 0));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(raft::node_id(2), r.get_voted_for());
@@ -710,15 +681,10 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
     EXPECT_EQ(raft::node_id(1), r.get_voted_for());
 
     /* current term is less than term */
-    msg_requestvote_t rv = { 0 };
-    rv.candidate_id = raft::node_id(3);
-    rv.term = 2;
-    rv.last_log_idx = 1;
-    auto rvr = r.accept_requestvote(bmcl::None, rv);
-    EXPECT_TRUE(rvr.isOk());
+    msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(2, raft::node_id(2), 1, 0));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
-    EXPECT_EQ(raft::node_id(3), r.get_voted_for());
+    EXPECT_EQ(raft::node_id(2), r.get_voted_for());
 }
 
 /* If votedFor is null or candidateId, and candidate's log is at
@@ -737,23 +703,16 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     /* vote for self */
     r.vote_for_nodeid(raft::node_id(1));
 
-    msg_requestvote_t rv = {0};
-    rv.term = 1;
-    rv.candidate_id = raft::node_id(1);
-    rv.last_log_idx = 1;
-    rv.last_log_term = 1;
     {
-        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-        EXPECT_TRUE(rvr.isOk());
-        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
+        msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(1, raft::node_id(2), 1, 1));
+        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.vote_granted);
     }
 
     /* vote for ID 0 */
     r.vote_for_nodeid(raft::node_id(0));
     {
-        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-        EXPECT_TRUE(rvr.isOk());
-        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
+        msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(1, raft::node_id(2), 1, 1));
+        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.vote_granted);
     }
 }
 
@@ -1281,7 +1240,6 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
 /* Candidate 5.2 */
 TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 {
-    msg_requestvote_t rv;
 
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
@@ -1292,11 +1250,6 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
     /*  request vote */
     /*  vote indicates candidate's log is not complete compared to follower */
-    memset(&rv, 0, sizeof(msg_requestvote_t));
-    rv.term = 1;
-    rv.candidate_id = raft::node_id(1);
-    rv.last_log_idx = 1;
-    rv.last_log_term = 1;
 
     r.set_current_term(1);
 
@@ -1306,22 +1259,15 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
     /* vote not granted */
     {
-        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-        EXPECT_TRUE(rvr.isOk());
-        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
+        msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(1, raft::node_id(2), 1, 1));
+        EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.vote_granted);
     }
 
     /* approve vote, because last_log_term is higher */
     r.set_current_term(2);
-    memset(&rv, 0, sizeof(msg_requestvote_t));
-    rv.term = 2;
-    rv.candidate_id = raft::node_id(1);
-    rv.last_log_idx = 1;
-    rv.last_log_term = 3;
     {
-        auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-        EXPECT_TRUE(rvr.isOk());
-        EXPECT_EQ(raft_request_vote::GRANTED, rvr.unwrap().vote_granted);
+        msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(2, raft::node_id(2), 1, 3));
+        EXPECT_EQ(raft_request_vote::GRANTED, rvr.vote_granted);
     }
 }
 
@@ -1599,8 +1545,6 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 /* Candidate 5.2 */
 TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
 {
-    msg_requestvote_response_t vr;
-
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
@@ -1620,17 +1564,14 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
     EXPECT_EQ(1, r.get_nvotes_for_me());
 
     /* a vote for us */
-    memset(&vr, 0, sizeof(msg_requestvote_response_t));
-    vr.term = 1;
-    vr.vote_granted = raft_request_vote::GRANTED;
     /* get one vote */
-    r.accept_requestvote_response(raft::node_id(2), vr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(1, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_EQ(2, r.get_nvotes_for_me());
     EXPECT_FALSE(r.is_leader());
 
     /* get another vote
      * now has majority (ie. 3/5 votes) */
-    r.accept_requestvote_response(raft::node_id(3), vr);
+    r.accept_requestvote_response(raft::node_id(3), msg_requestvote_response_t(1, raft::node_id(3), raft_request_vote::GRANTED));
     EXPECT_TRUE(r.is_leader());
 }
 
@@ -1646,12 +1587,10 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
 
     r.vote_for_nodeid(raft::node_id(1));
 
-    msg_requestvote_t rv = {0};
-    auto rvr = r.accept_requestvote(raft::node_id(2), rv);
-    EXPECT_TRUE(rvr.isOk());
+    msg_requestvote_response_t rvr = r.accept_requestvote(msg_requestvote_t(0, raft::node_id(2), 0, 0));
 
     /* we've vote already, so won't respond with a vote granted... */
-    EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.unwrap().vote_granted);
+    EXPECT_EQ(raft_request_vote::NOT_GRANTED, rvr.vote_granted);
 }
 
 /* Candidate 5.2 */
@@ -1702,10 +1641,7 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     EXPECT_FALSE(r.get_current_leader().isSome());
     EXPECT_EQ(1, r.get_current_term());
 
-    msg_requestvote_response_t rvr = { 0 };
-    rvr.term = 2;
-    rvr.vote_granted = raft_request_vote::NOT_GRANTED;
-    r.accept_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(2, raft::node_id(2), raft_request_vote::NOT_GRANTED));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_FALSE(r.get_voted_for().isSome());
@@ -2938,18 +2874,12 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
 
     r.election_start();
 
-    msg_requestvote_response_t rvr = {0};
-    rvr.term = 1;
-    rvr.vote_granted = raft_request_vote::GRANTED;
-    r.accept_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(1, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
-    msg_requestvote_t rv = {0};
-    rv.term = 1;
-    auto opt = r.accept_requestvote(raft::node_id(3), rv);
-    EXPECT_TRUE(opt.isOk());
-    EXPECT_EQ(raft_request_vote::NOT_GRANTED, opt.unwrap().vote_granted);
+    msg_requestvote_response_t opt = r.accept_requestvote(msg_requestvote_t(1, raft::node_id(3), 0, 0));
+    EXPECT_EQ(raft_request_vote::NOT_GRANTED, opt.vote_granted);
 }
 
 TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
@@ -2972,15 +2902,10 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
 
     r.election_start();
 
-    msg_requestvote_response_t rvr = {0};
-    rvr.term = 1;
-    rvr.vote_granted = raft_request_vote::GRANTED;
-    r.accept_requestvote_response(raft::node_id(2), rvr);
+    r.accept_requestvote_response(raft::node_id(2), msg_requestvote_response_t(1, raft::node_id(2), raft_request_vote::GRANTED));
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
-    msg_requestvote_t rv = {0};
-    rv.term = 2;
-    EXPECT_TRUE(r.accept_requestvote(raft::node_id(3), rv).isOk());
+    r.accept_requestvote(msg_requestvote_t(2, raft::node_id(3), 0, 0));
     EXPECT_TRUE(r.is_follower());
 }
