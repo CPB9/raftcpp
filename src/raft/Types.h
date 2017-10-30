@@ -137,6 +137,7 @@ struct msg_requestvote_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_t
 {
+    msg_appendentries_t(std::size_t term, std::size_t prev_log_idx = 0) : term(term), prev_log_idx(0), prev_log_term(0), leader_commit(0), n_entries(0), entries(nullptr) {}
     std::size_t term;           /**< currentTerm, to force other leader/candidate to step down */
     std::size_t prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     std::size_t prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
@@ -150,12 +151,13 @@ struct msg_appendentries_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_response_t
 {
+    msg_appendentries_response_t(std::size_t term, bool success, std::size_t current_idx, std::size_t first_idx)
+        : term(term), success(success), current_idx(current_idx), first_idx(first_idx) {}
     std::size_t term;           /**< currentTerm, to force other leader/candidate to step down */
     bool success;               /**< true if follower contained entry matching prevLogidx and prevLogTerm */
 
     /* Non-Raft fields follow: */
-    /* Having the following fields allows us to do less book keeping in
-     * regards to full fledged RPC */
+    /* Having the following fields allows us to do less book keeping in regards to full fledged RPC */
 
     std::size_t current_idx;    /**< This is the highest log IDX we've received and appended to our log */
     std::size_t first_idx;      /**< The first idx that we received within the appendentries message */

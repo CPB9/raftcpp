@@ -243,7 +243,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
 
 bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae)
 {
-    msg_appendentries_response_t r = {0};
+    msg_appendentries_response_t r(_me.current_term, false, 0, 0);
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
     _me.timeout_elapsed = std::chrono::milliseconds(0);
@@ -273,7 +273,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     {
         /* 1. Reply false if term < currentTerm (§5.1) */
         __log(node, "AE term %d is less than current term %d", ae.term, _me.current_term);
-        goto fail_with_current_idx;
+        return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
     }
 
     /* Not the first appendentries we've received */
@@ -284,21 +284,20 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         if (e.isNone())
         {
             __log(node, "AE no log at prev_idx %d", ae.prev_log_idx);
-            goto fail_with_current_idx;
+            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
         }
 
         /* 2. Reply false if log doesn't contain an entry at prevLogIndex
            whose term matches prevLogTerm (§5.3) */
         if (_log.get_current_idx() < ae.prev_log_idx)
-            goto fail_with_current_idx;
+            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
 
         if (e.unwrap().term != ae.prev_log_term)
         {
             __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
             delete_entry_from_idx(ae.prev_log_idx);
-            r.current_idx = ae.prev_log_idx - 1;
-            goto fail;
+            return msg_appendentries_response_t(r.term, false, ae.prev_log_idx - 1, 0);
         }
     }
 
@@ -345,7 +344,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
                 r.first_idx = 0;
                 return Error::Shutdown;
             }
-            goto fail_with_current_idx;
+            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
         }
         r.current_idx = ae.prev_log_idx + 1 + i;
     }
@@ -363,13 +362,6 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
 
     r.success = true;
     r.first_idx = ae.prev_log_idx + 1;
-    return r;
-
-fail_with_current_idx:
-    r.current_idx = _log.get_current_idx();
-fail:
-    r.success = false;
-    r.first_idx = 0;
     return r;
 }
 

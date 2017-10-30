@@ -675,8 +675,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
     EXPECT_FALSE(r.get_current_leader().isSome());
 
     /* term is low */
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
 
     /*  higher current term */
     r.set_current_term(5);
@@ -695,9 +694,7 @@ TEST(TestFollower, recv_appendentries_does_not_need_node)
 
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
-    msg_appendentries_t ae = {0};
-    ae.term = 1;
-    auto aer = r.accept_appendentries(bmcl::None, ae);
+    auto aer = r.accept_appendentries(bmcl::None, msg_appendentries_t(1));
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
 }
@@ -716,10 +713,8 @@ TEST(TestFollower, recv_appendentries_updates_currentterm_if_term_gt_currentterm
     EXPECT_FALSE(r.get_current_leader().isSome());
 
     /*  newer term for appendentry */
-    msg_appendentries_t ae = {0};
     /* no prev log idx */
-    ae.prev_log_idx = 0;
-    ae.term = 2;
+    msg_appendentries_t ae(2, 0);
 
     /*  appendentry has newer term, so we change our currentterm */
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
@@ -747,7 +742,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
     EXPECT_EQ(0, r.log().count());
 
     /* receive an appendentry with commit */
-    msg_appendentries_t ae = {0};
+    msg_appendentries_t ae(1);
     ae.term = 1;
     ae.prev_log_term = 1;
     ae.prev_log_idx = 4;
@@ -773,7 +768,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
     EXPECT_EQ(0, r.log().count());
 
     /* receive an appendentry with commit */
-    msg_appendentries_t ae = { 0 };
+    msg_appendentries_t ae(3);
     ae.term = 3;
     ae.prev_log_term = 1;
     /* first appendentries msg */
@@ -808,8 +803,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
     // TODO at log manually?
 
     /* log idx that server doesn't have */
-    msg_appendentries_t ae = { 0 };
-    ae.term = 2;
+    msg_appendentries_t ae(2);
     ae.prev_log_idx = 1;
     /* prev_log_term is less than current term (ie. 2) */
     ae.prev_log_term = 1;
@@ -868,8 +862,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 
     /* pass a appendentry that is newer  */
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 2;
+    msg_appendentries_t ae(2);
     /* entries from 2 onwards will be overwritten by this appendentries message */
     ae.prev_log_idx = 1;
     ae.prev_log_term = 1;
@@ -910,8 +903,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 
     /* pass a appendentry that is newer  */
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 2;
+    msg_appendentries_t ae(2);
     /* ALL append entries will be overwritten by this appendentries message */
     ae.prev_log_idx = 0;
     ae.prev_log_term = 0;
@@ -947,7 +939,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     __create_mock_entries_for_conflict_tests(&r, strs);
     EXPECT_EQ(3, r.log().count());
 
-    msg_appendentries_t ae = { 0 };
+    msg_appendentries_t ae(2);
     ae.term = 2;
     ae.prev_log_idx = 1;
     ae.prev_log_term = 1;
@@ -976,8 +968,7 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
     r.set_current_term(1);
 
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include entries */
@@ -1000,8 +991,7 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     r.nodes().add_node(raft::node_id(2));
     r.set_current_term(1);
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include 1 entry */
@@ -1041,8 +1031,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include entries */
@@ -1080,8 +1069,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include entries */
@@ -1122,9 +1110,8 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     r.append_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
 
     /* receive an appendentry with commit */
-    msg_appendentries_t ae = { 0 };
     /* lower term means failure */
-    ae.term = 0;
+    msg_appendentries_t ae(0);
     ae.prev_log_term = 0;
     ae.prev_log_idx = 0;
     ae.leader_commit = 0;
@@ -1205,8 +1192,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include entries */
@@ -1259,8 +1245,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
 
-    msg_appendentries_t ae = { 0 };
-    ae.term = 1;
+    msg_appendentries_t ae(1);
     ae.prev_log_idx = 0;
     ae.prev_log_term = 1;
     /* include entries */
@@ -1394,9 +1379,7 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 
     r.raft_periodic(std::chrono::milliseconds(900));
 
-    msg_appendentries_t ae = {0};
-    ae.term = 1;
-    auto aer = r.accept_appendentries(raft::node_id(1), ae);
+    auto aer = r.accept_appendentries(raft::node_id(1), msg_appendentries_t(1));
     EXPECT_TRUE(aer.isOk());
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 }
@@ -1590,9 +1573,7 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     EXPECT_EQ(0, r.get_current_term());
 
     /* receive recent appendentries */
-    msg_appendentries_t ae = {0};
-    ae.term = 1;
-    auto aer = r.accept_appendentries(raft::node_id(2), ae);
+    auto aer = r.accept_appendentries(raft::node_id(2), msg_appendentries_t(1));
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(r.is_follower());
     /* after accepting a leader, it's available as the last known leader */
@@ -1617,8 +1598,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     EXPECT_FALSE(r.is_follower());
     EXPECT_EQ(raft::node_id(1), r.get_voted_for());
 
-    msg_appendentries_t ae = {0};
-    ae.term = 2;
+    msg_appendentries_t ae(2);
     ae.prev_log_idx = 1;
     ae.prev_log_term = 1;
 
@@ -1887,7 +1867,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 
     /* receive appendentries messages */
     r.send_appendentries(raft::node_id(2));
-    msg_appendentries_t*  ae;;
+    msg_appendentries_t*  ae;
     {
         bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2022,14 +2002,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.send_appendentries(raft::node_id(3));
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer = {0};
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(0, r.get_commit_idx());
-    r.accept_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), msg_appendentries_response_t(1, true, 1, 1));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(1, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2043,13 +2018,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.send_appendentries(raft::node_id(3));
 
     /* receive mock success responses */
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 2;
-    aer.first_idx = 2;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 2, 2));
     EXPECT_EQ(1, r.get_commit_idx());
-    r.accept_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), msg_appendentries_response_t(1, true, 2, 2));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(2, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2088,12 +2059,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     r.send_appendentries(raft::node_id(2));
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer = { 0 };
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(1, r.get_commit_idx());
     /* leader will now have majority followers who have appended this log */
     r.raft_periodic(std::chrono::milliseconds(1));
@@ -2126,30 +2092,16 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     r.append_entry(msg_entry_t(1, 2, raft::raft_entry_data_t("aaa", 4)));
     r.append_entry(msg_entry_t(1, 3, raft::raft_entry_data_t("aaa", 4)));
 
-    msg_appendentries_response_t aer = { 0 };
-
     /* receive msg 1 */
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(1, r.nodes().get_node(raft::node_id(2))->get_match_idx());
 
     /* receive msg 2 */
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 2;
-    aer.first_idx = 2;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 2, 2));
     EXPECT_EQ(2, r.nodes().get_node(raft::node_id(2))->get_match_idx());
 
     /* receive msg 1 - because of duplication ie. unreliable network */
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(2, r.nodes().get_node(raft::node_id(2))->get_match_idx());
 }
 
@@ -2186,14 +2138,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::node_id(2));
     r.send_appendentries(raft::node_id(3));
     /* receive mock success responses */
-    msg_appendentries_response_t aer = { 0 };
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(0, r.get_commit_idx());
-    r.accept_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(0, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.get_last_applied_idx());
@@ -2204,13 +2151,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::node_id(2));
     r.send_appendentries(raft::node_id(3));
     /* receive mock success responses */
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 2;
-    aer.first_idx = 2;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 2, 2));
     EXPECT_EQ(0, r.get_commit_idx());
-    r.accept_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), msg_appendentries_response_t(1, true, 2, 2));
     EXPECT_EQ(0, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.get_last_applied_idx());
@@ -2220,13 +2163,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::node_id(3));
     /* receive mock success responses
      * let's say that the nodes have majority within leader's current term */
-    aer.term = 2;
-    aer.success = true;
-    aer.current_idx = 3;
-    aer.first_idx = 3;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(2, true, 3, 3));
     EXPECT_EQ(0, r.get_commit_idx());
-    r.accept_appendentries_response(raft::node_id(3), aer);
+    r.accept_appendentries_response(raft::node_id(3), msg_appendentries_response_t(2, true, 3, 3));
     EXPECT_EQ(3, r.get_commit_idx());
     r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.get_last_applied_idx());
@@ -2288,12 +2227,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer = { 0 };
-    memset(&aer, 0, sizeof(msg_appendentries_response_t));
-    aer.term = 2;
-    aer.success = false;
-    aer.current_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(2, false, 1, 0));
     EXPECT_EQ(2, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2361,11 +2295,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer = {0};
-    aer.term = 2;
-    aer.success = false;
-    aer.current_idx = 4;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(2, false, 4, 0));
     EXPECT_EQ(4, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2380,11 +2310,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    memset(&aer, 0, sizeof(msg_appendentries_response_t));
-    aer.term = 2;
-    aer.success = false;
-    aer.current_idx = 4;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(2, false, 4, 0));
     EXPECT_EQ(3, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -2434,13 +2360,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     r.become_follower();
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer;
-    memset(&aer, 0, sizeof(msg_appendentries_response_t));
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    EXPECT_TRUE(r.accept_appendentries_response(raft::node_id(2), aer).isSome());
+    EXPECT_TRUE(r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1)).isSome());
     EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
@@ -2458,13 +2378,7 @@ TEST(TestLeader, recv_appendentries_response_without_node_fails)
     r.set_current_term(1);
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer;
-    memset(&aer, 0, sizeof(msg_appendentries_response_t));
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 0;
-    aer.first_idx = 0;
-    EXPECT_TRUE(r.accept_appendentries_response(bmcl::None, aer).isSome());
+    EXPECT_TRUE(r.accept_appendentries_response(bmcl::None, msg_appendentries_response_t(1, true, 0, 0)).isSome());
 }
 
 TEST(TestLeader, recv_entry_resets_election_timeout)
@@ -2603,17 +2517,11 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     r.send_appendentries(raft::node_id(2));
 
     /* receive mock success response */
-    msg_appendentries_response_t aer;
-    memset(&aer, 0, sizeof(msg_appendentries_response_t));
-    aer.term = 1;
-    aer.success = false;
-    aer.current_idx = 0;
-    aer.first_idx = 0;
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::node_id(2));
     EXPECT_TRUE(p.isSome());
-    r.accept_appendentries_response(p->get_id(), aer);
+    r.accept_appendentries_response(p->get_id(), msg_appendentries_response_t(1, false, 0, 0));
     EXPECT_EQ(1, p->get_next_idx());
-    r.accept_appendentries_response(p->get_id(), aer);
+    r.accept_appendentries_response(p->get_id(), msg_appendentries_response_t(1, false, 0, 0));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2638,12 +2546,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
     EXPECT_EQ(1, p->get_next_idx());
 
     /* receive mock success responses */
-    msg_appendentries_response_t aer;
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 0;
-    aer.first_idx = 0;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 0, 0));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2668,12 +2571,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     EXPECT_EQ(1, p->get_next_idx());
 
     /* receive OLD mock success responses */
-    msg_appendentries_response_t aer;
-    aer.term = 1;
-    aer.success = true;
-    aer.current_idx = 1;
-    aer.first_idx = 1;
-    r.accept_appendentries_response(raft::node_id(2), aer);
+    r.accept_appendentries_response(raft::node_id(2), msg_appendentries_response_t(1, true, 1, 1));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2691,8 +2589,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
     EXPECT_TRUE(r.is_leader());
     EXPECT_EQ(raft::node_id(1), r.get_current_leader());
 
-    msg_appendentries_t ae = {0};
-    ae.term = 6;
+    msg_appendentries_t ae(6);
     ae.prev_log_idx = 6;
     ae.prev_log_term = 5;
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
@@ -2715,8 +2612,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
     r.set_state(raft_state_e::LEADER);
     r.set_current_term(5);
 
-    msg_appendentries_t ae = {0};
-    ae.term = 6;
+    msg_appendentries_t ae(6);
     ae.prev_log_idx = 5;
     ae.prev_log_term = 5;
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
