@@ -18,7 +18,7 @@ TEST(TestScenario, leader_appears)
 
         for(std::size_t j = 1; j < Count; ++j)
         {
-            rx.add_node(raft::node_id((i + j) % Count));
+            rx.nodes().add_node(raft::node_id((i + j) % Count));
         }
         rx.set_election_timeout(std::chrono::milliseconds(500));
     }
@@ -68,6 +68,5 @@ one_more_time:
         if (r[j].is_leader())
             leaders += 1;
 
-    EXPECT_NE(0, leaders);
     EXPECT_EQ(1, leaders);
 }

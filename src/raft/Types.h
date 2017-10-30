@@ -117,8 +117,8 @@ struct msg_requestvote_t
         :term(term), candidate_id(candidate_id), last_log_idx(last_log_idx), last_log_term(last_log_term)
     {
     }
-    std::size_t  term;              /**< currentTerm, to force other leader/candidate to step down */
-    node_id candidate_id;           /**< candidate requesting vote */
+    std::size_t term;               /**< currentTerm, to force other leader/candidate to step down */
+    node_id     candidate_id;       /**< candidate requesting vote */
     std::size_t last_log_idx;       /**< index of candidate's last log entry */
     std::size_t last_log_term;      /**< term of candidate's last log entry */
 };
@@ -127,9 +127,9 @@ struct msg_requestvote_t
  * Indicates if node has accepted the server's vote request. */
 struct msg_requestvote_response_t
 {
-    msg_requestvote_response_t(std::size_t term, node_id responser, raft_request_vote vote) : term(term), responser(responser), vote_granted(vote) {}
+    msg_requestvote_response_t(std::size_t term, node_id responser, raft_request_vote vote) : term(term), responser_id(responser), vote_granted(vote) {}
     std::size_t term;                   /**< currentTerm, for candidate to update itself */
-    node_id responser;
+    node_id     responser_id;
     raft_request_vote vote_granted;     /**< true means candidate received vote */
 };
 
@@ -236,39 +236,39 @@ struct raft_cbs_t
     func_send_appendentries_f send_appendentries;
 
     /** Callback for finite state machine application
-     * Return 0 on success.
-     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    * Return 0 on success.
+    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
     func_logentry_event_f applylog;
 
     /** Callback for persisting vote data
-     * For safety reasons this callback MUST flush the change to disk. */
+    * For safety reasons this callback MUST flush the change to disk. */
     func_persist_int_f persist_vote;
 
     /** Callback for persisting term data
-     * For safety reasons this callback MUST flush the change to disk. */
+    * For safety reasons this callback MUST flush the change to disk. */
     func_persist_int_f persist_term;
 
     /** Callback for adding an entry to the log
-     * For safety reasons this callback MUST flush the change to disk.
-     * Return 0 on success.
-     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    * For safety reasons this callback MUST flush the change to disk.
+    * Return 0 on success.
+    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
     func_logentry_event_f log_offer;
 
     /** Callback for removing the oldest entry from the log
-     * For safety reasons this callback MUST flush the change to disk.
-     * @note If memory was malloc'd in log_offer then this should be the right
-     *  time to free the memory. */
+    * For safety reasons this callback MUST flush the change to disk.
+    * @note If memory was malloc'd in log_offer then this should be the right
+    *  time to free the memory. */
     func_logentry_event_f log_poll;
 
     /** Callback for removing the youngest entry from the log
-     * For safety reasons this callback MUST flush the change to disk.
-     * @note If memory was malloc'd in log_offer then this should be the right
-     *  time to free the memory. */
+    * For safety reasons this callback MUST flush the change to disk.
+    * @note If memory was malloc'd in log_offer then this should be the right
+    *  time to free the memory. */
     func_logentry_event_f log_pop;
 
     /** Callback for determining which node this configuration log entry
-     * affects. This call only applies to configuration change log entries.
-     * @return the node ID of the node */
+    * affects. This call only applies to configuration change log entries.
+    * @return the node ID of the node */
     func_logentry_event_f log_get_node_id;
 
     /** Callback for detecting when a non-voting node has sufficient logs. */
