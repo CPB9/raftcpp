@@ -12,6 +12,7 @@ add_library(raftcpp STATIC
     src/raft/Log.h
     src/raft/Log.cpp
     src/raft/Node.h
+    src/raft/Node.cpp
     src/raft/Types.h
 )
 target_include_directories(raftcpp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

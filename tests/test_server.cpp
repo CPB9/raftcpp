@@ -91,61 +91,6 @@ TEST(TestServer, voting_results_in_voting)
     EXPECT_EQ(raft::node_id(9), r.get_voted_for());
 }
 
-TEST(TestServer, add_node_makes_non_voting_node_voting)
-{
-    raft::Server r(raft::node_id(9), false);
-    bmcl::Option<raft::Node&> n1 = r.nodes().get_node(raft::node_id(9));
-
-    EXPECT_TRUE(n1.isSome());
-    EXPECT_FALSE(n1->is_voting());
-    r.nodes().add_node(raft::node_id(9));
-    EXPECT_TRUE(n1->is_voting());
-    EXPECT_EQ(1, r.nodes().count());
-}
-
-TEST(TestServer, add_node_with_already_existing_id_is_not_allowed)
-{
-    raft::Server r(raft::node_id(1), true);
-    r.nodes().add_node(raft::node_id(9));
-    r.nodes().add_node(raft::node_id(11));
-
-    EXPECT_FALSE(r.nodes().add_node(raft::node_id(9)).isSome());
-    EXPECT_FALSE(r.nodes().add_node(raft::node_id(11)).isSome());
-}
-
-TEST(TestServer, add_non_voting_node_with_already_existing_id_is_not_allowed)
-{
-    raft::Server r(raft::node_id(1), true);
-    r.nodes().add_non_voting_node(raft::node_id(9));
-    r.nodes().add_non_voting_node(raft::node_id(11));
-
-    EXPECT_FALSE(r.nodes().add_non_voting_node(raft::node_id(9)).isSome());
-    EXPECT_FALSE(r.nodes().add_non_voting_node(raft::node_id(11)).isSome());
-}
-
-TEST(TestServer, add_non_voting_node_with_already_existing_voting_id_is_not_allowed)
-{
-    raft::Server r(raft::node_id(1), true);
-    r.nodes().add_node(raft::node_id(9));
-    r.nodes().add_node(raft::node_id(11));
-
-    EXPECT_FALSE(r.nodes().add_non_voting_node(raft::node_id(9)).isSome());
-    EXPECT_FALSE(r.nodes().add_non_voting_node(raft::node_id(11)).isSome());
-}
-
-TEST(TestServer, remove_node)
-{
-    raft::Server r(raft::node_id(1), true);
-    bmcl::Option<raft::Node&> n1 = r.nodes().add_node(raft::node_id(2));
-    bmcl::Option<raft::Node&> n2 = r.nodes().add_node(raft::node_id(9));
-
-    r.nodes().remove_node(raft::node_id(2));
-    EXPECT_FALSE(r.nodes().get_node(raft::node_id(2)).isSome());
-    EXPECT_TRUE(r.nodes().get_node(raft::node_id(9)).isSome());
-    r.nodes().remove_node(raft::node_id(9));
-    EXPECT_FALSE(r.nodes().get_node(raft::node_id(9)).isSome());
-}
-
 TEST(TestServer, election_start_increments_term)
 {
     raft::Server r(raft::node_id(1), true);
@@ -464,25 +409,6 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     EXPECT_TRUE(cr.isErr());
     EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
     EXPECT_EQ(1, r.get_commit_idx());
-}
-
-TEST(TestServer, cfg_sets_num_nodes)
-{
-    raft::Server r(raft::node_id(1), true);
-    r.nodes().add_node(raft::node_id(2));
-
-    EXPECT_EQ(2, r.nodes().count());
-}
-
-TEST(TestServer, cant_get_node_we_dont_have)
-{
-    raft::Server r(raft::node_id(1), true);
-    r.nodes().add_node(raft::node_id(2));
-
-    EXPECT_FALSE(r.nodes().get_node(raft::node_id(0)).isSome());
-    EXPECT_TRUE(r.nodes().get_node(raft::node_id(1)).isSome());
-    EXPECT_TRUE(r.nodes().get_node(raft::node_id(2)).isSome());
-    EXPECT_FALSE(r.nodes().get_node(raft::node_id(3)).isSome());
 }
 
 /* If term > currentTerm, set currentTerm to term (step down if candidate or
