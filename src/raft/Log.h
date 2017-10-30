@@ -29,7 +29,7 @@ public:
 
     /**
     * @return number of entries held within log */
-    std::size_t log_count() const;
+    std::size_t count() const;
 
     /**
     * Delete all logs from this log onwards */
@@ -37,22 +37,24 @@ public:
 
     /**
     * Empty the queue. */
-    void log_empty();
+    void clear();
 
     /**
     * Remove oldest entry
     * @return oldest entry */
     bmcl::Option<raft_entry_t> log_poll(Server* raft);
 
-    bmcl::Option<const raft_entry_t*> log_get_from_idx(std::size_t idx, std::size_t *n_etys) const;
+    bmcl::Option<const raft_entry_t*> get_from_idx(std::size_t idx, std::size_t *n_etys) const;
 
-    bmcl::Option<const raft_entry_t&> log_get_at_idx(std::size_t idx) const;
+    bmcl::Option<const raft_entry_t&> get_at_idx(std::size_t idx) const;
 
     /**
     * @return youngest entry */
-    bmcl::Option<const raft_entry_t&> log_peektail() const;
+    bmcl::Option<const raft_entry_t&> peektail() const;
 
-    std::size_t log_get_current_idx() const;
+    std::size_t get_current_idx() const;
+
+    bmcl::Option<std::size_t> get_last_log_term() const;
 
 private:
     log_private_t _me;

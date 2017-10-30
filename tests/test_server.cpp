@@ -58,10 +58,10 @@ TEST(TestServer, get_my_node)
 TEST(TestServer, idx_starts_at_1)
 {
     raft::Server r(raft::node_id(1), true);
-    EXPECT_EQ(0, r.get_current_idx());
+    EXPECT_EQ(0, r.log().get_current_idx());
 
     r.append_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
-    EXPECT_EQ(1, r.get_current_idx());
+    EXPECT_EQ(1, r.log().get_current_idx());
 }
 
 TEST(TestServer, currentterm_defaults_to_0)
@@ -183,17 +183,17 @@ TEST(TestServer, starts_with_request_timeout_of_200ms)
 TEST(TestServer, entry_append_increases_logidx)
 {
     raft::Server r(raft::node_id(1), true);
-    EXPECT_EQ(0, r.get_current_idx());
+    EXPECT_EQ(0, r.log().get_current_idx());
     r.append_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
-    EXPECT_EQ(1, r.get_current_idx());
+    EXPECT_EQ(1, r.log().get_current_idx());
 }
 
 TEST(TestServer, append_entry_means_entry_gets_current_term)
 {
     raft::Server r(raft::node_id(1), true);
-    EXPECT_EQ(0, r.get_current_idx());
+    EXPECT_EQ(0, r.log().get_current_idx());
     r.append_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
-    EXPECT_EQ(1, r.get_current_idx());
+    EXPECT_EQ(1, r.log().get_current_idx());
 }
 
 TEST(TestServer, append_entry_is_retrievable)
@@ -205,7 +205,7 @@ TEST(TestServer, append_entry_is_retrievable)
     raft_entry_t ety(1, 100, raft::raft_entry_data_t("aaa", 4));
     r.append_entry(ety);
 
-    bmcl::Option<const raft_entry_t&> kept =  r.get_entry_from_idx(1);
+    bmcl::Option<const raft_entry_t&> kept =  r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
     EXPECT_NE(nullptr, kept.unwrap().data.buf);
     EXPECT_EQ(ety.data.len, kept.unwrap().data.len);
@@ -230,7 +230,7 @@ TEST(TestServer, append_entry_user_can_set_data_buf)
     r.set_current_term(5);
     raft_entry_t ety(1, 100, raft::raft_entry_data_t("aaa", 4));
     r.append_entry(ety);
-    bmcl::Option<const raft_entry_t&> kept =  r.get_entry_from_idx(1);
+    bmcl::Option<const raft_entry_t&> kept =  r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
     EXPECT_NE(nullptr, kept.unwrap().data.buf);
     EXPECT_EQ(kept.unwrap().data.buf, ety.data.buf);
@@ -275,7 +275,7 @@ TEST(TestServer, entry_is_retrieveable_using_idx)
     /* different ID so we can be successful */
     r.append_entry(raft_entry_t(1, 2, raft::raft_entry_data_t(str2, 4)));
 
-    bmcl::Option<const raft_entry_t&> ety_appended = r.get_entry_from_idx(2);
+    bmcl::Option<const raft_entry_t&> ety_appended = r.log().get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str2, 3));
 }
@@ -440,7 +440,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
     /* receive entry */
     auto cr = r.accept_entry(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(1, r.get_log_count());
+    EXPECT_EQ(1, r.log().count());
     EXPECT_EQ(1, r.get_commit_idx());
 }
 
@@ -457,7 +457,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 
     /* receive entry */
     EXPECT_TRUE(r.accept_entry(ety).isOk());
-    EXPECT_EQ(1, r.get_log_count());
+    EXPECT_EQ(1, r.log().count());
 
     ety.id = 2;
     auto cr = r.accept_entry(ety);
@@ -818,7 +818,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
     r.set_state(raft_state_e::FOLLOWER);
 
     /*  log size s */
-    EXPECT_EQ(0, r.get_log_count());
+    EXPECT_EQ(0, r.log().count());
 
     /* receive an appendentry with commit */
     msg_appendentries_t ae = {0};
@@ -830,7 +830,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
 
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
-    EXPECT_EQ(0, r.get_log_count());
+    EXPECT_EQ(0, r.log().count());
 }
 
 TEST(TestFollower, recv_appendentries_increases_log)
@@ -844,7 +844,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
     r.set_state(raft_state_e::FOLLOWER);
 
     /*  log size s */
-    EXPECT_EQ(0, r.get_log_count());
+    EXPECT_EQ(0, r.log().count());
 
     /* receive an appendentry with commit */
     msg_appendentries_t ae = { 0 };
@@ -862,8 +862,8 @@ TEST(TestFollower, recv_appendentries_increases_log)
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(1, r.get_log_count());
-    bmcl::Option<const raft_entry_t&> log = r.get_entry_from_idx(1);
+    EXPECT_EQ(1, r.log().count());
+    bmcl::Option<const raft_entry_t&> log = r.log().get_at_idx(1);
     EXPECT_TRUE(log.isSome());
     EXPECT_EQ(2, log.unwrap().term);
 }
@@ -907,21 +907,21 @@ static void __create_mock_entries_for_conflict_tests(raft::Server* r, char** str
     /* increase log size */
     char *str1 = strs[0];
     r->append_entry(raft_entry_t(1, 1, raft::raft_entry_data_t(str1, 3)));
-    EXPECT_EQ(1, r->get_log_count());
+    EXPECT_EQ(1, r->log().count());
 
     /* this log will be overwritten by a later appendentries */
     char *str2 = strs[1];
     r->append_entry(raft_entry_t(1, 2, raft::raft_entry_data_t(str2, 3)));
-    EXPECT_EQ(2, r->get_log_count());
-    ety_appended = r->get_entry_from_idx(2);
+    EXPECT_EQ(2, r->log().count());
+    ety_appended = r->log().get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str2, 3));
 
     /* this log will be overwritten by a later appendentries */
     char *str3 = strs[2];
     r->append_entry(raft_entry_t(1, 3, raft::raft_entry_data_t(str3, 4)));
-    EXPECT_EQ(3, r->get_log_count());
-    ety_appended = r->get_entry_from_idx(3);
+    EXPECT_EQ(3, r->log().count());
+    ety_appended = r->log().get_at_idx(3);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str3, 3));
 }
@@ -956,15 +956,15 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(2, r.get_log_count());
+    EXPECT_EQ(2, r.log().count());
     /* str1 is still there */
 
-    bmcl::Option<const raft_entry_t&> ety_appended = r.get_entry_from_idx(1);
+    bmcl::Option<const raft_entry_t&> ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, strs[0], 3));
     /* str4 has overwritten the last 2 entries */
 
-    ety_appended = r.get_entry_from_idx(2);
+    ety_appended = r.log().get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str4, 3));
 }
@@ -998,9 +998,9 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(1, r.get_log_count());
+    EXPECT_EQ(1, r.log().count());
     /* str1 is gone */
-    bmcl::Option<const raft_entry_t&> ety_appended = r.get_entry_from_idx(1);
+    bmcl::Option<const raft_entry_t&> ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str4, 3));
 }
@@ -1019,7 +1019,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     bmcl::Option<const raft_entry_t&> ety_appended;
     
     __create_mock_entries_for_conflict_tests(&r, strs);
-    EXPECT_EQ(3, r.get_log_count());
+    EXPECT_EQ(3, r.log().count());
 
     msg_appendentries_t ae = { 0 };
     ae.term = 2;
@@ -1032,8 +1032,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(2, r.get_log_count());
-    ety_appended = r.get_entry_from_idx(1);
+    EXPECT_EQ(2, r.log().count());
+    ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, strs[0], 3));
 }
@@ -1062,7 +1062,7 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(2, r.get_log_count());
+    EXPECT_EQ(2, r.log().count());
 }
 
 TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
@@ -1094,7 +1094,7 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
         auto aer = r.accept_appendentries(raft::node_id(2), ae);
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
-        EXPECT_EQ(1, r.get_log_count());
+        EXPECT_EQ(1, r.log().count());
     }
 
     /* lets get the server to append 2 now! */
@@ -1102,7 +1102,7 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     auto aer = r.accept_appendentries(raft::node_id(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(2, r.get_log_count());
+    EXPECT_EQ(2, r.log().count());
 }
 
 /* If leaderCommit > commitidx, set commitidx =
@@ -1322,7 +1322,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
         EXPECT_TRUE(aer.unwrap().success);
     }
 
-    EXPECT_EQ(5, r.get_current_idx());
+    EXPECT_EQ(5, r.log().get_current_idx());
 }
 
 TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
@@ -1374,7 +1374,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
-    EXPECT_EQ(6, r.get_current_idx());
+    EXPECT_EQ(6, r.log().get_current_idx());
     EXPECT_EQ(4, r.get_commit_idx());
 
     /* The server sends a follow up AE.
@@ -1393,7 +1393,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
-    EXPECT_EQ(6, r.get_current_idx());
+    EXPECT_EQ(6, r.log().get_current_idx());
 }
 
 TEST(TestCandidate, becomes_candidate_is_candidate)
@@ -1753,7 +1753,7 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
     {
         bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::node_id(i));
         EXPECT_TRUE(p.isSome());
-        EXPECT_EQ(r.get_current_idx() + 1, p->get_next_idx());
+        EXPECT_EQ(r.log().get_current_idx() + 1, p->get_next_idx());
     }
 }
 
@@ -1801,12 +1801,12 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
 
     /* I am the leader */
     r.set_state(raft_state_e::LEADER);
-    EXPECT_EQ(0, r.get_log_count());
+    EXPECT_EQ(0, r.log().count());
 
     /* receive entry */
     auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(1, r.get_log_count());
+    EXPECT_EQ(1, r.log().count());
 
     /* trigger response through commit */
     r.raft_apply_entry();
@@ -2022,11 +2022,11 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     raft::Server r(raft::node_id(1), true, funcs);
     r.nodes().add_node(raft::node_id(2));
     r.set_state(raft_state_e::LEADER);
-    EXPECT_EQ(0, r.get_log_count());
+    EXPECT_EQ(0, r.log().count());
 
     auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(1, r.get_log_count());
+    EXPECT_EQ(1, r.log().count());
 }
 
 #if 0
@@ -2596,7 +2596,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     EXPECT_EQ(0, r.msg_entry_response_committed(cr.unwrap()));
     EXPECT_EQ(1, cr.unwrap().term);
     EXPECT_EQ(1, cr.unwrap().idx);
-    EXPECT_EQ(1, r.get_current_idx());
+    EXPECT_EQ(1, r.log().get_current_idx());
     EXPECT_EQ(0, r.get_commit_idx());
 
     /* append entry that invalidates entry message */
@@ -2613,7 +2613,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_TRUE(aer.unwrap().success);
-    EXPECT_EQ(1, r.get_current_idx());
+    EXPECT_EQ(1, r.log().get_current_idx());
     EXPECT_EQ(1, r.get_commit_idx());
     EXPECT_EQ(-1, r.msg_entry_response_committed(cr.unwrap()));
 }

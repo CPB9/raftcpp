@@ -66,7 +66,7 @@ void Server::election_start()
 {
     __log(NULL, "election starting: %d %d, term: %d ci: %d",
           _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
-          get_current_idx());
+          _log.get_current_idx());
 
     become_candidate();
 }
@@ -80,7 +80,7 @@ void Server::become_leader()
     {
         if (_nodes.is_me(i.get_id()))
             continue;
-        _nodes.get_node(i.get_id()).unwrap().set_next_idx(get_current_idx() + 1);
+        _nodes.get_node(i.get_id()).unwrap().set_next_idx(_log.get_current_idx() + 1);
         _nodes.get_node(i.get_id()).unwrap().set_match_idx(0);
         send_appendentries(i);
     }
@@ -152,7 +152,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
     __log(node,
           "received appendentries response %s ci:%d rci:%d 1stidx:%d",
           r.success ? "SUCCESS" : "fail",
-          get_current_idx(),
+        _log.get_current_idx(),
           r.current_idx,
           r.first_idx);
 
@@ -184,7 +184,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
         std::size_t next_idx = node->get_next_idx();
         assert(0 < next_idx);
         if (r.current_idx < next_idx - 1)
-            node->set_next_idx(std::min(r.current_idx + 1, get_current_idx()));
+            node->set_next_idx(std::min(r.current_idx + 1, _log.get_current_idx()));
         else
             node->set_next_idx(next_idx - 1);
 
@@ -193,14 +193,14 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
         return bmcl::None;
     }
 
-    assert(r.current_idx <= get_current_idx());
+    assert(r.current_idx <= _log.get_current_idx());
 
     node->set_next_idx(r.current_idx + 1);
     node->set_match_idx(r.current_idx);
 
     if (!node->is_voting() &&
         !voting_change_is_in_progress() &&
-        get_current_idx() <= r.current_idx + 1 &&
+        _log.get_current_idx() <= r.current_idx + 1 &&
         _me.cb.node_has_sufficient_logs &&
         false == node->has_sufficient_logs()
         )
@@ -214,7 +214,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
     std::size_t point = r.current_idx;
     if (point)
     {
-        bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(point);
+        bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
         if (get_commit_idx() < point && ety.unwrap().term == _me.current_term)
         {
@@ -233,7 +233,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
     }
 
     /* Aggressively send remaining entries */
-    if (get_entry_from_idx(node->get_next_idx()).isSome())
+    if (_log.get_at_idx(node->get_next_idx()).isSome())
         send_appendentries(node.unwrap());
 
     /* periodic applies committed entries lazily */
@@ -251,7 +251,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     if (0 < ae.n_entries)
         __log(node, "recvd appendentries t:%d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
-              get_current_idx(),
+              _log.get_current_idx(),
               ae.leader_commit,
               ae.prev_log_idx,
               ae.prev_log_term,
@@ -280,7 +280,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     /* NOTE: the log starts at 1 */
     if (0 < ae.prev_log_idx)
     {
-        bmcl::Option<const raft_entry_t&> e = get_entry_from_idx(ae.prev_log_idx);
+        bmcl::Option<const raft_entry_t&> e = _log.get_at_idx(ae.prev_log_idx);
         if (e.isNone())
         {
             __log(node, "AE no log at prev_idx %d", ae.prev_log_idx);
@@ -289,12 +289,12 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
 
         /* 2. Reply false if log doesn't contain an entry at prevLogIndex
            whose term matches prevLogTerm (§5.3) */
-        if (get_current_idx() < ae.prev_log_idx)
+        if (_log.get_current_idx() < ae.prev_log_idx)
             goto fail_with_current_idx;
 
         if (e.unwrap().term != ae.prev_log_term)
         {
-            __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, get_current_idx(), ae.prev_log_idx);
+            __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
             delete_entry_from_idx(ae.prev_log_idx);
             r.current_idx = ae.prev_log_idx - 1;
@@ -305,7 +305,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     /* 3. If an existing entry conflicts with a new one (same index
        but different terms), delete the existing entry and all that
        follow it (§5.3) */
-    if (0 < ae.prev_log_idx && ae.prev_log_idx + 1 < get_current_idx())
+    if (0 < ae.prev_log_idx && ae.prev_log_idx + 1 < _log.get_current_idx())
     {
         /* Heartbeats shouldn't cause logs to be deleted. Heartbeats might be
         * sent before the leader received the last appendentries response */
@@ -322,7 +322,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     {
         const raft_entry_t* ety = &ae.entries[i];
         std::size_t ety_index = ae.prev_log_idx + 1 + i;
-        bmcl::Option<const raft_entry_t&> existing_ety = get_entry_from_idx(ety_index);
+        bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
         r.current_idx = ety_index;
         if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && _me.commit_idx < ety_index)
         {
@@ -354,7 +354,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         min(leaderCommit, index of most recent entry) */
     if (get_commit_idx() < ae.leader_commit)
     {
-        std::size_t last_log_idx = std::max<std::size_t>(get_current_idx(), 1);
+        std::size_t last_log_idx = std::max<std::size_t>(_log.get_current_idx(), 1);
         set_commit_idx(std::min(last_log_idx, ae.leader_commit));
     }
 
@@ -366,7 +366,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     return r;
 
 fail_with_current_idx:
-    r.current_idx = get_current_idx();
+    r.current_idx = _log.get_current_idx();
 fail:
     r.success = false;
     r.first_idx = 0;
@@ -392,13 +392,13 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
 
     /* Below we check if log is more up-to-date... */
 
-    std::size_t current_idx = me->get_current_idx();
+    std::size_t current_idx = me->log().get_current_idx();
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const raft_entry_t&> e = me->get_entry_from_idx(current_idx);
+    bmcl::Option<const raft_entry_t&> e = me->log().get_at_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
@@ -526,7 +526,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
         return Error::NotLeader;
 
     __log(NULL, "received entry t:%d id: %d idx: %d",
-        _me.current_term, e.id, get_current_idx() + 1);
+        _me.current_term, e.id, _log.get_current_idx() + 1);
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;
@@ -540,21 +540,21 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
          * Don't send the entry to peers who are behind, to prevent them from
          * becoming congested. */
         std::size_t next_idx = i.get_next_idx();
-        if (next_idx == get_current_idx())
+        if (next_idx == _log.get_current_idx())
             send_appendentries(i);
     }
 
     /* if we're the only node, we can consider the entry committed */
     if (1 == _nodes.get_num_voting_nodes())
-        set_commit_idx(get_current_idx());
+        set_commit_idx(_log.get_current_idx());
 
     msg_entry_response_t r = {0};
     r.id = e.id;
-    r.idx = get_current_idx();
+    r.idx = _log.get_current_idx();
     r.term = _me.current_term;
 
     if (e.is_voting_cfg_change())
-        _me.voting_cfg_change_log_idx = get_current_idx();
+        _me.voting_cfg_change_log_idx = _log.get_current_idx();
 
     return r;
 }
@@ -571,7 +571,7 @@ bmcl::Option<Error> Server::send_requestvote(const Node& node)
     assert(!_nodes.is_me(node.get_id()));
     assert(_me.cb.send_requestvote);
     __log(node, "sending requestvote to: %d", node);
-    return _me.cb.send_requestvote(this, node, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), get_current_idx(), get_last_log_term().unwrapOr(0)));
+    return _me.cb.send_requestvote(this, node, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::delete_entry_from_idx(std::size_t idx)
@@ -579,19 +579,14 @@ void Server::delete_entry_from_idx(std::size_t idx)
     assert(_me.commit_idx < idx);
     if (_me.voting_cfg_change_log_idx.isSome() && idx <= _me.voting_cfg_change_log_idx.unwrap())
         _me.voting_cfg_change_log_idx.clear();
-    _me.log.log_delete(this, idx);
+    _log.log_delete(this, idx);
 }
 
 bmcl::Option<Error> Server::append_entry(const raft_entry_t& ety)
 {
     if (ety.is_voting_cfg_change())
-        _me.voting_cfg_change_log_idx = get_current_idx();
-    return _me.log.log_append_entry(this, ety);
-}
-
-bmcl::Option<const raft_entry_t *> Server::get_entries_from_idx(std::size_t idx, std::size_t* n_etys) const
-{
-    return _me.log.log_get_from_idx(idx, n_etys);
+        _me.voting_cfg_change_log_idx = _log.get_current_idx();
+    return _log.log_append_entry(this, ety);
 }
 
 bmcl::Option<Error> Server::raft_apply_entry()
@@ -602,7 +597,7 @@ bmcl::Option<Error> Server::raft_apply_entry()
 
     std::size_t log_idx = _me.last_applied_idx + 1;
 
-    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(log_idx);
+    bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(log_idx);
     if (ety.isNone())
         return Error::Any;
 
@@ -656,19 +651,19 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
 
     std::size_t next_idx = node.get_next_idx();
 
-    ae.entries = get_entries_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
+    ae.entries = _log.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
 
     /* previous log is the log just before the new logs */
     if (1 < next_idx)
     {
-        bmcl::Option<const raft_entry_t&> prev_ety = get_entry_from_idx(next_idx - 1);
+        bmcl::Option<const raft_entry_t&> prev_ety = _log.get_at_idx(next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
             ae.prev_log_term = prev_ety.unwrap().term;
     }
 
     __log(node, "sending appendentries node: ci:%d comi:%d t:%d lc:%d pli:%d plt:%d",
-          get_current_idx(),
+          _log.get_current_idx(),
           get_commit_idx(),
           ae.term,
           ae.leader_commit,
@@ -679,18 +674,15 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
     return _me.cb.send_appendentries(this, node, ae);
 }
 
-bmcl::Option<Error> Server::send_appendentries_all()
+void Server::send_appendentries_all()
 {
     _me.timeout_elapsed = std::chrono::milliseconds(0);
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()))
             continue;
-        bmcl::Option<Error> e = send_appendentries(i);
-        if (e.isSome())
-            return e;
+        send_appendentries(i);
     }
-    return bmcl::None;
 }
 
 
@@ -704,7 +696,7 @@ void Server::vote_for_nodeid(node_id nodeid)
 
 int Server::msg_entry_response_committed(const msg_entry_response_t& r) const
 {
-    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(r.idx);
+    bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(r.idx);
     if (ety.isNone())
         return 0;
 
@@ -823,7 +815,7 @@ void Server::set_current_term(std::size_t term)
 void Server::set_commit_idx(std::size_t idx)
 {
     assert(_me.commit_idx <= idx);
-    assert(idx <= get_current_idx());
+    assert(idx <= _log.get_current_idx());
     _me.commit_idx = idx;
 }
 
@@ -833,19 +825,6 @@ void Server::set_state(raft_state_e state)
     if (state == raft_state_e::LEADER)
         _me.current_leader = _nodes.get_my_id();
     _me.state = state;
-}
-
-bmcl::Option<std::size_t> Server::get_last_log_term() const
-{
-    std::size_t current_idx = get_current_idx();
-    if (0 == current_idx)
-        return bmcl::None;
-
-    bmcl::Option<const raft_entry_t&> ety = get_entry_from_idx(current_idx);
-    if (ety.isNone())
-        return bmcl::None;
-
-    return ety.unwrap().term;
 }
 
 }

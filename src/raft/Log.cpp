@@ -26,19 +26,32 @@ void Logger::log_clear()
     _me.base = 0;
 }
 
-std::size_t Logger::log_count() const
+std::size_t Logger::count() const
 {
     return _me.entries.size();
 }
 
-void Logger::log_empty()
+void Logger::clear()
 {
     _me.entries.clear();
 }
 
-std::size_t Logger::log_get_current_idx() const
+std::size_t Logger::get_current_idx() const
 {
-    return log_count() + _me.base;
+    return count() + _me.base;
+}
+
+bmcl::Option<std::size_t> Logger::get_last_log_term() const
+{
+    std::size_t current_idx = get_current_idx();
+    if (0 == current_idx)
+        return bmcl::None;
+
+    bmcl::Option<const raft_entry_t&> ety = get_at_idx(current_idx);
+    if (ety.isNone())
+        return bmcl::None;
+
+    return ety.unwrap().term;
 }
 
 bmcl::Option<Error> Logger::log_append_entry(Server* raft, const raft_entry_t& c)
@@ -48,8 +61,8 @@ bmcl::Option<Error> Logger::log_append_entry(Server* raft, const raft_entry_t& c
         const raft_cbs_t& cb = raft->get_callbacks();
         if (cb.log_offer)
         {
-            Error e = (Error)cb.log_offer(raft, c, log_get_current_idx() + 1);
-            raft->offer_log(c, log_get_current_idx() + 1);
+            Error e = (Error)cb.log_offer(raft, c, get_current_idx() + 1);
+            raft->offer_log(c, get_current_idx() + 1);
             if (e == Error::Shutdown)
                 return Error::Shutdown;
         }
@@ -59,7 +72,7 @@ bmcl::Option<Error> Logger::log_append_entry(Server* raft, const raft_entry_t& c
     return bmcl::None;
 }
 
-bmcl::Option<const raft_entry_t*> Logger::log_get_from_idx(std::size_t idx, std::size_t *n_etys) const
+bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
     assert(idx > _me.base);
     /* idx starts at 1 */
@@ -76,7 +89,7 @@ bmcl::Option<const raft_entry_t*> Logger::log_get_from_idx(std::size_t idx, std:
     return &_me.entries[i];
 }
 
-bmcl::Option<const raft_entry_t&> Logger::log_get_at_idx(std::size_t idx) const
+bmcl::Option<const raft_entry_t&> Logger::get_at_idx(std::size_t idx) const
 {
     assert(idx > _me.base);
     /* idx starts at 1 */
@@ -125,7 +138,7 @@ bmcl::Option<raft_entry_t> Logger::log_poll(Server* raft)
     return elem;
 }
 
-bmcl::Option<const raft_entry_t&> Logger::log_peektail() const
+bmcl::Option<const raft_entry_t&> Logger::peektail() const
 {
     if (_me.entries.empty())
         return bmcl::None;
