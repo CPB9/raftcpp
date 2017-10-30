@@ -35,7 +35,6 @@ enum class raft_request_vote
 
 enum class raft_state_e
 {
-    NONE,
     FOLLOWER,
     CANDIDATE,
     LEADER
@@ -48,7 +47,6 @@ enum class logtype_e
     ADD_NODE,
     DEMOTE_NODE,
     REMOVE_NODE,
-    NUM,
 };
 
 enum class node_status
