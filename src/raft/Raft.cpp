@@ -140,7 +140,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
         }
     }
 
-    if (_me.last_applied_idx < _me.commit_idx)
+    if (_me.last_applied_idx < get_commit_idx())
         return raft_apply_entry();
 
     return bmcl::None;
@@ -310,7 +310,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         * sent before the leader received the last appendentries response */
         if (ae.n_entries != 0 &&
             /* this is an old out-of-order appendentry message */
-            _me.commit_idx < ae.prev_log_idx + 1)
+            get_commit_idx() < ae.prev_log_idx + 1)
             delete_entry_from_idx(ae.prev_log_idx + 1);
     }
 
@@ -323,7 +323,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         std::size_t ety_index = ae.prev_log_idx + 1 + i;
         bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
         r.current_idx = ety_index;
-        if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && _me.commit_idx < ety_index)
+        if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && get_commit_idx() < ety_index)
         {
             delete_entry_from_idx(ety_index);
             break;
@@ -563,7 +563,7 @@ bmcl::Option<Error> Server::send_requestvote(const Node& node)
 
 void Server::delete_entry_from_idx(std::size_t idx)
 {
-    assert(_me.commit_idx < idx);
+    assert(get_commit_idx() < idx);
     if (_me.voting_cfg_change_log_idx.isSome() && idx <= _me.voting_cfg_change_log_idx.unwrap())
         _me.voting_cfg_change_log_idx.clear();
     _log.log_delete(this, idx);
@@ -579,7 +579,7 @@ bmcl::Option<Error> Server::append_entry(const raft_entry_t& ety)
 bmcl::Option<Error> Server::raft_apply_entry()
 {
     /* Don't apply after the commit_idx */
-    if (_me.last_applied_idx == _me.commit_idx)
+    if (_me.last_applied_idx == get_commit_idx())
         return Error::Any;
 
     std::size_t log_idx = _me.last_applied_idx + 1;
@@ -588,10 +588,9 @@ bmcl::Option<Error> Server::raft_apply_entry()
     if (ety.isNone())
         return Error::Any;
 
-    __log(NULL, "applying log: %d, id: %d size: %d",
-        _me.last_applied_idx, ety.unwrap().id, ety.unwrap().data.len);
+    __log(NULL, "applying log: %d, id: %d size: %d", _me.last_applied_idx, ety.unwrap().id, ety.unwrap().data.len);
 
-    _me.last_applied_idx++;
+    _me.last_applied_idx = log_idx;
     assert(_me.cb.applylog);
     int e = _me.cb.applylog(this, ety.unwrap(), _me.last_applied_idx - 1);
     if (e == RAFT_ERR_SHUTDOWN)
@@ -801,7 +800,7 @@ void Server::set_current_term(std::size_t term)
 
 void Server::set_commit_idx(std::size_t idx)
 {
-    assert(_me.commit_idx <= idx);
+    assert(get_commit_idx() <= idx);
     assert(idx <= _log.get_current_idx());
     _me.commit_idx = idx;
 }
