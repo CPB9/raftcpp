@@ -125,7 +125,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
             become_leader();
     }
 
-    if (_me.state == raft_state_e::LEADER)
+    if (is_leader())
     {
         if (_me.request_timeout <= _me.timeout_elapsed)
             send_appendentries_all();
@@ -510,15 +510,13 @@ bmcl::Option<Error> Server::accept_requestvote_response(bmcl::Option<node_id> no
 bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t& e)
 {
     /* Only one voting cfg change at a time */
-    if (e.is_voting_cfg_change())
-        if (voting_change_is_in_progress())
-            return Error::OneVotingChangeOnly;
+    if (e.is_voting_cfg_change() && voting_change_is_in_progress())
+        return Error::OneVotingChangeOnly;
 
     if (!is_leader())
         return Error::NotLeader;
 
-    __log(NULL, "received entry t:%d id: %d idx: %d",
-        _me.current_term, e.id, _log.get_current_idx() + 1);
+    __log(NULL, "received entry t:%d id: %d idx: %d", _me.current_term, e.id, _log.get_current_idx() + 1);
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;
@@ -540,10 +538,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
     if (1 == _nodes.get_num_voting_nodes())
         set_commit_idx(_log.get_current_idx());
 
-    msg_entry_response_t r = {0};
-    r.id = e.id;
-    r.idx = _log.get_current_idx();
-    r.term = _me.current_term;
+    msg_entry_response_t r(_me.current_term, e.id, _log.get_current_idx());
 
     if (e.is_voting_cfg_change())
         _me.voting_cfg_change_log_idx = _log.get_current_idx();

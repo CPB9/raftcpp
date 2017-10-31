@@ -101,8 +101,9 @@ typedef raft_entry_t msg_entry_t;
  * Indicates to client if entry was committed or not. */
 struct msg_entry_response_t
 {
-    std::size_t id;     /**< the entry's unique ID */
+    msg_entry_response_t(std::size_t term, std::size_t id, std::size_t idx) : term(term), id(id), idx(idx){}
     std::size_t term;   /**< the entry's term */
+    std::size_t id;     /**< the entry's unique ID */
     std::size_t idx;    /**< the entry's index */
 };
 
