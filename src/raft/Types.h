@@ -40,6 +40,13 @@ enum class raft_state_e
     LEADER
 } ;
 
+enum class raft_entry_state_e
+{
+    INVALIDATED = -1,
+    NOTCOMMITTED = 0,
+    COMMITTED = 1,
+};
+
 enum class logtype_e
 {
     NORMAL,

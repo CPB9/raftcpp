@@ -509,10 +509,6 @@ bmcl::Option<Error> Server::accept_requestvote_response(bmcl::Option<node_id> no
 
 bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t& e)
 {
-    /* Only one voting cfg change at a time */
-    if (e.is_voting_cfg_change() && voting_change_is_in_progress())
-        return Error::OneVotingChangeOnly;
-
     if (!is_leader())
         return Error::NotLeader;
 
@@ -520,7 +516,14 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;
-    entry_append(ety);
+    auto r = entry_append(ety);
+    if (r.isSome())
+        return r.unwrap();
+
+    /* if we're the only node, we can consider the entry committed */
+    if (1 == _nodes.get_num_voting_nodes())
+        set_commit_idx(_log.get_current_idx());
+
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()) || !i.is_voting())
@@ -534,16 +537,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
             send_appendentries(i);
     }
 
-    /* if we're the only node, we can consider the entry committed */
-    if (1 == _nodes.get_num_voting_nodes())
-        set_commit_idx(_log.get_current_idx());
-
-    msg_entry_response_t r(_me.current_term, e.id, _log.get_current_idx());
-
-    if (e.is_voting_cfg_change())
-        _me.voting_cfg_change_log_idx = _log.get_current_idx();
-
-    return r;
+    return msg_entry_response_t(_me.current_term, e.id, _log.get_current_idx());
 }
 
 bmcl::Option<Error> Server::send_requestvote(const bmcl::Option<node_id>& node)
@@ -669,6 +663,10 @@ void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
 
 bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
 {
+    /* Only one voting cfg change at a time */
+    if (ety.is_voting_cfg_change() && voting_change_is_in_progress())
+        return Error::OneVotingChangeOnly;
+
     if (ety.is_voting_cfg_change())
         _me.voting_cfg_change_log_idx = _log.get_current_idx();
 
@@ -681,6 +679,7 @@ bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
 
     entry_append_impl(ety, _log.get_current_idx() + 1);
     _log.append(ety);
+
     return bmcl::None;
 }
 
@@ -786,16 +785,16 @@ void Server::vote_for_nodeid(node_id nodeid)
     _me.cb.persist_vote(this, (std::size_t)nodeid);
 }
 
-int Server::msg_entry_response_committed(const msg_entry_response_t& r) const
+raft_entry_state_e Server::entry_get_state(const msg_entry_response_t& r) const
 {
     bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(r.idx);
     if (ety.isNone())
-        return 0;
+        return raft_entry_state_e::NOTCOMMITTED;
 
     /* entry from another leader has invalidated this entry message */
     if (r.term != ety.unwrap().term)
-        return -1;
-    return r.idx <= get_commit_idx();
+        return raft_entry_state_e::INVALIDATED;
+    return r.idx <= get_commit_idx() ? raft_entry_state_e::COMMITTED : raft_entry_state_e::NOTCOMMITTED;
 }
 
 void Server::set_current_term(std::size_t term)

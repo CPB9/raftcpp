@@ -62,9 +62,10 @@ public:
     void vote_for_nodeid(node_id nodeid);
     inline void set_last_applied_idx(std::size_t idx) { _me.last_applied_idx = idx; }
     void set_commit_idx(std::size_t commit_idx);
+
     bmcl::Option<Error> entry_append(const raft_entry_t& ety);
     bmcl::Option<Error> entry_apply_all();
-    int msg_entry_response_committed(const msg_entry_response_t& r) const;
+    raft_entry_state_e entry_get_state(const msg_entry_response_t& r) const;
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
