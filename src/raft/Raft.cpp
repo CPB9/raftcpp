@@ -569,11 +569,113 @@ void Server::delete_entry_from_idx(std::size_t idx)
     _log.log_delete(this, idx);
 }
 
+bmcl::Option<Error> Server::apply_all()
+{
+    while (get_last_applied_idx() < get_commit_idx())
+    {
+        bmcl::Option<Error> e = raft_apply_entry();
+        if (e.isSome())
+            return e;
+    }
+
+    return bmcl::None;
+}
+
+void Server::offer_log(const raft_entry_t& ety, const std::size_t idx)
+{
+    if (!ety.is_cfg_change())
+        return;
+
+    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
+    bmcl::Option<Node&> node = _nodes.get_node(id);
+
+    switch (ety.type)
+    {
+    case logtype_e::ADD_NONVOTING_NODE:
+        if (!_nodes.is_me(id))
+        {
+            bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
+            assert(node.isSome());
+        }
+        break;
+
+    case logtype_e::ADD_NODE:
+        node = _nodes.add_node(id);
+        assert(node.isSome());
+        assert(node->is_voting());
+        break;
+
+    case logtype_e::DEMOTE_NODE:
+        node->set_voting(false);
+        break;
+
+    case logtype_e::REMOVE_NODE:
+        if (node.isSome())
+            _nodes.remove_node(node->get_id());
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
+{
+    if (!ety.is_cfg_change())
+        return;
+
+    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
+
+    switch (ety.type)
+    {
+    case logtype_e::DEMOTE_NODE:
+    {
+        bmcl::Option<Node&> node = _nodes.get_node(id);
+        node->set_voting(true);
+    }
+    break;
+
+    case logtype_e::REMOVE_NODE:
+    {
+        bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
+        assert(node.isSome());
+    }
+    break;
+
+    case logtype_e::ADD_NONVOTING_NODE:
+    {
+        _nodes.remove_node(id);
+    }
+    break;
+
+    case logtype_e::ADD_NODE:
+    {
+        bmcl::Option<Node&> node = _nodes.get_node(id);
+        node->set_voting(false);
+    }
+    break;
+
+    default:
+        assert(false);
+        break;
+    }
+}
+
 bmcl::Option<Error> Server::append_entry(const raft_entry_t& ety)
 {
     if (ety.is_voting_cfg_change())
         _me.voting_cfg_change_log_idx = _log.get_current_idx();
-    return _log.log_append_entry(this, ety);
+
+    if (_me.cb.log_offer)
+    {
+        Error e = (Error)_me.cb.log_offer(this, ety, _log.get_current_idx() + 1);
+        offer_log(ety, _log.get_current_idx() + 1);
+        if (e == Error::Shutdown)
+            return Error::Shutdown;
+    }
+
+    _log.append(ety);
+    return bmcl::None;
 }
 
 bmcl::Option<Error> Server::raft_apply_entry()
@@ -671,8 +773,6 @@ void Server::send_appendentries_all()
     }
 }
 
-
-
 void Server::vote_for_nodeid(node_id nodeid)
 {
     _me.voted_for = nodeid;
@@ -691,101 +791,6 @@ int Server::msg_entry_response_committed(const msg_entry_response_t& r) const
         return -1;
     return r.idx <= get_commit_idx();
 }
-
-bmcl::Option<Error> Server::apply_all()
-{
-    while (get_last_applied_idx() < get_commit_idx())
-    {
-        bmcl::Option<Error> e = raft_apply_entry();
-        if (e.isSome())
-            return e;
-    }
-
-    return bmcl::None;
-}
-
-void Server::offer_log(const raft_entry_t& ety, const std::size_t idx)
-{
-    if (!ety.is_cfg_change())
-        return;
-
-    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
-    bmcl::Option<Node&> node = _nodes.get_node(id);
-
-    switch (ety.type)
-    {
-    case logtype_e::ADD_NONVOTING_NODE:
-            if (!_nodes.is_me(id))
-            {
-                bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
-                assert(node.isSome());
-            }
-            break;
-
-        case logtype_e::ADD_NODE:
-            node = _nodes.add_node(id);
-            assert(node.isSome());
-            assert(node->is_voting());
-            break;
-
-        case logtype_e::DEMOTE_NODE:
-            node->set_voting(false);
-            break;
-
-        case logtype_e::REMOVE_NODE:
-            if (node.isSome())
-                _nodes.remove_node(node->get_id());
-            break;
-
-        default:
-            assert(0);
-    }
-}
-
-void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
-{
-    if (!ety.is_cfg_change())
-        return;
-
-    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
-
-    switch (ety.type)
-    {
-        case logtype_e::DEMOTE_NODE:
-            {
-                bmcl::Option<Node&> node = _nodes.get_node(id);
-                node->set_voting(true);
-            }
-            break;
-
-        case logtype_e::REMOVE_NODE:
-            {
-                bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
-                assert(node.isSome());
-            }
-            break;
-
-        case logtype_e::ADD_NONVOTING_NODE:
-            {
-                _nodes.remove_node(id);
-            }
-            break;
-
-        case logtype_e::ADD_NODE:
-            {
-                bmcl::Option<Node&> node = _nodes.get_node(id);
-                node->set_voting(false);
-            }
-            break;
-
-        default:
-            assert(false);
-            break;
-    }
-}
-
-
-//properties
 
 void Server::set_current_term(std::size_t term)
 {

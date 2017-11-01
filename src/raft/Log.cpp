@@ -54,24 +54,10 @@ bmcl::Option<std::size_t> Logger::get_last_log_term() const
     return ety.unwrap().term;
 }
 
-bmcl::Option<Error> Logger::log_append_entry(Server* raft, const raft_entry_t& c)
+void Logger::append(const raft_entry_t& c)
 {
-    if (raft)
-    {
-        const raft_cbs_t& cb = raft->get_callbacks();
-        if (cb.log_offer)
-        {
-            Error e = (Error)cb.log_offer(raft, c, get_current_idx() + 1);
-            raft->offer_log(c, get_current_idx() + 1);
-            if (e == Error::Shutdown)
-                return Error::Shutdown;
-        }
-    }
-
     _me.entries.emplace_back(c);
-    return bmcl::None;
 }
-
 bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
     assert(idx > _me.base);

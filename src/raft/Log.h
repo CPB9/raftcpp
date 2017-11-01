@@ -25,7 +25,7 @@ public:
     * Don't add entry if we've already added this entry (based off ID)
     * Don't add entries with ID=0
     * @return 0 if unsucessful; 1 otherwise */
-    bmcl::Option<Error> log_append_entry(Server* raft, const raft_entry_t& c);
+    void append(const raft_entry_t& c);
 
     /**
     * @return number of entries held within log */

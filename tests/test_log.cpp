@@ -14,9 +14,8 @@ TEST(TestLog, new_is_empty)
 TEST(TestLog, append_is_not_empty)
 {
     raft::Logger l;
-    raft_entry_t e(0, 1);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e).isSome());
+    l.append(raft_entry_t(0, 1));
     EXPECT_EQ(1, l.count());
 }
 
@@ -25,9 +24,9 @@ TEST(TestLog, get_at_idx)
     raft::Logger l;
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
+    l.append(e1);
+    l.append(e2);
+    l.append(e3);
     EXPECT_EQ(3, l.count());
 
     EXPECT_EQ(3, l.count());
@@ -38,9 +37,8 @@ TEST(TestLog, get_at_idx)
 TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 {
     raft::Logger l;
-    raft_entry_t e1(0, 1);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
+    l.append(raft_entry_t(0, 1));
     EXPECT_FALSE(l.get_at_idx(2).isSome());
 }
 
@@ -60,9 +58,9 @@ TEST(TestLog, delete)
     };
     r.set_callbacks(funcs);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
+    l.append(e1);
+    l.append(e2);
+    l.append(e3);
     EXPECT_EQ(3, l.count());
 
     l.log_delete(&r, 3);
@@ -87,9 +85,9 @@ TEST(TestLog, delete_onwards)
     raft::Logger l;
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
+    l.append(e1);
+    l.append(e2);
+    l.append(e3);
     EXPECT_EQ(3, l.count());
 
     /* even 3 gets deleted */
@@ -106,9 +104,9 @@ TEST(TestLog, peektail)
     raft::Logger l;
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    EXPECT_FALSE(l.log_append_entry(nullptr, e1).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e2).isSome());
-    EXPECT_FALSE(l.log_append_entry(nullptr, e3).isSome());
+    l.append(e1);
+    l.append(e2);
+    l.append(e3);
     EXPECT_EQ(3, l.count());
     EXPECT_TRUE(l.peektail().isSome());
     EXPECT_EQ(e3.id, l.peektail().unwrap().id);
