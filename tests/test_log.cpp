@@ -65,10 +65,8 @@ TEST(TestLog, delete)
 
     l.log_delete(&r, 3);
 
-    raft_entry_t e = queue.front();
+    EXPECT_EQ(queue.front().id, e3.id);
     queue.pop_front();
-    std::size_t id = e.id;
-    EXPECT_EQ(id, e3.id);
 
     EXPECT_EQ(2, l.count());
     EXPECT_FALSE(l.get_at_idx(3).isSome());

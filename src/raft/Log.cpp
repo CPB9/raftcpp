@@ -58,6 +58,7 @@ void Logger::append(const raft_entry_t& c)
 {
     _me.entries.emplace_back(c);
 }
+
 bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
     assert(idx > _me.base);

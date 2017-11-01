@@ -62,9 +62,9 @@ public:
     void vote_for_nodeid(node_id nodeid);
     inline void set_last_applied_idx(std::size_t idx) { _me.last_applied_idx = idx; }
     void set_commit_idx(std::size_t commit_idx);
-    bmcl::Option<Error> append_entry(const raft_entry_t& ety);
+    bmcl::Option<Error> entry_append(const raft_entry_t& ety);
+    bmcl::Option<Error> entry_apply_all();
     int msg_entry_response_committed(const msg_entry_response_t& r) const;
-    bmcl::Option<Error> apply_all();
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
@@ -98,12 +98,12 @@ public:
     bmcl::Option<Error> send_appendentries(const bmcl::Option<node_id>& node);
     bmcl::Option<Error> send_appendentries(const Node& node);
     void send_appendentries_all();
-    bmcl::Option<Error> raft_apply_entry();
     void set_state(raft_state_e state);
 
+    bmcl::Option<Error> entry_apply();
+    void entry_delete_from_idx(std::size_t idx);
     void pop_log(const raft_entry_t& ety, const std::size_t idx);
-    void offer_log(const raft_entry_t& ety, const std::size_t idx);
-    void delete_entry_from_idx(std::size_t idx);
+    void entry_append_impl(const raft_entry_t& ety, const std::size_t idx);
     inline bool voting_change_is_in_progress() const { return _me.voting_cfg_change_log_idx.isSome(); }
 
 private:

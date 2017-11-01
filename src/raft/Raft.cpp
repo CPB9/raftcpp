@@ -141,7 +141,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     }
 
     if (_me.last_applied_idx < get_commit_idx())
-        return raft_apply_entry();
+        return entry_apply();
 
     return bmcl::None;
 }
@@ -296,7 +296,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         {
             __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
-            delete_entry_from_idx(ae.prev_log_idx);
+            entry_delete_from_idx(ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, ae.prev_log_idx - 1, 0);
         }
     }
@@ -311,7 +311,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         if (ae.n_entries != 0 &&
             /* this is an old out-of-order appendentry message */
             get_commit_idx() < ae.prev_log_idx + 1)
-            delete_entry_from_idx(ae.prev_log_idx + 1);
+            entry_delete_from_idx(ae.prev_log_idx + 1);
     }
 
     r.current_idx = ae.prev_log_idx;
@@ -325,7 +325,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
         r.current_idx = ety_index;
         if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && get_commit_idx() < ety_index)
         {
-            delete_entry_from_idx(ety_index);
+            entry_delete_from_idx(ety_index);
             break;
         }
         else if (existing_ety.isNone())
@@ -335,7 +335,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(b
     /* Pick up remainder in case of mismatch or missing entry */
     for (; i < ae.n_entries; i++)
     {
-        bmcl::Option<Error> e = append_entry(ae.entries[i]);
+        bmcl::Option<Error> e = entry_append(ae.entries[i]);
         if (e.isSome())
         {
             if (e.unwrap() == Error::Shutdown)
@@ -520,7 +520,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;
-    append_entry(ety);
+    entry_append(ety);
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()) || !i.is_voting())
@@ -561,7 +561,7 @@ bmcl::Option<Error> Server::send_requestvote(const Node& node)
     return _me.cb.send_requestvote(this, node, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
-void Server::delete_entry_from_idx(std::size_t idx)
+void Server::entry_delete_from_idx(std::size_t idx)
 {
     assert(get_commit_idx() < idx);
     if (_me.voting_cfg_change_log_idx.isSome() && idx <= _me.voting_cfg_change_log_idx.unwrap())
@@ -569,11 +569,11 @@ void Server::delete_entry_from_idx(std::size_t idx)
     _log.log_delete(this, idx);
 }
 
-bmcl::Option<Error> Server::apply_all()
+bmcl::Option<Error> Server::entry_apply_all()
 {
     while (get_last_applied_idx() < get_commit_idx())
     {
-        bmcl::Option<Error> e = raft_apply_entry();
+        bmcl::Option<Error> e = entry_apply();
         if (e.isSome())
             return e;
     }
@@ -581,10 +581,16 @@ bmcl::Option<Error> Server::apply_all()
     return bmcl::None;
 }
 
-void Server::offer_log(const raft_entry_t& ety, const std::size_t idx)
+void Server::entry_append_impl(const raft_entry_t& ety, const std::size_t idx)
 {
     if (!ety.is_cfg_change())
         return;
+
+    if (!_me.cb.log_get_node_id)
+    {
+        //assert(false);
+        return;
+    }
 
     node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
     bmcl::Option<Node&> node = _nodes.get_node(id);
@@ -661,7 +667,7 @@ void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
     }
 }
 
-bmcl::Option<Error> Server::append_entry(const raft_entry_t& ety)
+bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
 {
     if (ety.is_voting_cfg_change())
         _me.voting_cfg_change_log_idx = _log.get_current_idx();
@@ -669,16 +675,16 @@ bmcl::Option<Error> Server::append_entry(const raft_entry_t& ety)
     if (_me.cb.log_offer)
     {
         Error e = (Error)_me.cb.log_offer(this, ety, _log.get_current_idx() + 1);
-        offer_log(ety, _log.get_current_idx() + 1);
         if (e == Error::Shutdown)
             return Error::Shutdown;
     }
 
+    entry_append_impl(ety, _log.get_current_idx() + 1);
     _log.append(ety);
     return bmcl::None;
 }
 
-bmcl::Option<Error> Server::raft_apply_entry()
+bmcl::Option<Error> Server::entry_apply()
 {
     /* Don't apply after the commit_idx */
     if (_me.last_applied_idx == get_commit_idx())
