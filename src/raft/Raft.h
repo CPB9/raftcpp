@@ -71,7 +71,7 @@ public:
 
     bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(node_id nodeid, const msg_appendentries_t& ae);
     bmcl::Option<Error> accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r);
-    msg_requestvote_response_t accept_requestvote(const msg_requestvote_t& vr);
+    msg_requestvote_response_t accept_requestvote(node_id nodeid, const msg_requestvote_t& vr);
     bmcl::Option<Error> accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r);
     bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
 
@@ -108,7 +108,7 @@ public:
 private:
     void __log(const bmcl::Option<Node&> node, const char *fmt, ...);
     void __log(const bmcl::Option<const Node&> node, const char *fmt, ...) const;
-    msg_requestvote_response_t prepare_requestvote_response_t(const msg_requestvote_t& vr, raft_request_vote vote);
+    msg_requestvote_response_t prepare_requestvote_response_t(node_id candidate, raft_request_vote vote);
 
     Nodes _nodes;
     Logger _log;    /**< the log which is replicated */

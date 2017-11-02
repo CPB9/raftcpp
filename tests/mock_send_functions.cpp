@@ -111,7 +111,7 @@ void Sender::sender_poll_msgs(raft::node_id from)
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE:
         {
             EXPECT_EQ(sizeof(msg_requestvote_t), m.data.size());
-            msg_requestvote_response_t response = s.raft->accept_requestvote(*(msg_requestvote_t*)m.data.data());
+            msg_requestvote_response_t response = s.raft->accept_requestvote(from, *(msg_requestvote_t*)m.data.data());
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
         }
         break;

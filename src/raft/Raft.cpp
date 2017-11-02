@@ -102,7 +102,7 @@ void Server::become_candidate()
      * this, we allow a negative randomness as a potential handicap. */
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
 
-    _me.cb.send_requestvote(this, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
+    _me.cb.send_requestvote(this, msg_requestvote_t(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::become_follower()
@@ -397,19 +397,19 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
     return false;
 }
 
-msg_requestvote_response_t Server::prepare_requestvote_response_t(const msg_requestvote_t& vr, raft_request_vote vote)
+msg_requestvote_response_t Server::prepare_requestvote_response_t(node_id candidate, raft_request_vote vote)
 {
-    __log(_nodes.get_node(vr.candidate_id), "node requested vote: %d replying: %s",
-        vr.candidate_id,
+    __log(_nodes.get_node(candidate), "node requested vote: %d replying: %s",
+        candidate,
         vote == raft_request_vote::GRANTED ? "granted" :
         vote == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
 
-    return msg_requestvote_response_t(get_current_term(), _nodes.get_my_id(), vote);
+    return msg_requestvote_response_t(get_current_term(), vote);
 }
 
-msg_requestvote_response_t Server::accept_requestvote(const msg_requestvote_t& vr)
+msg_requestvote_response_t Server::accept_requestvote(node_id nodeid, const msg_requestvote_t& vr)
 {
-    bmcl::Option<Node&> node = _nodes.get_node(vr.candidate_id);
+    bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
     {
         assert(false);
@@ -418,7 +418,7 @@ msg_requestvote_response_t Server::accept_requestvote(const msg_requestvote_t& v
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(vr, raft_request_vote::UNKNOWN_NODE);
+        return prepare_requestvote_response_t(nodeid, raft_request_vote::UNKNOWN_NODE);
     }
 
     if (get_current_term() < vr.term)
@@ -428,19 +428,19 @@ msg_requestvote_response_t Server::accept_requestvote(const msg_requestvote_t& v
     }
 
     if (!__should_grant_vote(this, vr))
-        return prepare_requestvote_response_t(vr, raft_request_vote::NOT_GRANTED);
+        return prepare_requestvote_response_t(nodeid, raft_request_vote::NOT_GRANTED);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
     assert(!is_leader() && !is_candidate());
 
-    vote_for_nodeid(vr.candidate_id);
+    vote_for_nodeid(nodeid);
 
     /* there must be in an election. */
     _me.current_leader.clear();
     _me.timeout_elapsed = std::chrono::milliseconds(0);
 
-    return prepare_requestvote_response_t(vr, raft_request_vote::GRANTED);
+    return prepare_requestvote_response_t(nodeid, raft_request_vote::GRANTED);
 }
 
 bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r)
