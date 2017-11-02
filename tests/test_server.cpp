@@ -21,7 +21,7 @@ int __raft_applylog(const raft::Server* raft, const raft_entry_t& ety, std::size
     return 0;
 }
 
-bmcl::Option<raft::Error> __raft_send_requestvote(raft::Server* raft, const raft::Node& node, const msg_requestvote_t& msg)
+bmcl::Option<raft::Error> __raft_send_requestvote(raft::Server* raft, const msg_requestvote_t& msg)
 {
     return bmcl::None;
 }
@@ -1240,12 +1240,16 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
 {
     raft::Server r(raft::node_id(1), true);
+    raft::Server r2(raft::node_id(2), true);
+    raft::Server r3(raft::node_id(3), true);
     Sender sender(&r);
+    sender.add(&r2);
+    sender.add(&r3);
 
     raft_cbs_t funcs = {0};
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
-    funcs.send_requestvote = [&sender](raft::Server* raft, const raft::Node& node, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, node, msg); };
+    funcs.send_requestvote = [&sender](raft::Server* raft, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, msg); };
     r.set_callbacks(funcs);
 
     r.nodes().add_node(raft::node_id(2));
@@ -1343,10 +1347,14 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
 TEST(TestCandidate, requestvote_includes_logidx)
 {
     raft::Server r(raft::node_id(1), true);
+    raft::Server r2(raft::node_id(2), true);
+    raft::Server r3(raft::node_id(3), true);
     Sender sender(&r);
+    sender.add(&r2);
+    sender.add(&r3);
 
     raft_cbs_t funcs = {0};
-    funcs.send_requestvote = [&sender](raft::Server* raft, const raft::Node& node, const msg_requestvote_t& msg) {return sender.sender_requestvote(raft, node, msg); };
+    funcs.send_requestvote = [&sender](raft::Server* raft, const msg_requestvote_t& msg) {return sender.sender_requestvote(raft, msg); };
     funcs.persist_term = __raft_persist_term;
     funcs.persist_vote = __raft_persist_vote;
     r.set_callbacks(funcs);
@@ -1359,14 +1367,14 @@ TEST(TestCandidate, requestvote_includes_logidx)
     r.entry_append(raft_entry_t(1, 100, raft::raft_entry_data_t("aaa", 4)));
     r.entry_append(raft_entry_t(1, 101, raft::raft_entry_data_t("aaa", 4)));
     r.entry_append(raft_entry_t(3, 102, raft::raft_entry_data_t("aaa", 4)));
-    r.send_requestvote(raft::node_id(2));
+    r.become_candidate(); //becoming candidate means new election term? so +1
 
     bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     msg_requestvote_t* rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
     EXPECT_EQ(3, rv->last_log_idx);
-    EXPECT_EQ(5, rv->term);
+    EXPECT_EQ(6, rv->term);
     EXPECT_EQ(3, rv->last_log_term);
     EXPECT_EQ(raft::node_id(1), rv->candidate_id);
 }

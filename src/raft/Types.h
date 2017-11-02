@@ -174,12 +174,11 @@ struct msg_appendentries_response_t
 class Server;
 class Node;
 
-/** Callback for sending request vote messages.
- * @param[in] raft The Raft server making this callback
- * @param[in] node The node's ID that we are sending this message to
+/** Callback for sending request vote messages to cluster's members.
+* @param[in] raft The Raft server making this callback
  * @param[in] msg The request vote message to be sent
  * @return 0 on success */
-using func_send_requestvote_f = std::function<bmcl::Option<Error>(Server* raft, const Node& node, const msg_requestvote_t& msg)>;
+using func_send_requestvote_f = std::function<bmcl::Option<Error>(Server* raft, const msg_requestvote_t& msg)>;
 
 /** Callback for sending append entries messages.
  * @param[in] raft The Raft server making this callback
@@ -237,7 +236,7 @@ using func_logentry_event_f = std::function<int(const Server* raft, const raft_e
 
 struct raft_cbs_t
 {
-    /** Callback for sending request vote messages */
+    /** Callback for sending request vote messages to all cluster's members */
     func_send_requestvote_f send_requestvote;
 
     /** Callback for sending appendentries messages */

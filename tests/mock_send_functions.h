@@ -51,7 +51,7 @@ public:
     void sender_poll_msgs(raft::node_id from);
     bmcl::Option<msg_t> sender_poll_msg_data(const raft::Server& from);
     bmcl::Option<msg_t> sender_poll_msg_data(raft::node_id from);
-    bmcl::Option<raft::Error> sender_requestvote(const raft::Server* raft, const raft::Node& node, const msg_requestvote_t& msg);
+    bmcl::Option<raft::Error> sender_requestvote(const raft::Server* raft, const msg_requestvote_t& msg);
     bmcl::Option<raft::Error> sender_requestvote_response(const raft::node_id& from, const raft::node_id& to, const msg_requestvote_response_t& msg);
     bmcl::Option<raft::Error> sender_appendentries(const raft::Server* raft, const raft::Node& node, const msg_appendentries_t& msg);
     bmcl::Option<raft::Error> sender_appendentries_response(const raft::node_id& from, const raft::node_id& to, const msg_appendentries_response_t& msg);

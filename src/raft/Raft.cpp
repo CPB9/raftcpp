@@ -102,9 +102,7 @@ void Server::become_candidate()
      * this, we allow a negative randomness as a potential handicap. */
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
 
-    for (const Node& i : _nodes.items())
-        if (!_nodes.is_me(i.get_id()) && i.is_voting())
-            send_requestvote(i);
+    _me.cb.send_requestvote(this, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::become_follower()
@@ -530,21 +528,6 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
     }
 
     return msg_entry_response_t(_me.current_term, e.id, _log.get_current_idx());
-}
-
-bmcl::Option<Error> Server::send_requestvote(const bmcl::Option<node_id>& node)
-{
-    bmcl::Option<Node&> n = _nodes.get_node(node);
-    if (n.isNone()) return Error::NodeUnknown;
-    return send_requestvote(n.unwrap());
-}
-
-bmcl::Option<Error> Server::send_requestvote(const Node& node)
-{
-    assert(!_nodes.is_me(node.get_id()));
-    assert(_me.cb.send_requestvote);
-    __log(node, "sending requestvote to: %d", node);
-    return _me.cb.send_requestvote(this, node, msg_requestvote_t(_me.current_term, _nodes.get_my_id(), _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::entry_delete_from_idx(std::size_t idx)

@@ -23,9 +23,16 @@ bmcl::Option<raft::Error> Sender::__append_msg(const raft::node_id& from, const 
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Sender::sender_requestvote(const raft::Server * from, const raft::Node & to, const msg_requestvote_t& msg)
+bmcl::Option<raft::Error> Sender::sender_requestvote(const raft::Server* raft, const msg_requestvote_t& msg)
 {
-    return __append_msg(from->nodes().get_my_id(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
+    //return __append_msg(from->nodes().get_my_id(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
+
+    for (const auto& to : _servers)
+    {
+        if (to.first != raft->nodes().get_my_id())
+            __append_msg(raft->nodes().get_my_id(), to.first, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
+    }
+    return bmcl::None;
 }
 
 bmcl::Option<raft::Error> Sender::sender_requestvote_response(const raft::node_id& from, const raft::node_id& to, const msg_requestvote_response_t& msg)

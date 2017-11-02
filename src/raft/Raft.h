@@ -94,8 +94,6 @@ public:
     void become_candidate();
     void become_follower();
     void election_start();
-    bmcl::Option<Error> send_requestvote(const bmcl::Option<node_id>& node);
-    bmcl::Option<Error> send_requestvote(const Node& node);
     bmcl::Option<Error> send_appendentries(const bmcl::Option<node_id>& node);
     bmcl::Option<Error> send_appendentries(const Node& node);
     void send_appendentries_all();
