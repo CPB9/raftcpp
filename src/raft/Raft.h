@@ -69,10 +69,10 @@ public:
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
-    bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae);
-    bmcl::Option<Error> accept_appendentries_response(bmcl::Option<node_id> nodeid, const msg_appendentries_response_t& r);
+    bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(node_id nodeid, const msg_appendentries_t& ae);
+    bmcl::Option<Error> accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r);
     msg_requestvote_response_t accept_requestvote(const msg_requestvote_t& vr);
-    bmcl::Option<Error> accept_requestvote_response(bmcl::Option<node_id> nodeid, const msg_requestvote_response_t& r);
+    bmcl::Option<Error> accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r);
     bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
 
     inline bmcl::Option<node_id> get_current_leader() const { return _me.current_leader; }

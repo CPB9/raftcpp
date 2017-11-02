@@ -144,7 +144,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     return bmcl::None;
 }
 
-bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> nodeid, const msg_appendentries_response_t& r)
+bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     __log(node,
@@ -231,10 +231,12 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
     return bmcl::None;
 }
 
-bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(bmcl::Option<node_id> nodeid, const msg_appendentries_t& ae)
+bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(node_id nodeid, const msg_appendentries_t& ae)
 {
     msg_appendentries_response_t r(_me.current_term, false, 0, 0);
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
+    if (node.isNone())
+        return Error::NodeUnknown;
 
     _me.timeout_elapsed = std::chrono::milliseconds(0);
 
@@ -441,7 +443,7 @@ msg_requestvote_response_t Server::accept_requestvote(const msg_requestvote_t& v
     return prepare_requestvote_response_t(vr, raft_request_vote::GRANTED);
 }
 
-bmcl::Option<Error> Server::accept_requestvote_response(bmcl::Option<node_id> nodeid, const msg_requestvote_response_t& r)
+bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 

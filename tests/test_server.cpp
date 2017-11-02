@@ -615,13 +615,12 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
     EXPECT_FALSE(r.get_current_leader().isSome());
 }
 
-TEST(TestFollower, recv_appendentries_does_not_need_node)
+TEST(TestFollower, recv_appendentries_from_unknown_node_fails)
 {
     raft::Server r(raft::node_id(1), true, generic_funcs());
     r.nodes().add_node(raft::node_id(2));
-    auto aer = r.accept_appendentries(bmcl::None, msg_appendentries_t(1));
-    EXPECT_TRUE(aer.isOk());
-    EXPECT_TRUE(aer.unwrap().success);
+    auto aer = r.accept_appendentries(raft::node_id(3), msg_appendentries_t(1));
+    EXPECT_FALSE(aer.isOk());
 }
 
 /* TODO: check if test case is needed */
@@ -2183,7 +2182,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
 }
 
-TEST(TestLeader, recv_appendentries_response_without_node_fails)
+TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
 {
     raft::Server r(raft::node_id(1), true, generic_funcs());
     r.nodes().add_node(raft::node_id(2));
@@ -2194,7 +2193,7 @@ TEST(TestLeader, recv_appendentries_response_without_node_fails)
     r.set_current_term(1);
 
     /* receive mock success responses */
-    EXPECT_TRUE(r.accept_appendentries_response(bmcl::None, msg_appendentries_response_t(1, true, 0, 0)).isSome());
+    EXPECT_TRUE(r.accept_appendentries_response(raft::node_id(4), msg_appendentries_response_t(1, true, 0, 0)).isSome());
 }
 
 TEST(TestLeader, recv_entry_resets_election_timeout)
