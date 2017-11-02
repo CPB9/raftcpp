@@ -84,7 +84,7 @@ public:
     std::size_t get_num_voting_nodes() const;
     bool raft_votes_is_majority(bmcl::Option<node_id> voted_for) const;
     static bool raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes);
-
+    bool is_committed(std::size_t point) const;
 private:
     node_id _me;
     Items _nodes;

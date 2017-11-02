@@ -136,4 +136,19 @@ bool Nodes::raft_votes_is_majority(std::size_t num_nodes, std::size_t nvotes)
     std::size_t half = num_nodes / 2;
     return half + 1 <= nvotes;
 }
+
+bool Nodes::is_committed(std::size_t point) const
+{
+    std::size_t votes = 1;
+    for (const Node& i : _nodes)
+    {
+        if (!is_me(i.get_id()) && i.is_voting() && point <= i.get_match_idx())
+        {
+            votes++;
+        }
+    }
+
+    return (get_num_voting_nodes() / 2 < votes);
+}
+
 }

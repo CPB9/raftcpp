@@ -174,7 +174,8 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
         become_follower();
         return bmcl::None;
     }
-    else if (_me.current_term != r.term)
+
+    if (_me.current_term > r.term)
         return bmcl::None;
 
     if (!r.success)
@@ -212,22 +213,13 @@ bmcl::Option<Error> Server::accept_appendentries_response(bmcl::Option<node_id> 
 
     /* Update commit idx */
     std::size_t point = r.current_idx;
-    if (point)
+    if (point > 0)
     {
         bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
         if (get_commit_idx() < point && ety.unwrap().term == _me.current_term)
         {
-            std::size_t votes = 1;
-            for (const Node& i: _nodes.items())
-            {
-                if (!_nodes.is_me(i.get_id()) && i.is_voting() && point <= i.get_match_idx())
-                {
-                    votes++;
-                }
-            }
-
-            if (_nodes.get_num_voting_nodes() / 2 < votes)
+            if (_nodes.is_committed(point))
                 set_commit_idx(point);
         }
     }
