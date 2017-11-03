@@ -44,8 +44,7 @@ raft_cbs_t generic_funcs()
 
 TEST(TestServer, voted_for_records_who_we_voted_for)
 {
-    raft::Server r(raft::node_id(1), true);
-    r.set_callbacks(generic_funcs());
+    raft::Server r(raft::node_id(1), true, generic_funcs());
     r.vote_for_nodeid(raft::node_id(1));
     EXPECT_EQ(raft::node_id(1), r.get_voted_for());
 }
@@ -75,16 +74,14 @@ TEST(TestServer, currentterm_defaults_to_0)
 
 TEST(TestServer, set_currentterm_sets_term)
 {
-    raft::Server r(raft::node_id(1), true);
-    r.set_callbacks(generic_funcs());
+    raft::Server r(raft::node_id(1), true, generic_funcs());
     r.set_current_term(5);
     EXPECT_EQ(5, r.get_current_term());
 }
 
 TEST(TestServer, voting_results_in_voting)
 {
-    raft::Server r(raft::node_id(1), true);
-    r.set_callbacks(generic_funcs());
+    raft::Server r(raft::node_id(1), true, generic_funcs());
     r.nodes().add_node(raft::node_id(2));
     r.nodes().add_node(raft::node_id(9));
 
@@ -96,8 +93,7 @@ TEST(TestServer, voting_results_in_voting)
 
 TEST(TestServer, election_start_increments_term)
 {
-    raft::Server r(raft::node_id(1), true);
-    r.set_callbacks(generic_funcs());
+    raft::Server r(raft::node_id(1), true, generic_funcs());
     r.set_current_term(1);
     r.election_start();
     EXPECT_EQ(2, r.get_current_term());
