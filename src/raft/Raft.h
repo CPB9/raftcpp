@@ -29,11 +29,8 @@ class Server
         bmcl::Option<node_id> voted_for;        /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
 
         /* Volatile state: */
-        std::size_t commit_idx;                                 /**< idx of highest log entry known to be committed */
-        std::size_t last_applied_idx;                           /**< idx of highest log entry applied to state machine */
         raft_state_e state;                                     /**< follower/leader/candidate indicator */
         bmcl::Option<node_id>   current_leader;                 /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
-        bmcl::Option<std::size_t> voting_cfg_change_log_idx;    /**< the log which has a voting cfg change */
 
         std::chrono::milliseconds timeout_elapsed;              /**< amount of time left till timeout */
         std::chrono::milliseconds election_timeout;
@@ -55,16 +52,13 @@ public:
 
     const Nodes& nodes() const { return _nodes; }
     Nodes& nodes() { return _nodes; }
-    const Logger& log() const { return _log; }
-    Logger& log() { return _log; }
+    const LogCommitter& log() const { return _log; }
+    LogCommitter& log() { return _log; }
 
     void set_current_term(std::size_t term);
     void vote_for_nodeid(node_id nodeid);
-    inline void set_last_applied_idx(std::size_t idx) { _me.last_applied_idx = idx; }
-    void set_commit_idx(std::size_t commit_idx);
 
     bmcl::Option<Error> entry_append(const raft_entry_t& ety);
-    bmcl::Option<Error> entry_apply_all();
     raft_entry_state_e entry_get_state(const msg_entry_response_t& r) const;
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
@@ -85,8 +79,6 @@ public:
     inline bool is_candidate() const { return get_state() == raft_state_e::CANDIDATE; }
     inline raft_state_e get_state() const { return _me.state; }
 
-    inline std::size_t get_commit_idx() const { return _me.commit_idx; }
-    inline std::size_t get_last_applied_idx() const { return _me.last_applied_idx; }
 
 public:
 
@@ -99,19 +91,17 @@ public:
     void send_appendentries_all();
     void set_state(raft_state_e state);
 
-    bmcl::Option<Error> entry_apply();
-    void entry_delete_from_idx(std::size_t idx);
     void pop_log(const raft_entry_t& ety, const std::size_t idx);
-    void entry_append_impl(const raft_entry_t& ety, const std::size_t idx);
-    inline bool voting_change_is_in_progress() const { return _me.voting_cfg_change_log_idx.isSome(); }
+    void entry_apply_node_add(const raft_entry_t& ety, node_id id);
 
 private:
+    void entry_append_impl(const raft_entry_t& ety, const std::size_t idx);
     void __log(const bmcl::Option<Node&> node, const char *fmt, ...);
     void __log(const bmcl::Option<const Node&> node, const char *fmt, ...) const;
     msg_requestvote_response_t prepare_requestvote_response_t(node_id candidate, raft_request_vote vote);
 
     Nodes _nodes;
-    Logger _log;    /**< the log which is replicated */
+    LogCommitter _log;
     server_private_t _me;
 };
 

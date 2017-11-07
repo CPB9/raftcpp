@@ -18,7 +18,6 @@ namespace raft
 
 enum class Error : int
 {
-    Any = -1,
     NotLeader = -2,
     OneVotingChangeOnly = -3,
     Shutdown = -4,
