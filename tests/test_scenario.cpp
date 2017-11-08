@@ -8,7 +8,7 @@ using namespace raft;
 TEST(TestScenario, leader_appears)
 {
     std::vector<raft::Server> r;
-    Sender sender;
+    Exchanger sender;
 
     const std::size_t Count = 3;
     for (std::size_t i = 0; i < Count; ++i)
@@ -31,12 +31,9 @@ TEST(TestScenario, leader_appears)
     for (std::size_t i = 0; i < 3; ++i)
     {
         raft_cbs_t funcs = { 0 };
-        funcs.send_requestvote = [&sender](const raft::Server* raft, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, msg); };
-        funcs.send_appendentries = [&sender](const raft::Server* raft, const raft::node_id& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
         funcs.persist_term = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
         funcs.persist_vote = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
         r[i].set_callbacks(funcs);
-
     }
 
     /* NOTE: important for 1st node to send vote request before others */

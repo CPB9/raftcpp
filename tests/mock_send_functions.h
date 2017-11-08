@@ -41,12 +41,24 @@ struct msg_t
     raft::node_id sender;
 };
 
+class Exchanger;
 
-class Sender
+class Sender : public ISender
+{
+private:
+    Exchanger* _ex;
+    raft::Server* _r;
+public:
+    explicit Sender(Exchanger* ex, raft::Server* r);
+    bmcl::Option<Error> send_requestvote(const msg_requestvote_t& msg) override;
+    bmcl::Option<Error> send_appendentries(const node_id& node, const msg_appendentries_t& msg) override;
+};
+
+class Exchanger
 {
 public:
-    explicit Sender(raft::Server* r = nullptr) { if (r) add(r); }
-    void add(raft::Server* r) { _servers[r->nodes().get_my_id()].raft = r; }
+    explicit Exchanger(raft::Server* r = nullptr) { if (r) add(r); }
+    void add(raft::Server* r);
     bool sender_msgs_available(raft::node_id from);
     void sender_poll_msgs(raft::node_id from);
     bmcl::Option<msg_t> sender_poll_msg_data(const raft::Server& from);
@@ -59,12 +71,19 @@ public:
 
 private:
 
-    typedef struct
+    struct sender_t
     {
+        sender_t() = default;
+        sender_t(Exchanger* ex, raft::Server* r)
+        {
+            raft = r;
+            sender = std::make_shared<Sender>(ex, r);
+        }
         std::deque<msg_t> outbox;
         std::deque<msg_t> inbox;
         raft::Server* raft;
-    } sender_t;
+        std::shared_ptr<ISender> sender;
+    };
 
     bmcl::Option<raft::Error> __append_msg(const raft::node_id& from, const raft::node_id& to, const void* data, int len, raft_message_type_e type);
 

@@ -228,12 +228,6 @@ using func_logentry_event_f = std::function<int(const Server* raft, const raft_e
 
 struct raft_cbs_t
 {
-    /** Callback for sending request vote messages to all cluster's members */
-    func_send_requestvote_f send_requestvote;
-
-    /** Callback for sending appendentries messages */
-    func_send_appendentries_f send_appendentries;
-
     /** Callback for finite state machine application
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
@@ -277,5 +271,63 @@ struct raft_cbs_t
      * This callback is optional */
     func_log_f log;
 };
+
+class ISender
+{
+public:
+    /** Callback for sending request vote messages to all cluster's members */
+    virtual bmcl::Option<Error> send_requestvote(const msg_requestvote_t& msg) = 0;
+
+    /** Callback for sending appendentries messages */
+    virtual bmcl::Option<Error> send_appendentries(const node_id& node, const msg_appendentries_t& msg) = 0;
+};
+
+class Helper
+{
+public:
+    /** Callback for finite state machine application
+    * Return 0 on success.
+    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    virtual int applylog(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+
+    /** Callback for persisting vote data
+    * For safety reasons this callback MUST flush the change to disk. */
+    virtual bmcl::Option<Error> persist_vote(std::size_t node) = 0;
+
+    /** Callback for persisting term data
+    * For safety reasons this callback MUST flush the change to disk. */
+    virtual bmcl::Option<Error> persist_term(std::size_t node) = 0;
+
+    /** Callback for adding an entry to the log
+    * For safety reasons this callback MUST flush the change to disk.
+    * Return 0 on success.
+    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    virtual int log_offer(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+
+    /** Callback for removing the oldest entry from the log
+    * For safety reasons this callback MUST flush the change to disk.
+    * @note If memory was malloc'd in log_offer then this should be the right
+    *  time to free the memory. */
+    virtual int log_poll(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+
+    /** Callback for removing the youngest entry from the log
+    * For safety reasons this callback MUST flush the change to disk.
+    * @note If memory was malloc'd in log_offer then this should be the right
+    *  time to free the memory. */
+    virtual int log_pop(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+
+    /** Callback for determining which node this configuration log entry
+    * affects. This call only applies to configuration change log entries.
+    * @return the node ID of the node */
+    virtual int log_get_node_id(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+
+    /** Callback for detecting when a non-voting node has sufficient logs. */
+    virtual bool node_has_sufficient_logs(const node_id& node) = 0;
+
+    /** Callback for catching debugging log messages
+    * This callback is optional */
+    virtual void log(const bmcl::Option<const node_id&> node, const char *buf) = 0;
+};
+
 
 }

@@ -41,8 +41,9 @@ class Server
 
     friend class Logger;
 public:
-    explicit Server(node_id id, bool is_voting, const raft_cbs_t& funcs = raft_cbs_t{});
+    explicit Server(node_id id, bool is_voting, const raft_cbs_t& funcs = raft_cbs_t{}, ISender* sender = nullptr);
     inline void set_callbacks(const raft_cbs_t& funcs) { _me.cb = funcs; }
+    inline void set_sender(ISender* sender) {_sender = sender; }
     inline const raft_cbs_t& get_callbacks() const { return _me.cb; }
     inline void set_election_timeout(std::chrono::milliseconds msec) {_me.election_timeout = msec;}
     inline void set_request_timeout(std::chrono::milliseconds msec) { _me.request_timeout = msec; }
@@ -103,6 +104,7 @@ private:
     Nodes _nodes;
     LogCommitter _log;
     server_private_t _me;
+    ISender* _sender;
 };
 
 }

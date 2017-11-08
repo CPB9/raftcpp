@@ -48,7 +48,7 @@ void Server::__log(const bmcl::Option<const node_id&> node, const char *fmt, ...
     _me.cb.log(this, node, buf);
 }
 
-Server::Server(node_id id, bool is_voting, const raft_cbs_t& funcs) : _nodes(id, is_voting), _log(this)
+Server::Server(node_id id, bool is_voting, const raft_cbs_t& funcs, ISender* sender) : _nodes(id, is_voting), _log(this), _sender(sender)
 {
     _me.cb = { 0 };
 
@@ -99,8 +99,7 @@ void Server::become_candidate()
      * would deadlock the cluster by always gaining a headstart. To prevent
      * this, we allow a negative randomness as a potential handicap. */
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
-
-    _me.cb.send_requestvote(this, msg_requestvote_t(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
+    _sender->send_requestvote(msg_requestvote_t(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::become_follower()
@@ -658,8 +657,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
           ae.prev_log_idx,
           ae.prev_log_term);
 
-    assert(_me.cb.send_appendentries);
-    return _me.cb.send_appendentries(this, node.get_id(), ae);
+    return _sender->send_appendentries(node.get_id(), ae);
 }
 
 void Server::send_appendentries_all()

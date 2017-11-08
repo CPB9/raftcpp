@@ -2,8 +2,25 @@
 #include "raft/Raft.h"
 #include "mock_send_functions.h"
 
+Sender::Sender(Exchanger* ex, raft::Server* r) : _ex(ex), _r(r) {}
+bmcl::Option<Error> Sender::send_requestvote(const msg_requestvote_t& msg)
+{
+    return _ex->sender_requestvote(_r, msg);
+}
 
-bmcl::Option<raft::Error> Sender::__append_msg(const raft::node_id& from, const raft::node_id& to, const void* data, int len, raft_message_type_e type)
+bmcl::Option<Error> Sender::send_appendentries(const node_id& node, const msg_appendentries_t& msg) 
+{
+    return _ex->sender_appendentries(_r, node, msg);
+}
+
+void Exchanger::add(raft::Server* r)
+{
+    sender_t s(this, r);
+    _servers.emplace(r->nodes().get_my_id(), s);
+    r->set_sender(s.sender.get());
+}
+
+bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::node_id& from, const raft::node_id& to, const void* data, int len, raft_message_type_e type)
 {
     auto f = _servers[from].raft;
     auto peer = _servers[to].raft;
@@ -23,7 +40,7 @@ bmcl::Option<raft::Error> Sender::__append_msg(const raft::node_id& from, const 
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Sender::sender_requestvote(const raft::Server* raft, const msg_requestvote_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_requestvote(const raft::Server* raft, const msg_requestvote_t& msg)
 {
     //return __append_msg(from->nodes().get_my_id(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
 
@@ -35,12 +52,12 @@ bmcl::Option<raft::Error> Sender::sender_requestvote(const raft::Server* raft, c
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Sender::sender_requestvote_response(const raft::node_id& from, const raft::node_id& to, const msg_requestvote_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_requestvote_response(const raft::node_id& from, const raft::node_id& to, const msg_requestvote_response_t& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Sender::sender_appendentries(const raft::Server * from, const raft::node_id & to, const msg_appendentries_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_appendentries(const raft::Server * from, const raft::node_id & to, const msg_appendentries_t& msg)
 {
     msg_entry_t* entries = (msg_entry_t*)calloc(1, sizeof(msg_entry_t) * msg.n_entries);
     memcpy(entries, msg.entries, sizeof(msg_entry_t) * msg.n_entries);
@@ -49,22 +66,22 @@ bmcl::Option<raft::Error> Sender::sender_appendentries(const raft::Server * from
     return __append_msg(from->nodes().get_my_id(), to, &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
 }
 
-bmcl::Option<raft::Error> Sender::sender_appendentries_response(const raft::node_id& from, const raft::node_id& to, const msg_appendentries_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_appendentries_response(const raft::node_id& from, const raft::node_id& to, const msg_appendentries_response_t& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Sender::sender_entries_response(const raft::node_id& from, const raft::node_id& to, const msg_entry_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_entries_response(const raft::node_id& from, const raft::node_id& to, const msg_entry_response_t& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
 }
 
-bmcl::Option<msg_t> Sender::sender_poll_msg_data(const raft::Server& from)
+bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(const raft::Server& from)
 {
     return sender_poll_msg_data(from.nodes().get_my_id());
 }
 
-bmcl::Option<msg_t> Sender::sender_poll_msg_data(raft::node_id from)
+bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(raft::node_id from)
 {
     auto& s = _servers[from];
     if (s.outbox.empty())
@@ -74,14 +91,14 @@ bmcl::Option<msg_t> Sender::sender_poll_msg_data(raft::node_id from)
     return m;
 }
 
-bool Sender::sender_msgs_available(raft::node_id from)
+bool Exchanger::sender_msgs_available(raft::node_id from)
 {
     auto& s = _servers[from];
     assert(s.raft != nullptr);
     return !s.inbox.empty();
 }
 
-void Sender::sender_poll_msgs(raft::node_id from)
+void Exchanger::sender_poll_msgs(raft::node_id from)
 {
     auto& s = _servers[from];
     if (!s.raft)
