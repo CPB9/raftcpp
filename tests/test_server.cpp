@@ -230,7 +230,6 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
     /* must be follower */
     r.set_state(raft_state_e::FOLLOWER);
     r.set_current_term(1);
-    r.log().set_last_applied_idx(0);
 
     /* need at least one entry */
     r.log().entry_append(&r, raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
@@ -248,7 +247,6 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
     funcs.applylog = __raft_applylog;
 
     raft::Server r(raft::node_id(1), true, funcs);
-    r.log().set_last_applied_idx(0);
 
     r.log().entry_append(&r, raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
     r.log().set_commit_idx(1);
@@ -1773,7 +1771,6 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.set_current_term(1);
     r.log().set_commit_idx(0);
     /* the last applied idx will became 1, and then 2 */
-    r.log().set_last_applied_idx(0);
 
     /* append entries - we need two */
     r.entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
@@ -1833,7 +1830,6 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     r.set_current_term(1);
     r.log().set_commit_idx(0);
     /* the last applied idx will became 1, and then 2 */
-    r.log().set_last_applied_idx(0);
 
     /* append entries - we need two */
     r.entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
@@ -1870,7 +1866,6 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     r.set_current_term(1);
     r.log().set_commit_idx(0);
     /* the last applied idx will became 1, and then 2 */
-    r.log().set_last_applied_idx(0);
 
     /* append entries - we need two */
     r.entry_append(msg_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
@@ -1910,7 +1905,6 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.set_state(raft_state_e::LEADER);
     r.set_current_term(2);
     r.log().set_commit_idx(0);
-    r.log().set_last_applied_idx(0);
 
     /* append entries - we need two */
     r.entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
@@ -2131,7 +2125,6 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     r.set_current_term(1);
     r.log().set_commit_idx(0);
     /* the last applied idx will became 1, and then 2 */
-    r.log().set_last_applied_idx(0);
 
     /* append entries - we need two */
     r.entry_append(msg_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));

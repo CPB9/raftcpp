@@ -31,9 +31,9 @@ std::size_t Logger::count() const
     return _me.entries.size();
 }
 
-void Logger::clear()
+bool Logger::empty() const
 {
-    _me.entries.clear();
+    return _me.entries.empty();
 }
 
 std::size_t Logger::get_current_idx() const
@@ -41,17 +41,9 @@ std::size_t Logger::get_current_idx() const
     return count() + _me.base;
 }
 
-bmcl::Option<std::size_t> Logger::get_last_log_term() const
+std::size_t Logger::get_front_idx() const
 {
-    std::size_t current_idx = get_current_idx();
-    if (0 == current_idx)
-        return bmcl::None;
-
-    bmcl::Option<const raft_entry_t&> ety = get_at_idx(current_idx);
-    if (ety.isNone())
-        return bmcl::None;
-
-    return ety.unwrap().term;
+    return _me.base + 1;
 }
 
 void Logger::append(const raft_entry_t& c)
@@ -87,49 +79,53 @@ bmcl::Option<const raft_entry_t&> Logger::get_at_idx(std::size_t idx) const
 
     std::size_t i = idx - _me.base;
     return _me.entries[i];
-
 }
 
-void Logger::log_delete_from(Server* raft, std::size_t idx)
-{
-    assert(idx > _me.base);
-
-    /* idx starts at 1 */
-    idx -= 1;
-    idx -= _me.base;
-    if (idx >= _me.entries.size())
-        return;
-    if (idx < 0)
-        idx = 0;
-    std::size_t count = _me.entries.size() - idx;
-
-    for (std::size_t i = 0; i < count; ++i)
-    {
-        if (raft && raft->get_callbacks().log_pop)
-            raft->get_callbacks().log_pop(raft, _me.entries.back(), _me.base + _me.entries.size());
-        raft->pop_log(_me.entries.back(), _me.base + _me.entries.size());
-        _me.entries.pop_back();
-    }
-}
-
-bmcl::Option<raft_entry_t> Logger::log_poll(Server* raft)
+bmcl::Option<raft_entry_t> Logger::pop_back()
 {
     if (_me.entries.empty())
         return bmcl::None;
+    raft_entry_t ety = _me.entries.back();
+    _me.entries.pop_back();
+    return ety;
+}
 
+bmcl::Option<raft_entry_t> Logger::pop_front()
+{
+    if (_me.entries.empty())
+        return bmcl::None;
     raft_entry_t elem = _me.entries.front();
-    if (raft && raft->get_callbacks().log_poll)
-        raft->get_callbacks().log_poll(raft, _me.entries.front(), _me.base + 1);
     _me.entries.erase(_me.entries.begin());
     _me.base++;
     return elem;
 }
 
-bmcl::Option<const raft_entry_t&> Logger::peektail() const
+bmcl::Option<const raft_entry_t&> Logger::back() const
 {
     if (_me.entries.empty())
         return bmcl::None;
     return _me.entries.back();
+}
+
+bmcl::Option<const raft_entry_t&> Logger::front() const
+{
+    if (_me.entries.empty())
+        return bmcl::None;
+    return _me.entries.front();
+}
+
+void LogCommitter::log_delete_from(Server* raft, std::size_t idx)
+{
+    for (std::size_t i = get_current_idx(); i >= idx && !empty(); --i)
+    {
+        auto ety = pop_back();
+        if (ety.isNone())
+            return;
+        if (raft && raft->get_callbacks().log_pop)
+            raft->get_callbacks().log_pop(raft, ety.unwrap(), i);
+        raft->pop_log(ety.unwrap(), i);
+
+    }
 }
 
 void LogCommitter::commit_till(std::size_t idx)
@@ -145,7 +141,7 @@ void LogCommitter::entry_delete_from_idx(Server* raft, std::size_t idx)
     assert(!is_committed(idx));
     if (idx <= voting_cfg_change_log_idx.unwrapOr(0))
         voting_cfg_change_log_idx.clear();
-    Logger::log_delete_from(raft, idx);
+    log_delete_from(raft, idx);
 }
 
 bmcl::Option<Error> LogCommitter::entry_append(Server* raft, const raft_entry_t& ety)
@@ -219,6 +215,29 @@ void LogCommitter::set_commit_idx(std::size_t idx)
     assert(get_commit_idx() <= idx);
     assert(idx <= get_current_idx());
     commit_idx = idx;
+}
+
+bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
+{
+    const auto& ety = back();
+    if (ety.isNone())
+        return bmcl::None;
+    return ety->term;
+}
+
+void LogCommitter::entry_pop_back(Server* raft)
+{
+    entry_delete_from_idx(raft, get_current_idx());
+}
+
+void LogCommitter::entry_pop_front(Server* raft)
+{
+    auto ety = pop_front();
+    if (ety.isNone())
+        return;
+    if (raft && raft->get_callbacks().log_poll)
+        raft->get_callbacks().log_poll(raft, ety.unwrap(), get_front_idx());
+    pop_front();
 }
 
 }

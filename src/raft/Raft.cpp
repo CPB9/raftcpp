@@ -253,7 +253,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     {
         become_follower();
     }
-    else if (_me.current_term < ae.term)
+    else if (ae.term > _me.current_term)
     {
         set_current_term(ae.term);
         r.term = ae.term;
@@ -271,16 +271,13 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     if (0 < ae.prev_log_idx)
     {
         bmcl::Option<const raft_entry_t&> e = _log.get_at_idx(ae.prev_log_idx);
-        if (e.isNone())
+        if (e.isNone() || _log.get_current_idx() < ae.prev_log_idx)
         {
+            /* 2. Reply false if log doesn't contain an entry at prevLogIndex
+            whose term matches prevLogTerm (§5.3) */
             __log(node, "AE no log at prev_idx %d", ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
         }
-
-        /* 2. Reply false if log doesn't contain an entry at prevLogIndex
-           whose term matches prevLogTerm (§5.3) */
-        if (_log.get_current_idx() < ae.prev_log_idx)
-            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
 
         if (e.unwrap().term != ae.prev_log_term)
         {
@@ -291,18 +288,6 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
         }
     }
 
-    /* 3. If an existing entry conflicts with a new one (same index
-       but different terms), delete the existing entry and all that
-       follow it (§5.3) */
-    if (0 < ae.prev_log_idx && ae.prev_log_idx + 1 < _log.get_current_idx())
-    {
-        /* Heartbeats shouldn't cause logs to be deleted. Heartbeats might be
-        * sent before the leader received the last appendentries response */
-        /* this is an old out-of-order appendentry message */
-        if (ae.n_entries != 0 && !_log.is_committed(ae.prev_log_idx + 1))
-            _log.entry_delete_from_idx(this, ae.prev_log_idx + 1);
-    }
-
     r.current_idx = ae.prev_log_idx;
 
     std::size_t i;
@@ -310,15 +295,19 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     {
         const raft_entry_t* ety = &ae.entries[i];
         std::size_t ety_index = ae.prev_log_idx + 1 + i;
-        bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
         r.current_idx = ety_index;
-        if (existing_ety.isSome() && existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
+        bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
+        if (existing_ety.isNone())
+            break;
+        //assert((existing_ety.unwrap().term == ety->term) == _log.is_committed(ety_index));
+        if (existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
         {
+            /* 3. If an existing entry conflicts with a new one (same index
+            but different terms), delete the existing entry and all that
+            follow it (§5.3) */
             _log.entry_delete_from_idx(this, ety_index);
             break;
         }
-        else if (existing_ety.isNone())
-            break;
     }
 
     /* Pick up remainder in case of mismatch or missing entry */
