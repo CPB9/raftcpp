@@ -7,25 +7,25 @@ using namespace raft;
 
 TEST(TestLog, new_is_empty)
 {
-    raft::LogCommitter l;
+    raft::LogCommitter l(nullptr);
     EXPECT_EQ(0, l.count());
 }
 
 TEST(TestLog, append_is_not_empty)
 {
-    raft::LogCommitter l;
-    l.entry_append(nullptr, raft_entry_t(0, 1));
+    raft::LogCommitter l(nullptr);
+    l.entry_append(raft_entry_t(0, 1));
     EXPECT_EQ(1, l.count());
 }
 
 TEST(TestLog, get_at_idx)
 {
-    raft::LogCommitter l;
+    raft::LogCommitter l(nullptr);
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    l.entry_append(nullptr, e1);
-    l.entry_append(nullptr, e2);
-    l.entry_append(nullptr, e3);
+    l.entry_append(e1);
+    l.entry_append(e2);
+    l.entry_append(e3);
     EXPECT_EQ(3, l.count());
 
     EXPECT_EQ(3, l.count());
@@ -35,16 +35,16 @@ TEST(TestLog, get_at_idx)
 
 TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 {
-    raft::LogCommitter l;
+    raft::LogCommitter l(nullptr);
 
-    l.entry_append(nullptr, raft_entry_t(0, 1));
+    l.entry_append(raft_entry_t(0, 1));
     EXPECT_FALSE(l.get_at_idx(2).isSome());
 }
 
 TEST(TestLog, delete)
 {
     raft::Server r(raft::node_id(1), true);
-    raft::LogCommitter l;
+    raft::LogCommitter l(&r);
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
     std::deque<raft_entry_t> queue;
 
@@ -56,37 +56,37 @@ TEST(TestLog, delete)
     };
     r.set_callbacks(funcs);
 
-    l.entry_append(nullptr, e1);
-    l.entry_append(nullptr, e2);
-    l.entry_append(nullptr, e3);
+    l.entry_append(e1);
+    l.entry_append(e2);
+    l.entry_append(e3);
     EXPECT_EQ(3, l.count());
 
-    l.log_delete_from(&r, 3);
+    l.log_delete_from(3);
 
     EXPECT_EQ(queue.front().id, e3.id);
 
     EXPECT_EQ(2, l.count());
     EXPECT_FALSE(l.get_at_idx(3).isSome());
-    l.log_delete_from(&r, 2);
+    l.log_delete_from(2);
     EXPECT_EQ(1, l.count());
     EXPECT_FALSE(l.get_at_idx(2).isSome());
-    l.log_delete_from(&r, 1);
+    l.log_delete_from(1);
     EXPECT_EQ(0, l.count());
     EXPECT_FALSE(l.get_at_idx(1).isSome());
 }
 
 TEST(TestLog, delete_onwards)
 {
-    raft::LogCommitter l;
+    raft::LogCommitter l(nullptr);
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    l.entry_append(nullptr, e1);
-    l.entry_append(nullptr, e2);
-    l.entry_append(nullptr, e3);
+    l.entry_append(e1);
+    l.entry_append(e2);
+    l.entry_append(e3);
     EXPECT_EQ(3, l.count());
 
     /* even 3 gets deleted */
-    l.log_delete_from(nullptr, 2);
+    l.log_delete_from(2);
     EXPECT_EQ(1, l.count());
     EXPECT_TRUE(l.get_at_idx(1).isSome());
     EXPECT_EQ(e1.id, l.get_at_idx(1).unwrap().id);
@@ -96,12 +96,12 @@ TEST(TestLog, delete_onwards)
 
 TEST(TestLog, peektail)
 {
-    raft::LogCommitter l;
+    raft::LogCommitter l(nullptr);
     raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
 
-    l.entry_append(nullptr, e1);
-    l.entry_append(nullptr, e2);
-    l.entry_append(nullptr, e3);
+    l.entry_append(e1);
+    l.entry_append(e2);
+    l.entry_append(e3);
     EXPECT_EQ(3, l.count());
     EXPECT_TRUE(l.back().isSome());
     EXPECT_EQ(e3.id, l.back().unwrap().id);
@@ -109,33 +109,32 @@ TEST(TestLog, peektail)
 
 TEST(TestLog, cant_append_duplicates)
 {
-    raft::LogCommitter l;
-    l.entry_append(nullptr, raft::raft_entry_t(1, 1));
+    raft::LogCommitter l(nullptr);
+    l.entry_append(raft::raft_entry_t(1, 1));
     EXPECT_EQ(1, l.count());
-    l.entry_append(nullptr, raft::raft_entry_t(1, 1));
+    l.entry_append(raft::raft_entry_t(1, 1));
     EXPECT_EQ(1, l.count());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_we_dont_have_entry_to_apply)
 {
-    raft::LogCommitter lc;
-
-    lc.entry_apply_one(nullptr);
+    raft::LogCommitter lc(nullptr);
+    lc.entry_apply_one();
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
 {
-    raft::LogCommitter lc;
+    raft::LogCommitter lc(nullptr);
 
-    auto e = lc.entry_apply_one(nullptr);
+    auto e = lc.entry_apply_one();
     EXPECT_TRUE(e.isNone());
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 
-    lc.entry_append(nullptr, raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
-    lc.entry_apply_one(nullptr);
+    lc.entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
+    lc.entry_apply_one();
     /* Not allowed to be applied because we haven't confirmed a majority yet */
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());

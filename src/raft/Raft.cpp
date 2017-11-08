@@ -48,7 +48,7 @@ void Server::__log(const bmcl::Option<const Node&> node, const char *fmt, ...) c
     _me.cb.log(this, node, buf);
 }
 
-Server::Server(node_id id, bool is_voting, const raft_cbs_t& funcs) : _nodes(id, is_voting)
+Server::Server(node_id id, bool is_voting, const raft_cbs_t& funcs) : _nodes(id, is_voting), _log(this)
 {
     _me.cb = { 0 };
 
@@ -137,7 +137,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     }
 
     if (_log.has_not_applied())
-        return _log.entry_apply_one(this);
+        return _log.entry_apply_one();
 
     return bmcl::None;
 }
@@ -283,7 +283,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
         {
             __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
-            _log.entry_delete_from_idx(this, ae.prev_log_idx);
+            _log.entry_delete_from_idx(ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, ae.prev_log_idx - 1, 0);
         }
     }
@@ -305,7 +305,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
             /* 3. If an existing entry conflicts with a new one (same index
             but different terms), delete the existing entry and all that
             follow it (§5.3) */
-            _log.entry_delete_from_idx(this, ety_index);
+            _log.entry_delete_from_idx(ety_index);
             break;
         }
     }
@@ -615,7 +615,7 @@ void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
 
 bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
 {
-    auto e = _log.entry_append(this, ety);
+    auto e = _log.entry_append(ety);
     if (e.isSome())
         return e;
     entry_append_impl(ety, _log.get_current_idx());

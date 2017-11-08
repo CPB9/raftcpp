@@ -41,7 +41,7 @@ private:
 class LogCommitter : public Logger
 {
 public:
-    LogCommitter()
+    LogCommitter(Server* raft) : _raft(raft)
     {
         commit_idx = 0;
         last_applied_idx = 0;
@@ -58,16 +58,17 @@ public:
     void commit_till(std::size_t idx);
     inline void commit_all() { set_commit_idx(get_current_idx()); }
     void set_commit_idx(std::size_t idx);
-    void log_delete_from(Server* raft, std::size_t idx);
+    void log_delete_from(std::size_t idx);
 
-    void entry_delete_from_idx(Server* raft, std::size_t idx);
-    bmcl::Option<Error> entry_append(Server* raft, const raft_entry_t& ety);
-    bmcl::Option<Error> entry_apply_one(Server* raft);
-    bmcl::Option<Error> entry_apply_all(Server* raft);
-    void entry_pop_back(Server* raft);
-    void entry_pop_front(Server* raft);
+    void entry_delete_from_idx(std::size_t idx);
+    bmcl::Option<Error> entry_append(const raft_entry_t& ety);
+    bmcl::Option<Error> entry_apply_one();
+    bmcl::Option<Error> entry_apply_all();
+    void entry_pop_back();
+    void entry_pop_front();
 
 private:
+    Server* _raft;
     std::size_t commit_idx;                                 /**< idx of highest log entry known to be committed */
     std::size_t last_applied_idx;                           /**< idx of highest log entry applied to state machine */
     bmcl::Option<std::size_t> voting_cfg_change_log_idx;    /**< the log which has a voting cfg change */

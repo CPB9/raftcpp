@@ -232,7 +232,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
     r.set_current_term(1);
 
     /* need at least one entry */
-    r.log().entry_append(&r, raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
+    r.log().entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
     r.log().set_commit_idx(1);
 
     /* let time lapse */
@@ -248,9 +248,9 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
 
     raft::Server r(raft::node_id(1), true, funcs);
 
-    r.log().entry_append(&r, raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
+    r.log().entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
     r.log().set_commit_idx(1);
-    r.log().entry_apply_one(&r);
+    r.log().entry_apply_one();
     EXPECT_EQ(1, r.log().get_last_applied_idx());
 }
 
@@ -1501,7 +1501,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     EXPECT_EQ(1, r.log().count());
 
     /* trigger response through commit */
-    r.log().entry_apply_one(&r);
+    r.log().entry_apply_one();
 }
 
 void TestRaft_non_leader_recv_entry_msg_fails()
