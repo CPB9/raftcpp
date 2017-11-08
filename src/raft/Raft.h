@@ -96,8 +96,8 @@ public:
 
 private:
     void entry_append_impl(const raft_entry_t& ety, const std::size_t idx);
-    void __log(const bmcl::Option<Node&> node, const char *fmt, ...);
-    void __log(const bmcl::Option<const Node&> node, const char *fmt, ...) const;
+    void __log(const bmcl::Option<node_id&> node, const char *fmt, ...);
+    void __log(const bmcl::Option<const node_id&> node, const char *fmt, ...) const;
     msg_requestvote_response_t prepare_requestvote_response_t(node_id candidate, raft_request_vote vote);
 
     Nodes _nodes;

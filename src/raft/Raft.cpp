@@ -24,7 +24,7 @@
 namespace raft
 {
 
-void Server::__log(const bmcl::Option<Node&> node, const char *fmt, ...)
+void Server::__log(const bmcl::Option<node_id&> node, const char *fmt, ...)
 {
     if (!_me.cb.log)
         return;
@@ -36,7 +36,7 @@ void Server::__log(const bmcl::Option<Node&> node, const char *fmt, ...)
     _me.cb.log(this, node, buf);
 }
 
-void Server::__log(const bmcl::Option<const Node&> node, const char *fmt, ...) const
+void Server::__log(const bmcl::Option<const node_id&> node, const char *fmt, ...) const
 {
     if (!_me.cb.log)
         return;
@@ -145,7 +145,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
 bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
-    __log(node,
+    __log(nodeid,
           "received appendentries response %s ci:%d rci:%d 1stidx:%d",
           r.success ? "SUCCESS" : "fail",
         _log.get_current_idx(),
@@ -202,7 +202,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
         false == node->has_sufficient_logs()
         )
     {
-        bool e = _me.cb.node_has_sufficient_logs(this, node.unwrap());
+        bool e = _me.cb.node_has_sufficient_logs(this, node->get_id());
         if (e)
             node->set_has_sufficient_logs();
     }
@@ -238,7 +238,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     _me.timeout_elapsed = std::chrono::milliseconds(0);
 
     if (0 < ae.n_entries)
-        __log(node, "recvd appendentries t:%d ci:%d lc:%d pli:%d plt:%d #%d",
+        __log(nodeid, "recvd appendentries t:%d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
               _log.get_current_idx(),
               ae.leader_commit,
@@ -261,7 +261,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     else if (ae.term < _me.current_term)
     {
         /* 1. Reply false if term < currentTerm (§5.1) */
-        __log(node, "AE term %d is less than current term %d", ae.term, _me.current_term);
+        __log(nodeid, "AE term %d is less than current term %d", ae.term, _me.current_term);
         return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
     }
 
@@ -274,13 +274,13 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
         {
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
             whose term matches prevLogTerm (§5.3) */
-            __log(node, "AE no log at prev_idx %d", ae.prev_log_idx);
+            __log(nodeid, "AE no log at prev_idx %d", ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
         }
 
         if (e.unwrap().term != ae.prev_log_term)
         {
-            __log(node, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
+            __log(nodeid, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
             /* Delete all the following log entries because they don't match */
             _log.entry_delete_from_idx(ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, ae.prev_log_idx - 1, 0);
@@ -379,7 +379,7 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
 
 msg_requestvote_response_t Server::prepare_requestvote_response_t(node_id candidate, raft_request_vote vote)
 {
-    __log(_nodes.get_node(candidate), "node requested vote: %d replying: %s",
+    __log(candidate, "node requested vote: %d replying: %s",
         candidate,
         vote == raft_request_vote::GRANTED ? "granted" :
         vote == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
@@ -427,7 +427,7 @@ bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const ms
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
-    __log(node, "node responded to requestvote status: %s",
+    __log(nodeid, "node responded to requestvote status: %s",
           r.vote_granted == raft_request_vote::GRANTED ? "granted" :
           r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
 
@@ -449,7 +449,7 @@ bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const ms
         return bmcl::None;
     }
 
-    __log(node, "node responded to requestvote status:%s ct:%d rt:%d",
+    __log(nodeid, "node responded to requestvote status:%s ct:%d rt:%d",
           r.vote_granted == raft_request_vote::GRANTED ? "granted" :
           r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown",
           _me.current_term,
@@ -650,7 +650,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
             ae.prev_log_term = prev_ety.unwrap().term;
     }
 
-    __log(node, "sending appendentries node: ci:%d comi:%d t:%d lc:%d pli:%d plt:%d",
+    __log(node.get_id(), "sending appendentries node: ci:%d comi:%d t:%d lc:%d pli:%d plt:%d",
           _log.get_current_idx(),
           _log.get_commit_idx(),
           ae.term,
@@ -659,7 +659,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
           ae.prev_log_term);
 
     assert(_me.cb.send_appendentries);
-    return _me.cb.send_appendentries(this, node, ae);
+    return _me.cb.send_appendentries(this, node.get_id(), ae);
 }
 
 void Server::send_appendentries_all()

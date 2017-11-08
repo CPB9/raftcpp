@@ -40,13 +40,13 @@ bmcl::Option<raft::Error> Sender::sender_requestvote_response(const raft::node_i
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Sender::sender_appendentries(const raft::Server * from, const raft::Node & to, const msg_appendentries_t& msg)
+bmcl::Option<raft::Error> Sender::sender_appendentries(const raft::Server * from, const raft::node_id & to, const msg_appendentries_t& msg)
 {
     msg_entry_t* entries = (msg_entry_t*)calloc(1, sizeof(msg_entry_t) * msg.n_entries);
     memcpy(entries, msg.entries, sizeof(msg_entry_t) * msg.n_entries);
     msg_appendentries_t tmp = msg;
     tmp.entries = entries;
-    return __append_msg(from->nodes().get_my_id(), to.get_id(), &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
+    return __append_msg(from->nodes().get_my_id(), to, &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
 }
 
 bmcl::Option<raft::Error> Sender::sender_appendentries_response(const raft::node_id& from, const raft::node_id& to, const msg_appendentries_response_t& msg)

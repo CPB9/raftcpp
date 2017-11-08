@@ -169,7 +169,6 @@ struct msg_appendentries_response_t
 } ;
 
 class Server;
-class Node;
 
 /** Callback for sending request vote messages to cluster's members.
 * @param[in] raft The Raft server making this callback
@@ -182,25 +181,21 @@ using func_send_requestvote_f = std::function<bmcl::Option<Error>(Server* raft, 
  * @param[in] node The node's ID that we are sending this message to
  * @param[in] msg The appendentries message to be sent
  * @return 0 on success */
-using func_send_appendentries_f = std::function<bmcl::Option<Error>(Server* raft, const Node& node, const msg_appendentries_t& msg)>;
+using func_send_appendentries_f = std::function<bmcl::Option<Error>(Server* raft, const node_id& node, const msg_appendentries_t& msg)>;
 
 /** Callback for detecting when non-voting nodes have obtained enough logs.
  * This triggers only when there are no pending configuration changes.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node
  * @return 0 does not want to be notified again; otherwise -1 */
-using func_node_has_sufficient_logs_f = std::function<bool(Server* raft, const Node& node)>;
-
-#ifndef HAVE_FUNC_LOG
-#define HAVE_FUNC_LOG
+using func_node_has_sufficient_logs_f = std::function<bool(Server* raft, const node_id& node)>;
 
 /** Callback for providing debug logging information.
  * This callback is optional
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node that is the subject of this log. Could be NULL.
  * @param[in] buf The buffer that was logged */
-using func_log_f = std::function<void(const Server* raft, const bmcl::Option<const Node&> node, const char *buf)>;
-#endif
+using func_log_f = std::function<void(const Server* raft, const bmcl::Option<const node_id&> node, const char *buf)>;
 
 /** Callback for saving who we voted for to disk.
  * For safety reasons this callback MUST flush the change to disk.
