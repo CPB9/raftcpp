@@ -33,8 +33,8 @@ TEST(TestScenario, leader_appears)
         raft_cbs_t funcs = { 0 };
         funcs.send_requestvote = [&sender](const raft::Server* raft, const msg_requestvote_t& msg) { return sender.sender_requestvote(raft, msg); };
         funcs.send_appendentries = [&sender](const raft::Server* raft, const raft::node_id& node, const msg_appendentries_t& msg) { return sender.sender_appendentries(raft, node, msg); };
-        funcs.persist_term = [&sender](raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
-        funcs.persist_vote = [&sender](raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
+        funcs.persist_term = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
+        funcs.persist_vote = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
         r[i].set_callbacks(funcs);
 
     }

@@ -174,21 +174,21 @@ class Server;
 * @param[in] raft The Raft server making this callback
  * @param[in] msg The request vote message to be sent
  * @return 0 on success */
-using func_send_requestvote_f = std::function<bmcl::Option<Error>(Server* raft, const msg_requestvote_t& msg)>;
+using func_send_requestvote_f = std::function<bmcl::Option<Error>(const Server* raft, const msg_requestvote_t& msg)>;
 
 /** Callback for sending append entries messages.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node's ID that we are sending this message to
  * @param[in] msg The appendentries message to be sent
  * @return 0 on success */
-using func_send_appendentries_f = std::function<bmcl::Option<Error>(Server* raft, const node_id& node, const msg_appendentries_t& msg)>;
+using func_send_appendentries_f = std::function<bmcl::Option<Error>(const Server* raft, const node_id& node, const msg_appendentries_t& msg)>;
 
 /** Callback for detecting when non-voting nodes have obtained enough logs.
  * This triggers only when there are no pending configuration changes.
  * @param[in] raft The Raft server making this callback
  * @param[in] node The node
  * @return 0 does not want to be notified again; otherwise -1 */
-using func_node_has_sufficient_logs_f = std::function<bool(Server* raft, const node_id& node)>;
+using func_node_has_sufficient_logs_f = std::function<bool(const Server* raft, const node_id& node)>;
 
 /** Callback for providing debug logging information.
  * This callback is optional
@@ -202,7 +202,7 @@ using func_log_f = std::function<void(const Server* raft, const bmcl::Option<con
  * @param[in] raft The Raft server making this callback
  * @param[in] voted_for The node we voted for
  * @return 0 on success */
-using func_persist_int_f = std::function<bmcl::Option<Error>(Server* raft, std::size_t node)>;
+using func_persist_int_f = std::function<bmcl::Option<Error>(const Server* raft, std::size_t node)>;
 
 /** Callback for saving log entry changes.
  *
