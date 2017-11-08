@@ -61,16 +61,16 @@ TEST(TestLog, delete)
     l.entry_append(e3);
     EXPECT_EQ(3, l.count());
 
-    l.log_delete_from(3);
+    l.entry_delete_from_idx(3);
 
     EXPECT_EQ(queue.front().id, e3.id);
 
     EXPECT_EQ(2, l.count());
     EXPECT_FALSE(l.get_at_idx(3).isSome());
-    l.log_delete_from(2);
+    l.entry_delete_from_idx(2);
     EXPECT_EQ(1, l.count());
     EXPECT_FALSE(l.get_at_idx(2).isSome());
-    l.log_delete_from(1);
+    l.entry_delete_from_idx(1);
     EXPECT_EQ(0, l.count());
     EXPECT_FALSE(l.get_at_idx(1).isSome());
 }
@@ -86,7 +86,7 @@ TEST(TestLog, delete_onwards)
     EXPECT_EQ(3, l.count());
 
     /* even 3 gets deleted */
-    l.log_delete_from(2);
+    l.entry_delete_from_idx(2);
     EXPECT_EQ(1, l.count());
     EXPECT_TRUE(l.get_at_idx(1).isSome());
     EXPECT_EQ(e1.id, l.get_at_idx(1).unwrap().id);

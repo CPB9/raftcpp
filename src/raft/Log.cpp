@@ -114,20 +114,6 @@ bmcl::Option<const raft_entry_t&> Logger::front() const
     return _me.entries.front();
 }
 
-void LogCommitter::log_delete_from(std::size_t idx)
-{
-    for (std::size_t i = get_current_idx(); i >= idx && !empty(); --i)
-    {
-        auto ety = pop_back();
-        if (ety.isNone())
-            return;
-        if (_raft && _raft->get_callbacks().log_pop)
-            _raft->get_callbacks().log_pop(_raft, ety.unwrap(), i);
-        _raft->pop_log(ety.unwrap(), i);
-
-    }
-}
-
 void LogCommitter::commit_till(std::size_t idx)
 {
     if (is_committed(idx))
@@ -138,10 +124,20 @@ void LogCommitter::commit_till(std::size_t idx)
 
 void LogCommitter::entry_delete_from_idx(std::size_t idx)
 {
-    assert(!is_committed(idx));
+    idx = std::max(idx, commit_idx);
+
     if (idx <= voting_cfg_change_log_idx.unwrapOr(0))
         voting_cfg_change_log_idx.clear();
-    log_delete_from(idx);
+
+    for (std::size_t i = get_current_idx(); i >= idx && !empty(); --i)
+    {
+        auto ety = pop_back();
+        if (ety.isNone())
+            return;
+        if (_raft && _raft->get_callbacks().log_pop)
+            _raft->get_callbacks().log_pop(_raft, ety.unwrap(), i);
+        _raft->pop_log(ety.unwrap(), i);
+    }
 }
 
 bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)

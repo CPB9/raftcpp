@@ -213,10 +213,9 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
     {
         bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
-        if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term)
+        if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point))
         {
-            if (_nodes.is_committed(point))
-                _log.set_commit_idx(point);
+            _log.set_commit_idx(point);
         }
     }
 
@@ -299,7 +298,6 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
         bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
-        //assert((existing_ety.unwrap().term == ety->term) == _log.is_committed(ety_index));
         if (existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
         {
             /* 3. If an existing entry conflicts with a new one (same index

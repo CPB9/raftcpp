@@ -58,7 +58,6 @@ public:
     void commit_till(std::size_t idx);
     inline void commit_all() { set_commit_idx(get_current_idx()); }
     void set_commit_idx(std::size_t idx);
-    void log_delete_from(std::size_t idx);
 
     void entry_delete_from_idx(std::size_t idx);
     bmcl::Option<Error> entry_append(const raft_entry_t& ety);
