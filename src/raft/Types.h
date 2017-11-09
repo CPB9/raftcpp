@@ -22,6 +22,7 @@ enum class Error : int
     OneVotingChangeOnly = -3,
     Shutdown = -4,
     NodeUnknown,
+    NothingToApply,
 };
 
 enum class raft_request_vote

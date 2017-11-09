@@ -34,7 +34,7 @@ void Server::__log(node_id node, const char *fmt, ...) const
 }
 
 Server::Server(node_id id, bool is_voting, ISender* sender, ISaver* saver)
-    : _nodes(id, is_voting), _log(this, saver), _sender(sender), _saver(saver)
+    : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
 {
     _me.current_term = 0;
     _me.timeout_elapsed = std::chrono::milliseconds(0);
@@ -118,10 +118,23 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
         }
     }
 
-    if (_log.has_not_applied())
-        return _log.entry_apply_one();
+    auto r = _log.entry_apply_one();
+    if (r.isOk())
+    {
+        const raft_entry_t& ety = r.unwrap();
+        if (logtype_e::ADD_NODE == ety.type)
+        {
+            assert(ety.node.isSome());
+            node_id id = ety.node.unwrap();
+            entry_apply_node_add(ety, id);
+        }
+        __log(_nodes.get_my_id(), "applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.len);
+        return bmcl::None;
+    }
 
-    return bmcl::None;
+    if (r.unwrapErr() == Error::NothingToApply)
+        return bmcl::None;
+    return r.unwrapErr();
 }
 
 bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r)
@@ -279,7 +292,15 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
             /* 3. If an existing entry conflicts with a new one (same index
             but different terms), delete the existing entry and all that
             follow it (§5.3) */
-            _log.entry_delete_from_idx(ety_index);
+            bool flag = true;
+            while (_log.get_current_idx() >= ety_index)
+            {
+                bmcl::Option<raft_entry_t> pop = _log.entry_pop_back();
+                if (pop.isNone())
+                    flag = false;
+                else
+                    pop_log(pop.unwrap(), _log.get_current_idx() + 1);
+            }
             break;
         }
     }

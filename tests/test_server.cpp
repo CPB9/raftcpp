@@ -237,7 +237,6 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
 
     /* let time lapse */
     r.raft_periodic(std::chrono::milliseconds(1));
-    EXPECT_NE(0, r.log().get_last_applied_idx());
     EXPECT_EQ(1, r.log().get_last_applied_idx());
 }
 
@@ -724,7 +723,6 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 {
     raft::Server r(raft::node_id(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::node_id(2));
-
     r.set_current_term(1);
 
     char* strs[] = {"111", "222", "333"};
@@ -762,7 +760,6 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 {
     raft::Server r(raft::node_id(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::node_id(2));
-
     r.set_current_term(1);
 
     char* strs[] = {"111", "222", "333"};

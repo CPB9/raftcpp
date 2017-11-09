@@ -15,7 +15,6 @@
 #include <algorithm>
 
 #include "Log.h"
-#include "Raft.h"
 
 
 namespace raft
@@ -122,23 +121,6 @@ void LogCommitter::commit_till(std::size_t idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-void LogCommitter::entry_delete_from_idx(std::size_t idx)
-{
-    idx = std::max(idx, commit_idx);
-
-    if (idx <= voting_cfg_change_log_idx.unwrapOr(0))
-        voting_cfg_change_log_idx.clear();
-
-    for (std::size_t i = get_current_idx(); i >= idx && !empty(); --i)
-    {
-        auto ety = pop_back();
-        if (ety.isNone())
-            return;
-        _saver->pop_back(ety.unwrap(), i);
-        _raft->pop_log(ety.unwrap(), i);
-    }
-}
-
 bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
 {
     /* Only one voting cfg change at a time */
@@ -146,7 +128,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
         return Error::OneVotingChangeOnly;
 
     if (ety.is_voting_cfg_change())
-        voting_cfg_change_log_idx = get_current_idx();
+        _voting_cfg_change_log_idx = get_current_idx();
 
     if (_saver)
     {
@@ -159,59 +141,37 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
     return bmcl::None;
 }
 
-bmcl::Option<Error> LogCommitter::entry_apply_one()
+bmcl::Result<raft_entry_t, Error> LogCommitter::entry_apply_one()
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
-        return bmcl::None;
+        return Error::NothingToApply;
 
-    std::size_t log_idx = last_applied_idx + 1;
+    std::size_t log_idx = _last_applied_idx + 1;
 
     bmcl::Option<const raft_entry_t&> etyo = get_at_idx(log_idx);
     if (etyo.isNone())
-        return bmcl::None;
+        return Error::NothingToApply;
     const raft_entry_t& ety = etyo.unwrap();
 
-    //__log(NULL, "applying log: %d, id: %d size: %d", last_applied_idx, ety.unwrap().id, ety.unwrap().data.len);
-
-    last_applied_idx = log_idx;
+    _last_applied_idx = log_idx;
     assert(_saver);
-    bmcl::Option<Error> e = _saver->applylog(ety, last_applied_idx - 1);
+    bmcl::Option<Error> e = _saver->applylog(ety, _last_applied_idx - 1);
     if (e == Error::Shutdown)
         return Error::Shutdown;
     assert(e.isNone());
 
-    /* Membership Change: confirm connection with cluster */
-    if (logtype_e::ADD_NODE == ety.type)
-    {
-        assert(ety.node.isSome());
-        node_id id = ety.node.unwrap();
-        _raft->entry_apply_node_add(ety, id);
-    }
-
     /* voting cfg change is now complete */
-    if (log_idx == voting_cfg_change_log_idx.unwrapOr(0))
-        voting_cfg_change_log_idx.clear();
+    if (log_idx == _voting_cfg_change_log_idx.unwrapOr(0))
+        _voting_cfg_change_log_idx.clear();
 
-    return bmcl::None;
-}
-
-bmcl::Option<Error> LogCommitter::entry_apply_all()
-{
-    while (is_all_committed())
-    {
-        bmcl::Option<Error> e = entry_apply_one();
-        if (e.isSome())
-            return e;
-    }
-
-    return bmcl::None;
+    return ety;
 }
 
 void LogCommitter::set_commit_idx(std::size_t idx)
 {
     assert(get_commit_idx() <= idx);
     assert(idx <= get_current_idx());
-    commit_idx = idx;
+    _commit_idx = idx;
 }
 
 bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
@@ -222,9 +182,20 @@ bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
     return ety->term;
 }
 
-void LogCommitter::entry_pop_back()
+bmcl::Option<raft_entry_t> LogCommitter::entry_pop_back()
 {
-    entry_delete_from_idx(get_current_idx());
+    std::size_t idx = get_current_idx();
+    if (empty() || idx <= get_commit_idx())
+        return bmcl::None;
+
+    if (idx <= _voting_cfg_change_log_idx.unwrapOr(0))
+        _voting_cfg_change_log_idx.clear();
+
+    auto ety = pop_back();
+    if (ety.isNone())
+        return bmcl::None;
+    _saver->pop_back(ety.unwrap(), idx);
+    return ety;
 }
 
 void LogCommitter::entry_pop_front()
