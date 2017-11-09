@@ -261,14 +261,6 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
             __log(nodeid, "AE no log at prev_idx %d", ae.prev_log_idx);
             return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
         }
-
-        if (e.unwrap().term != ae.prev_log_term)
-        {
-            __log(nodeid, "AE term doesn't match prev_term (ie. %d vs %d) ci:%d pli:%d", e.unwrap().term, ae.prev_log_term, _log.get_current_idx(), ae.prev_log_idx);
-            /* Delete all the following log entries because they don't match */
-            _log.entry_delete_from_idx(ae.prev_log_idx);
-            return msg_appendentries_response_t(r.term, false, ae.prev_log_idx - 1, 0);
-        }
     }
 
     r.current_idx = ae.prev_log_idx;
