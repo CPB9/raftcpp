@@ -46,7 +46,7 @@ class TestSaver : public Saver
 {
 public:
     std::deque<raft_entry_t> queue;
-    void log_pop(const raft_entry_t& entry, std::size_t entry_idx) override
+    void pop_back(const raft_entry_t& entry, std::size_t entry_idx) override
     {
         queue.push_back(entry);
     }

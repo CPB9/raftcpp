@@ -200,19 +200,19 @@ public:
     * For safety reasons this callback MUST flush the change to disk.
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> log_offer(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+    virtual bmcl::Option<Error> puch_back(const raft_entry_t& entry, std::size_t entry_idx) = 0;
 
     /** Callback for removing the oldest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void log_poll(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+    virtual void pop_front(const raft_entry_t& entry, std::size_t entry_idx) = 0;
 
     /** Callback for removing the youngest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void log_pop(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+    virtual void pop_back(const raft_entry_t& entry, std::size_t entry_idx) = 0;
 
     /** Callback for catching debugging log messages
     * This callback is optional */

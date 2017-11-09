@@ -24,16 +24,7 @@
 namespace raft
 {
 
-void Server::__log(const bmcl::Option<node_id&> node, const char *fmt, ...)
-{
-    char buf[1024];
-    va_list args;
-    va_start(args, fmt);
-    vsprintf(buf, fmt, args);
-    _saver->log(node, buf);
-}
-
-void Server::__log(const bmcl::Option<const node_id&> node, const char *fmt, ...) const
+void Server::__log(node_id node, const char *fmt, ...) const
 {
     char buf[1024];
     va_list args;
@@ -54,7 +45,7 @@ Server::Server(node_id id, bool is_voting, ISender* sender, ISaver* saver)
 
 void Server::election_start()
 {
-    __log(NULL, "election starting: %d %d, term: %d ci: %d",
+    __log(_nodes.get_my_id(), "election starting: %d %d, term: %d ci: %d",
           _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
           _log.get_current_idx());
 
@@ -63,7 +54,7 @@ void Server::election_start()
 
 void Server::become_leader()
 {
-    __log(NULL, "becoming leader term:%d", get_current_term());
+    __log(_nodes.get_my_id(), "becoming leader term:%d", get_current_term());
 
     set_state(raft_state_e::LEADER);
     for (const Node& i: _nodes.items())
@@ -78,7 +69,7 @@ void Server::become_leader()
 
 void Server::become_candidate()
 {
-    __log(NULL, "becoming candidate");
+    __log(_nodes.get_my_id(), "becoming candidate");
 
     set_current_term(get_current_term() + 1);
     _nodes.reset_all_votes();
@@ -96,7 +87,7 @@ void Server::become_candidate()
 
 void Server::become_follower()
 {
-    __log(NULL, "becoming follower");
+    __log(_nodes.get_my_id(), "becoming follower");
     set_state(raft_state_e::FOLLOWER);
 }
 
@@ -477,7 +468,7 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
     if (!is_leader())
         return Error::NotLeader;
 
-    __log(NULL, "received entry t:%d id: %d idx: %d", _me.current_term, e.id, _log.get_current_idx() + 1);
+    __log(_nodes.get_my_id(), "received entry t:%d id: %d idx: %d", _me.current_term, e.id, _log.get_current_idx() + 1);
 
     raft_entry_t ety = e;
     ety.term = _me.current_term;

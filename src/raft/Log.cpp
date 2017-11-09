@@ -134,7 +134,7 @@ void LogCommitter::entry_delete_from_idx(std::size_t idx)
         auto ety = pop_back();
         if (ety.isNone())
             return;
-        _saver->log_pop(ety.unwrap(), i);
+        _saver->pop_back(ety.unwrap(), i);
         _raft->pop_log(ety.unwrap(), i);
     }
 }
@@ -150,7 +150,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
 
     if (_saver)
     {
-        bmcl::Option<Error> e = _saver->log_offer(ety, get_current_idx() + 1);
+        bmcl::Option<Error> e = _saver->puch_back(ety, get_current_idx() + 1);
         if (e == Error::Shutdown)
             return Error::Shutdown;
     }
@@ -233,7 +233,7 @@ void LogCommitter::entry_pop_front()
     if (ety.isNone())
         return;
     if (_saver)
-        _saver->log_poll(ety.unwrap(), get_front_idx());
+        _saver->pop_front(ety.unwrap(), get_front_idx());
     pop_front();
 }
 
