@@ -50,6 +50,7 @@ public:
     inline bool is_all_committed() const { return get_last_applied_idx() >= _commit_idx; }
     inline bool voting_change_is_in_progress() const { return _voting_cfg_change_log_idx.isSome(); }
     bmcl::Option<std::size_t> get_last_log_term() const;
+    raft_entry_state_e entry_get_state(const msg_entry_response_t& r) const;
 
     void commit_till(std::size_t idx);
     inline void commit_all() { set_commit_idx(get_current_idx()); }

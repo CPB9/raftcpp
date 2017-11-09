@@ -2028,10 +2028,10 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     /* receive entry */
     auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(raft_entry_state_e::NOTCOMMITTED, r.entry_get_state(cr.unwrap()));
+    EXPECT_EQ(raft_entry_state_e::NOTCOMMITTED, r.log().entry_get_state(cr.unwrap()));
 
     r.log().set_commit_idx(1);
-    EXPECT_EQ(raft_entry_state_e::COMMITTED, r.entry_get_state(cr.unwrap()));
+    EXPECT_EQ(raft_entry_state_e::COMMITTED, r.log().entry_get_state(cr.unwrap()));
 }
 
 TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
@@ -2045,7 +2045,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     /* receive entry */
     auto cr = r.accept_entry(msg_entry_t(0, 1, raft::raft_entry_data_t("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(raft_entry_state_e::NOTCOMMITTED, r.entry_get_state(cr.unwrap()));
+    EXPECT_EQ(raft_entry_state_e::NOTCOMMITTED, r.log().entry_get_state(cr.unwrap()));
     EXPECT_EQ(1, cr.unwrap().term);
     EXPECT_EQ(1, cr.unwrap().idx);
     EXPECT_EQ(1, r.log().get_current_idx());
@@ -2067,7 +2067,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(1, r.log().get_current_idx());
     EXPECT_EQ(1, r.log().get_commit_idx());
-    EXPECT_EQ(raft_entry_state_e::INVALIDATED, r.entry_get_state(cr.unwrap()));
+    EXPECT_EQ(raft_entry_state_e::INVALIDATED, r.log().entry_get_state(cr.unwrap()));
 }
 
 TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)

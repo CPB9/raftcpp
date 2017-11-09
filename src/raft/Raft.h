@@ -55,7 +55,6 @@ public:
     const LogCommitter& log() const { return _log; }
     LogCommitter& log() { return _log; }
 
-    raft_entry_state_e entry_get_state(const msg_entry_response_t& r) const;
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
     bmcl::Result<msg_appendentries_response_t, Error> accept_appendentries(node_id nodeid, const msg_appendentries_t& ae);
@@ -65,7 +64,6 @@ public:
     bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
 
     inline bmcl::Option<node_id> get_current_leader() const { return _me.current_leader; }
-    inline bmcl::Option<Node&> get_current_leader_node() { return _nodes.get_node(_me.current_leader); }
     inline std::size_t get_current_term() const { return _me.current_term; }
     inline bmcl::Option<node_id> get_voted_for() const { return _me.voted_for; }
     inline bool is_already_voted() const { return _me.voted_for.isSome(); }
@@ -75,7 +73,6 @@ public:
     inline raft_state_e get_state() const { return _me.state; }
 
 public:
-
     void vote_for_nodeid(node_id nodeid);
     void set_current_term(std::size_t term);
     void set_state(raft_state_e state);

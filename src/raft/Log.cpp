@@ -205,4 +205,17 @@ void LogCommitter::entry_pop_front()
     pop_front();
 }
 
+raft_entry_state_e LogCommitter::entry_get_state(const msg_entry_response_t& r) const
+{
+    bmcl::Option<const raft_entry_t&> ety = get_at_idx(r.idx);
+    if (ety.isNone())
+        return raft_entry_state_e::NOTCOMMITTED;
+
+    /* entry from another leader has invalidated this entry message */
+    if (r.term != ety.unwrap().term)
+        return raft_entry_state_e::INVALIDATED;
+    return is_committed(r.idx) ? raft_entry_state_e::COMMITTED : raft_entry_state_e::NOTCOMMITTED;
+}
+
+
 }

@@ -670,18 +670,6 @@ void Server::vote_for_nodeid(node_id nodeid)
     _saver->persist_vote(nodeid);
 }
 
-raft_entry_state_e Server::entry_get_state(const msg_entry_response_t& r) const
-{
-    bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(r.idx);
-    if (ety.isNone())
-        return raft_entry_state_e::NOTCOMMITTED;
-
-    /* entry from another leader has invalidated this entry message */
-    if (r.term != ety.unwrap().term)
-        return raft_entry_state_e::INVALIDATED;
-    return _log.is_committed(r.idx) ? raft_entry_state_e::COMMITTED : raft_entry_state_e::NOTCOMMITTED;
-}
-
 void Server::set_current_term(std::size_t term)
 {
     if (_me.current_term < term)
