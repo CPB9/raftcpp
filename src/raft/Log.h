@@ -12,12 +12,6 @@ class Server;
 
 class Logger
 {
-    struct log_private_t
-    {   /* we compact the log, and thus need to increment the Base Log Index */
-        std::size_t base = 0;
-        std::vector<raft_entry_t> entries;
-    };
-
 public:
     Logger();
     std::size_t count() const;
@@ -36,7 +30,8 @@ protected:
     bmcl::Option<raft_entry_t> pop_back();
 
 private:
-    log_private_t _me;
+    std::size_t _base;
+    std::vector<raft_entry_t> _entries;
 };
 
 class LogCommitter : public Logger

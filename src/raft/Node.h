@@ -25,40 +25,33 @@ class Node
     };
 
 public:
-    inline explicit Node(node_id id)
+    inline explicit Node(node_id id) : _next_idx(1),  _match_idx(0), _id(id)
     {
-        _me.next_idx = 1;
-        _me.match_idx = 0;
-        _me.id = id;
-        _me.flags.set(RAFT_NODE_VOTING, true);
+        _flags.set(RAFT_NODE_VOTING, true);
     }
 
-    inline node_id get_id() const { return _me.id; }
+    inline node_id get_id() const { return _id; }
 
-    inline std::size_t get_next_idx() const { return _me.next_idx; }
-    inline void set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _me.next_idx = nextIdx < 1 ? 1 : nextIdx; }
+    inline std::size_t get_next_idx() const { return _next_idx; }
+    inline void set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _next_idx = nextIdx < 1 ? 1 : nextIdx; }
 
-    inline std::size_t get_match_idx() const { return _me.match_idx; }
-    inline void set_match_idx(std::size_t matchIdx) { _me.match_idx = matchIdx; }
+    inline std::size_t get_match_idx() const { return _match_idx; }
+    inline void set_match_idx(std::size_t matchIdx) { _match_idx = matchIdx; }
 
-    inline bool has_vote_for_me() const { return _me.flags.test(RAFT_NODE_VOTED_FOR_ME); }
-    inline void vote_for_me(bool vote) { _me.flags.set(RAFT_NODE_VOTED_FOR_ME, vote); }
+    inline bool has_vote_for_me() const { return _flags.test(RAFT_NODE_VOTED_FOR_ME); }
+    inline void vote_for_me(bool vote) { _flags.set(RAFT_NODE_VOTED_FOR_ME, vote); }
 
-    inline void set_voting(bool voting) { _me.flags.set(RAFT_NODE_VOTING, voting); }
-    inline bool is_voting() const { return _me.flags.test(RAFT_NODE_VOTING); }
+    inline void set_voting(bool voting) { _flags.set(RAFT_NODE_VOTING, voting); }
+    inline bool is_voting() const { return _flags.test(RAFT_NODE_VOTING); }
 
-    inline void set_has_sufficient_logs() { _me.flags.set(RAFT_NODE_HAS_SUFFICIENT_LOG, true); }
-    inline bool has_sufficient_logs() const { return _me.flags.test(RAFT_NODE_HAS_SUFFICIENT_LOG); }
+    inline void set_has_sufficient_logs() { _flags.set(RAFT_NODE_HAS_SUFFICIENT_LOG, true); }
+    inline bool has_sufficient_logs() const { return _flags.test(RAFT_NODE_HAS_SUFFICIENT_LOG); }
 
 private:
-    struct node_private_t
-    {
-        std::size_t next_idx;
-        std::size_t match_idx;
-        node_id id;
-        std::bitset<8> flags;
-    };
-    node_private_t _me;
+    std::size_t _next_idx;
+    std::size_t _match_idx;
+    node_id _id;
+    std::bitset<8> _flags;
 };
 
 class Nodes

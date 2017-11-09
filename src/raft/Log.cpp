@@ -20,97 +20,94 @@
 namespace raft
 {
 
-Logger::Logger()
-{
-    _me.base = 0;
-}
+Logger::Logger(): _base(0) { }
 
 std::size_t Logger::count() const
 {
-    return _me.entries.size();
+    return _entries.size();
 }
 
 bool Logger::empty() const
 {
-    return _me.entries.empty();
+    return _entries.empty();
 }
 
 std::size_t Logger::get_current_idx() const
 {
-    return count() + _me.base;
+    return count() + _base;
 }
 
 std::size_t Logger::get_front_idx() const
 {
-    return _me.base + 1;
+    return _base + 1;
 }
 
 void Logger::append(const raft_entry_t& c)
 {
-    _me.entries.emplace_back(c);
+    _entries.emplace_back(c);
 }
 
 bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
-    assert(idx > _me.base);
+    assert(idx > _base);
     /* idx starts at 1 */
     idx -= 1;
 
-    if (idx < _me.base || idx >= _me.base + _me.entries.size())
+    if (idx < _base || idx >= _base + _entries.size())
     {
         *n_etys = 0;
         return bmcl::None;
     }
 
-    std::size_t i = idx - _me.base;
-    *n_etys = _me.entries.size() - i;
-    return &_me.entries[i];
+    std::size_t i = idx - _base;
+    *n_etys = _entries.size() - i;
+    return &_entries[i];
 }
 
 bmcl::Option<const raft_entry_t&> Logger::get_at_idx(std::size_t idx) const
 {
-    assert(idx > _me.base);
+    assert(idx > _base);
     /* idx starts at 1 */
     idx -= 1;
 
-    if (idx < _me.base || idx >= _me.base + _me.entries.size())
+    if (idx < _base || idx >= _base + _entries.size())
         return bmcl::None;
 
-    std::size_t i = idx - _me.base;
-    return _me.entries[i];
+    std::size_t i = idx - _base;
+    return _entries[i];
 }
 
 bmcl::Option<raft_entry_t> Logger::pop_back()
 {
-    if (_me.entries.empty())
+    if (_entries.empty())
         return bmcl::None;
-    raft_entry_t ety = _me.entries.back();
-    _me.entries.pop_back();
+    raft_entry_t ety = _entries.back();
+    _entries.pop_back();
     return ety;
 }
 
 bmcl::Option<raft_entry_t> Logger::pop_front()
 {
-    if (_me.entries.empty())
+    if (_entries.empty())
         return bmcl::None;
-    raft_entry_t elem = _me.entries.front();
-    _me.entries.erase(_me.entries.begin());
-    _me.base++;
+    raft_entry_t elem = _entries.front();
+    _entries.erase(_entries.begin());
+    _base++;
     return elem;
 }
 
 bmcl::Option<const raft_entry_t&> Logger::back() const
 {
-    if (_me.entries.empty())
+    if (_entries.empty())
         return bmcl::None;
-    return _me.entries.back();
+    return _entries.back();
 }
 
 bmcl::Option<const raft_entry_t&> Logger::front() const
 {
-    if (_me.entries.empty())
+    if (_entries.empty())
         return bmcl::None;
-    return _me.entries.front();
+    return _entries.front();
 }
 
 void LogCommitter::commit_till(std::size_t idx)

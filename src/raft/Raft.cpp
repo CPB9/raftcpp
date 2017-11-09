@@ -560,7 +560,6 @@ void Server::entry_apply_node_add(const raft_entry_t& ety, node_id id)
     }
 }
 
-
 void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
 {
     if (!ety.is_cfg_change())
