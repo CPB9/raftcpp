@@ -216,7 +216,7 @@ public:
 
     /** Callback for catching debugging log messages
     * This callback is optional */
-    virtual void log(const bmcl::Option<const node_id&> node, const char *buf) = 0;
+    virtual void log(const node_id node, const char *buf) = 0;
 };
 
 
