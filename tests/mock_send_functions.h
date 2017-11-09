@@ -54,6 +54,17 @@ public:
     bmcl::Option<Error> send_appendentries(const node_id& node, const msg_appendentries_t& msg) override;
 };
 
+class Saver : public raft::ISaver
+{
+    bmcl::Option<Error> applylog(const raft_entry_t& entry, std::size_t entry_idx) override { return bmcl::None; }
+    bmcl::Option<Error> persist_vote(node_id node) override { return bmcl::None; }
+    bmcl::Option<Error> persist_term(std::size_t node) override { return bmcl::None; }
+    bmcl::Option<Error> log_offer(const raft_entry_t& entry, std::size_t entry_idx) override { return bmcl::None; }
+    void log_poll(const raft_entry_t& entry, std::size_t entry_idx) override {}
+    void log_pop(const raft_entry_t& entry, std::size_t entry_idx) override {}
+    void log(const bmcl::Option<const node_id&> node, const char *buf) override {}
+};
+
 class Exchanger
 {
 public:

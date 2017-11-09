@@ -60,8 +60,6 @@ bmcl::Option<Node&> Nodes::add_node(node_id id)
     bmcl::Option<Node&> node = get_node(id);
     if (node.isSome())
     {
-        if (node->is_voting())
-            return bmcl::None;
         node->set_voting(true);
         return node;
     }

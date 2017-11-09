@@ -9,11 +9,12 @@ TEST(TestScenario, leader_appears)
 {
     std::vector<raft::Server> r;
     Exchanger sender;
+    Saver saver;
 
     const std::size_t Count = 3;
     for (std::size_t i = 0; i < Count; ++i)
     {
-        r.emplace_back(raft::Server(raft::node_id(i), true));
+        r.emplace_back(raft::Server(raft::node_id(i), true, nullptr, &saver));
         raft::Server& rx = r.back();
 
         for(std::size_t j = 1; j < Count; ++j)
@@ -26,14 +27,6 @@ TEST(TestScenario, leader_appears)
     for (std::size_t i = 0; i < 3; ++i)
     {
         sender.add(&r[i]);
-    }
-
-    for (std::size_t i = 0; i < 3; ++i)
-    {
-        raft_cbs_t funcs = { 0 };
-        funcs.persist_term = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
-        funcs.persist_vote = [&sender](const raft::Server * raft, std::size_t node) -> bmcl::Option<raft::Error> { return bmcl::None; };
-        r[i].set_callbacks(funcs);
     }
 
     /* NOTE: important for 1st node to send vote request before others */

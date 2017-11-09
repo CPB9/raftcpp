@@ -41,7 +41,7 @@ private:
 class LogCommitter : public Logger
 {
 public:
-    LogCommitter(Server* raft) : _raft(raft)
+    LogCommitter(Server* raft, ISaver* saver) : _raft(raft), _saver(saver)
     {
         commit_idx = 0;
         last_applied_idx = 0;
@@ -67,6 +67,7 @@ public:
     void entry_pop_front();
 
 private:
+    ISaver* _saver;
     Server* _raft;
     std::size_t commit_idx;                                 /**< idx of highest log entry known to be committed */
     std::size_t last_applied_idx;                           /**< idx of highest log entry applied to state machine */

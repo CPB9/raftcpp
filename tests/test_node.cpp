@@ -47,14 +47,16 @@ TEST(TestNode, add_node_makes_non_voting_node_voting)
     EXPECT_EQ(1, nodes.count());
 }
 
-TEST(TestNode, add_node_with_already_existing_id_is_not_allowed)
+TEST(TestNode, add_node_with_already_existing_id_doesnt_add_new_one)
 {
     raft::Nodes nodes(raft::node_id(1), true);
     nodes.add_node(raft::node_id(9));
     nodes.add_node(raft::node_id(11));
 
-    EXPECT_FALSE(nodes.add_node(raft::node_id(9)).isSome());
-    EXPECT_FALSE(nodes.add_node(raft::node_id(11)).isSome());
+    const auto& node = nodes.add_node(raft::node_id(9));
+    EXPECT_TRUE(node.isSome());
+    EXPECT_EQ(node->get_id(), raft::node_id(9));
+    EXPECT_TRUE(node->is_voting());
 }
 
 TEST(TestNode, add_non_voting_node_with_already_existing_id_is_not_allowed)

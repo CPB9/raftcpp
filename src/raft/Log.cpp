@@ -134,8 +134,7 @@ void LogCommitter::entry_delete_from_idx(std::size_t idx)
         auto ety = pop_back();
         if (ety.isNone())
             return;
-        if (_raft && _raft->get_callbacks().log_pop)
-            _raft->get_callbacks().log_pop(_raft, ety.unwrap(), i);
+        _saver->log_pop(ety.unwrap(), i);
         _raft->pop_log(ety.unwrap(), i);
     }
 }
@@ -149,9 +148,9 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
     if (ety.is_voting_cfg_change())
         voting_cfg_change_log_idx = get_current_idx();
 
-    if (_raft && _raft->get_callbacks().log_offer)
+    if (_saver)
     {
-        Error e = (Error)_raft->get_callbacks().log_offer(_raft, ety, get_current_idx() + 1);
+        bmcl::Option<Error> e = _saver->log_offer(ety, get_current_idx() + 1);
         if (e == Error::Shutdown)
             return Error::Shutdown;
     }
@@ -167,24 +166,26 @@ bmcl::Option<Error> LogCommitter::entry_apply_one()
 
     std::size_t log_idx = last_applied_idx + 1;
 
-    bmcl::Option<const raft_entry_t&> ety = get_at_idx(log_idx);
-    if (ety.isNone())
+    bmcl::Option<const raft_entry_t&> etyo = get_at_idx(log_idx);
+    if (etyo.isNone())
         return bmcl::None;
+    const raft_entry_t& ety = etyo.unwrap();
 
     //__log(NULL, "applying log: %d, id: %d size: %d", last_applied_idx, ety.unwrap().id, ety.unwrap().data.len);
 
     last_applied_idx = log_idx;
-    assert(_raft && _raft->get_callbacks().applylog);
-    int e = _raft->get_callbacks().applylog(_raft, ety.unwrap(), last_applied_idx - 1);
-    if (e == RAFT_ERR_SHUTDOWN)
+    assert(_saver);
+    bmcl::Option<Error> e = _saver->applylog(ety, last_applied_idx - 1);
+    if (e == Error::Shutdown)
         return Error::Shutdown;
-    assert(e == 0);
+    assert(e.isNone());
 
     /* Membership Change: confirm connection with cluster */
-    if (logtype_e::ADD_NODE == ety.unwrap().type)
+    if (logtype_e::ADD_NODE == ety.type)
     {
-        node_id id = (node_id)_raft->get_callbacks().log_get_node_id(_raft, ety.unwrap(), log_idx);
-        _raft->entry_apply_node_add(ety.unwrap(), id);
+        assert(ety.node.isSome());
+        node_id id = ety.node.unwrap();
+        _raft->entry_apply_node_add(ety, id);
     }
 
     /* voting cfg change is now complete */
@@ -231,8 +232,8 @@ void LogCommitter::entry_pop_front()
     auto ety = pop_front();
     if (ety.isNone())
         return;
-    if (_raft && _raft->get_callbacks().log_poll)
-        _raft->get_callbacks().log_poll(_raft, ety.unwrap(), get_front_idx());
+    if (_saver)
+        _saver->log_poll(ety.unwrap(), get_front_idx());
     pop_front();
 }
 

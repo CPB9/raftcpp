@@ -26,38 +26,30 @@ namespace raft
 
 void Server::__log(const bmcl::Option<node_id&> node, const char *fmt, ...)
 {
-    if (!_me.cb.log)
-        return;
-
     char buf[1024];
     va_list args;
     va_start(args, fmt);
     vsprintf(buf, fmt, args);
-    _me.cb.log(this, node, buf);
+    _saver->log(node, buf);
 }
 
 void Server::__log(const bmcl::Option<const node_id&> node, const char *fmt, ...) const
 {
-    if (!_me.cb.log)
-        return;
-
     char buf[1024];
     va_list args;
     va_start(args, fmt);
     vsprintf(buf, fmt, args);
-    _me.cb.log(this, node, buf);
+    _saver->log(node, buf);
 }
 
-Server::Server(node_id id, bool is_voting, const raft_cbs_t& funcs, ISender* sender) : _nodes(id, is_voting), _log(this), _sender(sender)
+Server::Server(node_id id, bool is_voting, ISender* sender, ISaver* saver)
+    : _nodes(id, is_voting), _log(this, saver), _sender(sender), _saver(saver)
 {
-    _me.cb = { 0 };
-
     _me.current_term = 0;
     _me.timeout_elapsed = std::chrono::milliseconds(0);
     _me.request_timeout = std::chrono::milliseconds(200);
     _me.election_timeout = std::chrono::milliseconds(1000);
     set_state(raft_state_e::FOLLOWER);
-    set_callbacks(funcs);
 }
 
 void Server::election_start()
@@ -197,13 +189,15 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
     if (!node->is_voting() &&
         !_log.voting_change_is_in_progress() &&
         _log.get_current_idx() <= r.current_idx + 1 &&
-        _me.cb.node_has_sufficient_logs &&
         false == node->has_sufficient_logs()
         )
     {
-        bool e = _me.cb.node_has_sufficient_logs(this, node->get_id());
-        if (e)
-            node->set_has_sufficient_logs();
+        raft_entry_t ety(get_current_term(), 0, logtype_e::ADD_NODE, node->get_id()); //insert node->get_id() into ety
+        auto e = entry_append(ety);
+        if (e.isSome())
+            return e;
+
+        node->set_has_sufficient_logs();
     }
 
     /* Update commit idx */
@@ -516,13 +510,8 @@ void Server::entry_append_impl(const raft_entry_t& ety, const std::size_t idx)
     if (!ety.is_cfg_change())
         return;
 
-    if (!_me.cb.log_get_node_id)
-    {
-        //assert(false);
-        return;
-    }
-
-    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
+    assert(ety.node.isSome());
+    node_id id = ety.node.unwrap();
     bmcl::Option<Node&> node = _nodes.get_node(id);
 
     switch (ety.type)
@@ -573,7 +562,8 @@ void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
     if (!ety.is_cfg_change())
         return;
 
-    node_id id = (node_id)_me.cb.log_get_node_id(this, ety, idx);
+    assert(ety.node.isSome());
+    node_id id = ety.node.unwrap();
 
     switch (ety.type)
     {
@@ -674,8 +664,7 @@ void Server::send_appendentries_all()
 void Server::vote_for_nodeid(node_id nodeid)
 {
     _me.voted_for = nodeid;
-    assert(_me.cb.persist_vote);
-    _me.cb.persist_vote(this, (std::size_t)nodeid);
+    _saver->persist_vote(nodeid);
 }
 
 raft_entry_state_e Server::entry_get_state(const msg_entry_response_t& r) const
@@ -696,8 +685,7 @@ void Server::set_current_term(std::size_t term)
     {
         _me.current_term = term;
         _me.voted_for.clear();
-        assert(_me.cb.persist_term);
-        _me.cb.persist_term(this, term);
+        _saver->persist_term(term);
     }
 }
 

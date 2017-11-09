@@ -35,16 +35,15 @@ class Server
         std::chrono::milliseconds timeout_elapsed;              /**< amount of time left till timeout */
         std::chrono::milliseconds election_timeout;
         std::chrono::milliseconds request_timeout;
-        raft_cbs_t cb;                                          /**< callbacks */
         node_status connected;                                  /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
 
     friend class Logger;
 public:
-    explicit Server(node_id id, bool is_voting, const raft_cbs_t& funcs = raft_cbs_t{}, ISender* sender = nullptr);
-    inline void set_callbacks(const raft_cbs_t& funcs) { _me.cb = funcs; }
+    explicit Server(node_id id, bool is_voting, ISender* sender = nullptr, ISaver* saver = nullptr);
     inline void set_sender(ISender* sender) {_sender = sender; }
-    inline const raft_cbs_t& get_callbacks() const { return _me.cb; }
+    inline void set_sender(ISaver* saver) { _saver = saver; }
+    inline const ISaver* get_saver() const { return _saver; }
     inline void set_election_timeout(std::chrono::milliseconds msec) {_me.election_timeout = msec;}
     inline void set_request_timeout(std::chrono::milliseconds msec) { _me.request_timeout = msec; }
     inline std::chrono::milliseconds get_timeout_elapsed() const { return _me.timeout_elapsed; }
@@ -105,6 +104,7 @@ private:
     LogCommitter _log;
     server_private_t _me;
     ISender* _sender;
+    ISaver* _saver;
 };
 
 }
