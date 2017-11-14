@@ -50,6 +50,15 @@ public:
     inline std::chrono::milliseconds get_request_timeout() const { return _me.request_timeout; }
     inline std::chrono::milliseconds get_election_timeout() const { return _me.election_timeout; }
 
+    inline bmcl::Option<node_id> get_current_leader() const { return _me.current_leader; }
+    inline std::size_t get_current_term() const { return _me.current_term; }
+    inline bmcl::Option<node_id> get_voted_for() const { return _me.voted_for; }
+    inline bool is_already_voted() const { return _me.voted_for.isSome(); }
+    inline bool is_follower() const { return get_state() == raft_state_e::FOLLOWER; }
+    inline bool is_leader() const { return get_state() == raft_state_e::LEADER; }
+    inline bool is_candidate() const { return get_state() == raft_state_e::CANDIDATE; }
+    inline raft_state_e get_state() const { return _me.state; }
+
     const Nodes& nodes() const { return _nodes; }
     Nodes& nodes() { return _nodes; }
     const LogCommitter& log() const { return _log; }
@@ -62,15 +71,6 @@ public:
     msg_requestvote_response_t accept_requestvote(node_id nodeid, const msg_requestvote_t& vr);
     bmcl::Option<Error> accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r);
     bmcl::Result<msg_entry_response_t, Error> accept_entry(const msg_entry_t& ety);
-
-    inline bmcl::Option<node_id> get_current_leader() const { return _me.current_leader; }
-    inline std::size_t get_current_term() const { return _me.current_term; }
-    inline bmcl::Option<node_id> get_voted_for() const { return _me.voted_for; }
-    inline bool is_already_voted() const { return _me.voted_for.isSome(); }
-    inline bool is_follower() const { return get_state() == raft_state_e::FOLLOWER; }
-    inline bool is_leader() const { return get_state() == raft_state_e::LEADER; }
-    inline bool is_candidate() const { return get_state() == raft_state_e::CANDIDATE; }
-    inline raft_state_e get_state() const { return _me.state; }
 
 public:
     void vote_for_nodeid(node_id nodeid);

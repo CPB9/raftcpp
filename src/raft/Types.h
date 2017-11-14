@@ -145,7 +145,9 @@ struct msg_requestvote_response_t
  * This message could force a leader/candidate to become a follower. */
 struct msg_appendentries_t
 {
-    msg_appendentries_t(std::size_t term, std::size_t prev_log_idx = 0) : term(term), prev_log_idx(0), prev_log_term(0), leader_commit(0), n_entries(0), entries(nullptr) {}
+    msg_appendentries_t(std::size_t term) : term(term), prev_log_idx(0), prev_log_term(0), leader_commit(0), n_entries(0), entries(nullptr) {}
+    msg_appendentries_t(std::size_t term, std::size_t prev_log_idx, std::size_t prev_log_term, std::size_t leader_commit)
+        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), n_entries(0), entries(nullptr) {}
     std::size_t term;           /**< currentTerm, to force other leader/candidate to step down */
     std::size_t prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     std::size_t prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */

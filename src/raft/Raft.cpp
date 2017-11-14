@@ -623,12 +623,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
 {
     assert(!_nodes.is_me(node.get_id()));
 
-    msg_appendentries_t ae = {0};
-    ae.term = _me.current_term;
-    ae.leader_commit = _log.get_commit_idx();
-    ae.prev_log_idx = 0;
-    ae.prev_log_term = 0;
-
+    msg_appendentries_t ae(_me.current_term, 0, 0, _log.get_commit_idx());
     std::size_t next_idx = node.get_next_idx();
 
     ae.entries = _log.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
