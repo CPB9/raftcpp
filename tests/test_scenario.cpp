@@ -41,12 +41,12 @@ one_more_time:
         for (std::size_t j = 0; j < 3; j++)
         {
             std::cout << " (" << r[j].get_current_term() << ", "<< (int)r[j].get_state()<< ")";
-            sender.sender_poll_msgs(raft::NodeId(j));
+            sender.poll_msgs(raft::NodeId(j));
         }
         std::cout << std::endl;
 
         for (std::size_t j = 0; j < 3; j++)
-            if (sender.sender_msgs_available(raft::NodeId(j)))
+            if (sender.msgs_available(raft::NodeId(j)))
                 goto one_more_time;
 
         for (std::size_t j = 0; j < 3; j++)

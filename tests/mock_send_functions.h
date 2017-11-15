@@ -70,15 +70,15 @@ class Exchanger
 public:
     explicit Exchanger(raft::Server* r = nullptr) { if (r) add(r); }
     void add(raft::Server* r);
-    bool sender_msgs_available(raft::NodeId from);
-    void sender_poll_msgs(raft::NodeId from);
-    bmcl::Option<msg_t> sender_poll_msg_data(const raft::Server& from);
-    bmcl::Option<msg_t> sender_poll_msg_data(raft::NodeId from);
-    bmcl::Option<raft::Error> sender_requestvote(const raft::Server* raft, const MsgVoteReq& msg);
-    bmcl::Option<raft::Error> sender_requestvote_response(const raft::NodeId& from, const raft::NodeId& to, const MsgVoteRep& msg);
-    bmcl::Option<raft::Error> sender_appendentries(const raft::Server* raft, const raft::node_id& node, const MsgAppendEntriesReq& msg);
-    bmcl::Option<raft::Error> sender_appendentries_response(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg);
-    bmcl::Option<raft::Error> sender_entries_response(const raft::NodeId& from, const raft::NodeId& to, const MsgAddEntryRep& msg);
+    bool msgs_available(raft::NodeId from);
+    void poll_msgs(raft::NodeId from);
+    bmcl::Option<msg_t> poll_msg_data(const raft::Server& from);
+    bmcl::Option<msg_t> poll_msg_data(raft::NodeId from);
+    bmcl::Option<raft::Error> request_vote_req(const raft::Server* raft, const MsgVoteReq& msg);
+    bmcl::Option<raft::Error> request_vote_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgVoteRep& msg);
+    bmcl::Option<raft::Error> append_entries_req(const raft::Server* raft, const raft::NodeId& node, const MsgAppendEntriesReq& msg);
+    bmcl::Option<raft::Error> append_entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg);
+    bmcl::Option<raft::Error> entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAddEntryRep& msg);
 
 private:
 

@@ -1096,7 +1096,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     bmcl::Option<msg_t> msg;
     MsgVoteReq* rv;
     /* 2 nodes = 2 vote requests */
-    msg = sender.sender_poll_msg_data(r);
+    msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -1104,7 +1104,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     EXPECT_EQ(3, rv->term);
 
     /*  TODO: there should be more items */
-    msg = sender.sender_poll_msg_data(r);
+    msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -1195,7 +1195,7 @@ TEST(TestCandidate, requestvote_includes_logidx)
     r.log().entry_append(LogEntry(3, 102, raft::LogEntryData("aaa", 4)));
     r.become_candidate(); //becoming candidate means new election term? so +1
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+    bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     MsgVoteReq* rv = msg->cast_to_requestvote().unwrapOr(nullptr);
     EXPECT_NE(nullptr, rv);
@@ -1327,12 +1327,12 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     bmcl::Option<msg_t> msg;
     MsgAppendEntriesReq* ae;
 
-    msg = sender.sender_poll_msg_data(r);
+    msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
 
-    msg = sender.sender_poll_msg_data(r);
+    msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -1392,7 +1392,7 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     /* receive appendentries messages */
     r.send_appendentries(p.unwrap());
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+    bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -1418,7 +1418,7 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1439,7 +1439,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
 
-    bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+    bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
@@ -1454,7 +1454,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     n->set_next_idx(1);
     r.send_appendentries(n.unwrap());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1470,7 +1470,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     n->set_next_idx(2);
     r.send_appendentries(raft::NodeId(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1493,7 +1493,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     r.send_appendentries(raft::NodeId(2));
     MsgAppendEntriesReq*  ae;
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1506,7 +1506,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     r.log().entry_append(MsgAddEntryReq(1, 100, raft::LogEntryData("aaa", 4)));
     r.send_appendentries(n.unwrap());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1529,7 +1529,7 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1781,7 +1781,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     EXPECT_EQ(5, node->get_next_idx());
 
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1792,7 +1792,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
      * server will be waiting for response */
     r.send_appendentries(raft::NodeId(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1807,7 +1807,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1816,7 +1816,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
         EXPECT_EQ(1, ae->prev_log_idx);
     }
 
-    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
+    EXPECT_FALSE(sender.poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
@@ -1841,7 +1841,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     EXPECT_TRUE(node.isSome());
     EXPECT_EQ(5, node->get_next_idx());
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1852,7 +1852,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
      * server will be waiting for response */
     r.send_appendentries(raft::NodeId(2));
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1867,7 +1867,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1882,7 +1882,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* see if new appendentries have appropriate values */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
@@ -1891,7 +1891,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_EQ(2, ae->prev_log_idx);
     }
 
-    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
+    EXPECT_FALSE(sender.poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
@@ -1913,14 +1913,14 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     r.send_appendentries(raft::NodeId(2));
     r.send_appendentries(raft::NodeId(3));
 
-    EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
-    EXPECT_TRUE(sender.sender_poll_msg_data(r).isSome());
+    EXPECT_TRUE(sender.poll_msg_data(r).isSome());
+    EXPECT_TRUE(sender.poll_msg_data(r).isSome());
 
     r.become_follower();
 
     /* receive mock success responses */
     EXPECT_TRUE(r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1)).isSome());
-    EXPECT_FALSE(sender.sender_poll_msg_data(r).isSome());
+    EXPECT_FALSE(sender.poll_msg_data(r).isSome());
 }
 
 TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
@@ -2021,7 +2021,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 
     /* check if the slow node got sent this appendentries */
     {
-        bmcl::Option<msg_t> msg = sender.sender_poll_msg_data(r);
+        bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_FALSE(msg.isSome());
     }
 }
@@ -2146,26 +2146,26 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
 
     /* receive appendentries messages for both nodes */
     {
-        msg = sender.sender_poll_msg_data(r);
+        msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
     }
     {
-        msg = sender.sender_poll_msg_data(r);
+        msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
     }
     {
-        msg = sender.sender_poll_msg_data(r);
+        msg = sender.poll_msg_data(r);
         EXPECT_FALSE(msg.isSome());
     }
 
     /* force request timeout */
     r.raft_periodic(std::chrono::milliseconds(501));
     {
-        msg = sender.sender_poll_msg_data(r);
+        msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
