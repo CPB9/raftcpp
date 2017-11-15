@@ -129,7 +129,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
 
     if (_saver)
     {
-        bmcl::Option<Error> e = _saver->puch_back(ety, get_current_idx() + 1);
+        bmcl::Option<Error> e = _saver->push_back(ety, get_current_idx() + 1);
         if (e == Error::Shutdown)
             return Error::Shutdown;
     }
