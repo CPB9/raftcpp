@@ -16,11 +16,11 @@
 namespace raft
 {
 
-enum class Error : int
+enum class Error : uint8_t
 {
-    NotLeader = -2,
-    OneVotingChangeOnly = -3,
-    Shutdown = -4,
+    Shutdown,
+    NotLeader,
+    OneVotingChangeOnly,
     NodeUnknown,
     NothingToApply,
 };
@@ -203,7 +203,7 @@ public:
     * For safety reasons this callback MUST flush the change to disk.
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> puch_back(const raft_entry_t& entry, std::size_t entry_idx) = 0;
+    virtual bmcl::Option<Error> push_back(const raft_entry_t& entry, std::size_t entry_idx) = 0;
 
     /** Callback for removing the oldest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
