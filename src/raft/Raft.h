@@ -25,7 +25,7 @@ class Server
     struct server_private_t
     {
         /* Persistent state: */
-        std::size_t  current_term;              /**< the server's best guess of what the current term is starts at zero */
+        TermId  current_term;              /**< the server's best guess of what the current term is starts at zero */
         bmcl::Option<NodeId> voted_for;        /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
 
         /* Volatile state: */
@@ -51,7 +51,7 @@ public:
     inline std::chrono::milliseconds get_election_timeout() const { return _me.election_timeout; }
 
     inline bmcl::Option<NodeId> get_current_leader() const { return _me.current_leader; }
-    inline std::size_t get_current_term() const { return _me.current_term; }
+    inline TermId get_current_term() const { return _me.current_term; }
     inline bmcl::Option<NodeId> get_voted_for() const { return _me.voted_for; }
     inline bool is_already_voted() const { return _me.voted_for.isSome(); }
     inline bool is_follower() const { return get_state() == State::Follower; }
@@ -74,7 +74,7 @@ public:
 
 public:
     void vote_for_nodeid(NodeId nodeid);
-    void set_current_term(std::size_t term);
+    void set_current_term(TermId term);
     void set_state(State state);
     void become_leader();
     void become_candidate();
@@ -86,9 +86,9 @@ public:
 
 private:
     void entry_apply_node_add(const LogEntry& ety, NodeId id);
-    void pop_log(const LogEntry& ety, const std::size_t idx);
+    void pop_log(const LogEntry& ety, Index idx);
     bmcl::Option<Error> entry_append(const LogEntry& ety);
-    void entry_append_impl(const LogEntry& ety, const std::size_t idx);
+    void entry_append_impl(const LogEntry& ety, Index idx);
     void __log(NodeId node, const char *fmt, ...) const;
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
 

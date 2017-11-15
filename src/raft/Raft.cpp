@@ -36,7 +36,7 @@ void Server::__log(NodeId node, const char *fmt, ...) const
 Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
 {
-    _me.current_term = 0;
+    _me.current_term = TermId(0);
     _me.timeout_elapsed = std::chrono::milliseconds(0);
     _me.request_timeout = std::chrono::milliseconds(200);
     _me.election_timeout = std::chrono::milliseconds(1000);
@@ -82,7 +82,7 @@ void Server::become_candidate()
      * would deadlock the cluster by always gaining a headstart. To prevent
      * this, we allow a negative randomness as a potential handicap. */
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
-    _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
+    _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(TermId(0))));
 }
 
 void Server::become_follower()
@@ -173,7 +173,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     {
         /* If AppendEntries fails because of log inconsistency:
            decrement nextIndex and retry (§5.3) */
-        std::size_t next_idx = node->get_next_idx();
+        Index next_idx = node->get_next_idx();
         assert(0 < next_idx);
         if (r.current_idx < next_idx - 1)
             node->set_next_idx(std::min(r.current_idx + 1, _log.get_current_idx()));
@@ -196,7 +196,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
         false == node->has_sufficient_logs()
         )
     {
-        LogEntry ety(get_current_term(), 0, LotType::AddNode, node->get_id()); //insert node->get_id() into ety
+        LogEntry ety(get_current_term(), EntryId(0), LotType::AddNode, node->get_id()); //insert node->get_id() into ety
         auto e = entry_append(ety);
         if (e.isSome())
             return e;
@@ -205,7 +205,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     }
 
     /* Update commit idx */
-    std::size_t point = r.current_idx;
+    Index point = r.current_idx;
     if (point > 0)
     {
         bmcl::Option<const LogEntry&> ety = _log.get_at_idx(point);
@@ -278,11 +278,11 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
 
     r.current_idx = ae.prev_log_idx;
 
-    std::size_t i;
+    Index i;
     for (i = 0; i < ae.n_entries; i++)
     {
         const LogEntry* ety = &ae.entries[i];
-        std::size_t ety_index = ae.prev_log_idx + 1 + i;
+        Index ety_index = ae.prev_log_idx + 1 + i;
         r.current_idx = ety_index;
         bmcl::Option<const LogEntry&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
@@ -353,7 +353,7 @@ static bool __should_grant_vote(Server* me, const MsgVoteReq& vr)
 
     /* Below we check if log is more up-to-date... */
 
-    std::size_t current_idx = me->log().get_current_idx();
+    Index current_idx = me->log().get_current_idx();
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (0 == current_idx)
@@ -501,7 +501,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
         /* Only send new entries.
          * Don't send the entry to peers who are behind, to prevent them from
          * becoming congested. */
-        std::size_t next_idx = i.get_next_idx();
+        Index next_idx = i.get_next_idx();
         if (next_idx == _log.get_current_idx())
             send_appendentries(i);
     }
@@ -509,7 +509,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
 }
 
-void Server::entry_append_impl(const LogEntry& ety, const std::size_t idx)
+void Server::entry_append_impl(const LogEntry& ety, Index idx)
 {
     if (!ety.is_cfg_change())
         return;
@@ -560,7 +560,7 @@ void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
     }
 }
 
-void Server::pop_log(const LogEntry& ety, const std::size_t idx)
+void Server::pop_log(const LogEntry& ety, const Index idx)
 {
     if (!ety.is_cfg_change())
         return;
@@ -623,8 +623,8 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
 {
     assert(!_nodes.is_me(node.get_id()));
 
-    MsgAppendEntriesReq ae(_me.current_term, 0, 0, _log.get_commit_idx());
-    std::size_t next_idx = node.get_next_idx();
+    MsgAppendEntriesReq ae(_me.current_term, 0, TermId(0), _log.get_commit_idx());
+    Index next_idx = node.get_next_idx();
 
     ae.entries = _log.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
 
@@ -665,7 +665,7 @@ void Server::vote_for_nodeid(NodeId nodeid)
     _saver->persist_vote(nodeid);
 }
 
-void Server::set_current_term(std::size_t term)
+void Server::set_current_term(TermId term)
 {
     if (_me.current_term < term)
     {

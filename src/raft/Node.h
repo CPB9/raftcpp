@@ -32,11 +32,11 @@ public:
 
     inline NodeId get_id() const { return _id; }
 
-    inline std::size_t get_next_idx() const { return _next_idx; }
-    inline void set_next_idx(std::size_t nextIdx) {/* log index begins at 1 */ _next_idx = nextIdx < 1 ? 1 : nextIdx; }
+    inline Index get_next_idx() const { return _next_idx; }
+    inline void set_next_idx(Index nextIdx) {/* log index begins at 1 */ _next_idx = nextIdx < 1 ? 1 : nextIdx; }
 
-    inline std::size_t get_match_idx() const { return _match_idx; }
-    inline void set_match_idx(std::size_t matchIdx) { _match_idx = matchIdx; }
+    inline Index get_match_idx() const { return _match_idx; }
+    inline void set_match_idx(Index matchIdx) { _match_idx = matchIdx; }
 
     inline bool has_vote_for_me() const { return _flags.test(VotedForMe); }
     inline void vote_for_me(bool vote) { _flags.set(VotedForMe, vote); }
@@ -48,10 +48,10 @@ public:
     inline bool has_sufficient_logs() const { return _flags.test(NodeHasSufficientLog); }
 
 private:
-    std::size_t _next_idx;
-    std::size_t _match_idx;
-    NodeId _id;
-    std::bitset<8> _flags;
+    Index           _next_idx;
+    Index           _match_idx;
+    NodeId          _id;
+    std::bitset<8>  _flags;
 };
 
 class Nodes
@@ -77,7 +77,7 @@ public:
     std::size_t get_num_voting_nodes() const;
     bool votes_has_majority(bmcl::Option<NodeId> voted_for) const;
     static bool votes_has_majority(std::size_t num_nodes, std::size_t nvotes);
-    bool is_committed(std::size_t point) const;
+    bool is_committed(Index idx) const;
 private:
     NodeId _me;
     Items _nodes;

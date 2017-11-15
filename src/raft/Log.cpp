@@ -22,7 +22,7 @@ namespace raft
 
 Logger::Logger(): _base(0) { }
 
-std::size_t Logger::count() const
+Index Logger::count() const
 {
     return _entries.size();
 }
@@ -32,12 +32,12 @@ bool Logger::empty() const
     return _entries.empty();
 }
 
-std::size_t Logger::get_current_idx() const
+Index Logger::get_current_idx() const
 {
     return count() + _base;
 }
 
-std::size_t Logger::get_front_idx() const
+Index Logger::get_front_idx() const
 {
     return _base + 1;
 }
@@ -47,7 +47,7 @@ void Logger::append(const LogEntry& c)
     _entries.emplace_back(c);
 }
 
-bmcl::Option<const LogEntry*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
+bmcl::Option<const LogEntry*> Logger::get_from_idx(Index idx, Index* n_etys) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -59,12 +59,12 @@ bmcl::Option<const LogEntry*> Logger::get_from_idx(std::size_t idx, std::size_t 
         return bmcl::None;
     }
 
-    std::size_t i = idx - _base;
+    Index i = idx - _base;
     *n_etys = _entries.size() - i;
     return &_entries[i];
 }
 
-bmcl::Option<const LogEntry&> Logger::get_at_idx(std::size_t idx) const
+bmcl::Option<const LogEntry&> Logger::get_at_idx(Index idx) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -73,7 +73,7 @@ bmcl::Option<const LogEntry&> Logger::get_at_idx(std::size_t idx) const
     if (idx < _base || idx >= _base + _entries.size())
         return bmcl::None;
 
-    std::size_t i = idx - _base;
+    Index i = idx - _base;
     return _entries[i];
 }
 
@@ -110,11 +110,11 @@ bmcl::Option<const LogEntry&> Logger::front() const
     return _entries.front();
 }
 
-void LogCommitter::commit_till(std::size_t idx)
+void LogCommitter::commit_till(Index idx)
 {
     if (is_committed(idx))
         return;
-    std::size_t last_log_idx = std::max<std::size_t>(get_current_idx(), 1);
+    Index last_log_idx = std::max<Index>(get_current_idx(), 1);
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
@@ -143,7 +143,7 @@ bmcl::Result<LogEntry, Error> LogCommitter::entry_apply_one()
     if (!has_not_applied())
         return Error::NothingToApply;
 
-    std::size_t log_idx = _last_applied_idx + 1;
+    Index log_idx = _last_applied_idx + 1;
 
     bmcl::Option<const LogEntry&> etyo = get_at_idx(log_idx);
     if (etyo.isNone())
@@ -164,14 +164,14 @@ bmcl::Result<LogEntry, Error> LogCommitter::entry_apply_one()
     return ety;
 }
 
-void LogCommitter::set_commit_idx(std::size_t idx)
+void LogCommitter::set_commit_idx(Index idx)
 {
     assert(get_commit_idx() <= idx);
     assert(idx <= get_current_idx());
     _commit_idx = idx;
 }
 
-bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
+bmcl::Option<TermId> LogCommitter::get_last_log_term() const
 {
     const auto& ety = back();
     if (ety.isNone())
@@ -181,7 +181,7 @@ bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
 
 bmcl::Option<LogEntry> LogCommitter::entry_pop_back()
 {
-    std::size_t idx = get_current_idx();
+    Index idx = get_current_idx();
     if (empty() || idx <= get_commit_idx())
         return bmcl::None;
 

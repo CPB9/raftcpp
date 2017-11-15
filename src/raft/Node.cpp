@@ -135,12 +135,12 @@ bool Nodes::votes_has_majority(std::size_t num_nodes, std::size_t nvotes)
     return half + 1 <= nvotes;
 }
 
-bool Nodes::is_committed(std::size_t point) const
+bool Nodes::is_committed(Index idx) const
 {
     std::size_t votes = 1;
     for (const Node& i : _nodes)
     {
-        if (!is_me(i.get_id()) && i.is_voting() && point <= i.get_match_idx())
+        if (!is_me(i.get_id()) && i.is_voting() && idx <= i.get_match_idx())
         {
             votes++;
         }
