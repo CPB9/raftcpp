@@ -42,12 +42,12 @@ std::size_t Logger::get_front_idx() const
     return _base + 1;
 }
 
-void Logger::append(const raft_entry_t& c)
+void Logger::append(const LogEntry& c)
 {
     _entries.emplace_back(c);
 }
 
-bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
+bmcl::Option<const LogEntry*> Logger::get_from_idx(std::size_t idx, std::size_t *n_etys) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -64,7 +64,7 @@ bmcl::Option<const raft_entry_t*> Logger::get_from_idx(std::size_t idx, std::siz
     return &_entries[i];
 }
 
-bmcl::Option<const raft_entry_t&> Logger::get_at_idx(std::size_t idx) const
+bmcl::Option<const LogEntry&> Logger::get_at_idx(std::size_t idx) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -77,33 +77,33 @@ bmcl::Option<const raft_entry_t&> Logger::get_at_idx(std::size_t idx) const
     return _entries[i];
 }
 
-bmcl::Option<raft_entry_t> Logger::pop_back()
+bmcl::Option<LogEntry> Logger::pop_back()
 {
     if (_entries.empty())
         return bmcl::None;
-    raft_entry_t ety = _entries.back();
+    LogEntry ety = _entries.back();
     _entries.pop_back();
     return ety;
 }
 
-bmcl::Option<raft_entry_t> Logger::pop_front()
+bmcl::Option<LogEntry> Logger::pop_front()
 {
     if (_entries.empty())
         return bmcl::None;
-    raft_entry_t elem = _entries.front();
+    LogEntry elem = _entries.front();
     _entries.erase(_entries.begin());
     _base++;
     return elem;
 }
 
-bmcl::Option<const raft_entry_t&> Logger::back() const
+bmcl::Option<const LogEntry&> Logger::back() const
 {
     if (_entries.empty())
         return bmcl::None;
     return _entries.back();
 }
 
-bmcl::Option<const raft_entry_t&> Logger::front() const
+bmcl::Option<const LogEntry&> Logger::front() const
 {
     if (_entries.empty())
         return bmcl::None;
@@ -118,7 +118,7 @@ void LogCommitter::commit_till(std::size_t idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
+bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety)
 {
     /* Only one voting cfg change at a time */
     if (ety.is_voting_cfg_change() && voting_change_is_in_progress())
@@ -138,21 +138,21 @@ bmcl::Option<Error> LogCommitter::entry_append(const raft_entry_t& ety)
     return bmcl::None;
 }
 
-bmcl::Result<raft_entry_t, Error> LogCommitter::entry_apply_one()
+bmcl::Result<LogEntry, Error> LogCommitter::entry_apply_one()
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
         return Error::NothingToApply;
 
     std::size_t log_idx = _last_applied_idx + 1;
 
-    bmcl::Option<const raft_entry_t&> etyo = get_at_idx(log_idx);
+    bmcl::Option<const LogEntry&> etyo = get_at_idx(log_idx);
     if (etyo.isNone())
         return Error::NothingToApply;
-    const raft_entry_t& ety = etyo.unwrap();
+    const LogEntry& ety = etyo.unwrap();
 
     _last_applied_idx = log_idx;
     assert(_saver);
-    bmcl::Option<Error> e = _saver->applylog(ety, _last_applied_idx - 1);
+    bmcl::Option<Error> e = _saver->apply_log(ety, _last_applied_idx - 1);
     if (e == Error::Shutdown)
         return Error::Shutdown;
     assert(e.isNone());
@@ -179,7 +179,7 @@ bmcl::Option<std::size_t> LogCommitter::get_last_log_term() const
     return ety->term;
 }
 
-bmcl::Option<raft_entry_t> LogCommitter::entry_pop_back()
+bmcl::Option<LogEntry> LogCommitter::entry_pop_back()
 {
     std::size_t idx = get_current_idx();
     if (empty() || idx <= get_commit_idx())
@@ -205,16 +205,16 @@ void LogCommitter::entry_pop_front()
     pop_front();
 }
 
-raft_entry_state_e LogCommitter::entry_get_state(const msg_entry_response_t& r) const
+EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const
 {
-    bmcl::Option<const raft_entry_t&> ety = get_at_idx(r.idx);
+    bmcl::Option<const LogEntry&> ety = get_at_idx(r.idx);
     if (ety.isNone())
-        return raft_entry_state_e::NOTCOMMITTED;
+        return EntryState::NotCommitted;
 
     /* entry from another leader has invalidated this entry message */
     if (r.term != ety.unwrap().term)
-        return raft_entry_state_e::INVALIDATED;
-    return is_committed(r.idx) ? raft_entry_state_e::COMMITTED : raft_entry_state_e::NOTCOMMITTED;
+        return EntryState::Invalidated;
+    return is_committed(r.idx) ? EntryState::Committed : EntryState::NotCommitted;
 }
 
 

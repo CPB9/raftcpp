@@ -14,14 +14,14 @@ TEST(TestLog, new_is_empty)
 TEST(TestLog, append_is_not_empty)
 {
     raft::LogCommitter l(nullptr);
-    l.entry_append(raft_entry_t(0, 1));
+    l.entry_append(LogEntry(0, 1));
     EXPECT_EQ(1, l.count());
 }
 
 TEST(TestLog, get_at_idx)
 {
     raft::LogCommitter l(nullptr);
-    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
+    LogEntry e1(0, 1), e2(0, 2), e3(0, 3);
 
     l.entry_append(e1);
     l.entry_append(e2);
@@ -37,15 +37,15 @@ TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
 {
     raft::LogCommitter l(nullptr);
 
-    l.entry_append(raft_entry_t(0, 1));
+    l.entry_append(LogEntry(0, 1));
     EXPECT_FALSE(l.get_at_idx(2).isSome());
 }
 
 class TestSaver : public Saver
 {
 public:
-    std::deque<raft_entry_t> queue;
-    void pop_back(const raft_entry_t& entry, std::size_t entry_idx) override
+    std::deque<LogEntry> queue;
+    void pop_back(const LogEntry& entry, std::size_t entry_idx) override
     {
         queue.push_back(entry);
     }
@@ -55,7 +55,7 @@ TEST(TestLog, delete)
 {
     TestSaver saver;
     raft::LogCommitter l(&saver);
-    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
+    LogEntry e1(0, 1), e2(0, 2), e3(0, 3);
 
     l.entry_append(e1);
     l.entry_append(e2);
@@ -80,7 +80,7 @@ TEST(TestLog, delete_onwards)
 {
     TestSaver saver;
     raft::LogCommitter l(&saver);
-    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
+    LogEntry e1(0, 1), e2(0, 2), e3(0, 3);
 
     l.entry_append(e1);
     l.entry_append(e2);
@@ -100,7 +100,7 @@ TEST(TestLog, delete_onwards)
 TEST(TestLog, peektail)
 {
     raft::LogCommitter l(nullptr);
-    raft_entry_t e1(0, 1), e2(0, 2), e3(0, 3);
+    LogEntry e1(0, 1), e2(0, 2), e3(0, 3);
 
     l.entry_append(e1);
     l.entry_append(e2);
@@ -113,9 +113,9 @@ TEST(TestLog, peektail)
 TEST(TestLog, cant_append_duplicates)
 {
     raft::LogCommitter l(nullptr);
-    l.entry_append(raft::raft_entry_t(1, 1));
+    l.entry_append(raft::LogEntry(1, 1));
     EXPECT_EQ(1, l.count());
-    l.entry_append(raft::raft_entry_t(1, 1));
+    l.entry_append(raft::LogEntry(1, 1));
     EXPECT_EQ(1, l.count());
 }
 
@@ -136,7 +136,7 @@ TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 
-    lc.entry_append(raft_entry_t(1, 1, raft::raft_entry_data_t("aaa", 4)));
+    lc.entry_append(LogEntry(1, 1, raft::LogEntryData("aaa", 4)));
     lc.entry_apply_one();
     /* Not allowed to be applied because we haven't confirmed a majority yet */
     EXPECT_EQ(0, lc.get_last_applied_idx());

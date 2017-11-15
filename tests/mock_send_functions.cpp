@@ -3,12 +3,12 @@
 #include "mock_send_functions.h"
 
 Sender::Sender(Exchanger* ex, raft::Server* r) : _ex(ex), _r(r) {}
-bmcl::Option<Error> Sender::send_requestvote(const msg_requestvote_t& msg)
+bmcl::Option<Error> Sender::request_vote(const MsgVoteReq& msg)
 {
     return _ex->sender_requestvote(_r, msg);
 }
 
-bmcl::Option<Error> Sender::send_appendentries(const node_id& node, const msg_appendentries_t& msg) 
+bmcl::Option<Error> Sender::append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) 
 {
     return _ex->sender_appendentries(_r, node, msg);
 }
@@ -20,7 +20,7 @@ void Exchanger::add(raft::Server* r)
     r->set_sender(s.sender.get());
 }
 
-bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::node_id& from, const raft::node_id& to, const void* data, int len, raft_message_type_e type)
+bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::NodeId& from, const raft::NodeId& to, const void* data, int len, raft_message_type_e type)
 {
     auto f = _servers[from].raft;
     auto peer = _servers[to].raft;
@@ -40,7 +40,7 @@ bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::node_id& from, con
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Exchanger::sender_requestvote(const raft::Server* raft, const msg_requestvote_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_requestvote(const raft::Server* raft, const MsgVoteReq& msg)
 {
     //return __append_msg(from->nodes().get_my_id(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
 
@@ -52,26 +52,26 @@ bmcl::Option<raft::Error> Exchanger::sender_requestvote(const raft::Server* raft
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Exchanger::sender_requestvote_response(const raft::node_id& from, const raft::node_id& to, const msg_requestvote_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_requestvote_response(const raft::NodeId& from, const raft::NodeId& to, const MsgVoteRep& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Exchanger::sender_appendentries(const raft::Server * from, const raft::node_id & to, const msg_appendentries_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_appendentries(const raft::Server * from, const raft::NodeId & to, const MsgAppendEntriesReq& msg)
 {
-    msg_entry_t* entries = (msg_entry_t*)calloc(1, sizeof(msg_entry_t) * msg.n_entries);
-    memcpy(entries, msg.entries, sizeof(msg_entry_t) * msg.n_entries);
-    msg_appendentries_t tmp = msg;
+    MsgAddEntryReq* entries = (MsgAddEntryReq*)calloc(1, sizeof(MsgAddEntryReq) * msg.n_entries);
+    memcpy(entries, msg.entries, sizeof(MsgAddEntryReq) * msg.n_entries);
+    MsgAppendEntriesReq tmp = msg;
     tmp.entries = entries;
     return __append_msg(from->nodes().get_my_id(), to, &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
 }
 
-bmcl::Option<raft::Error> Exchanger::sender_appendentries_response(const raft::node_id& from, const raft::node_id& to, const msg_appendentries_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_appendentries_response(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Exchanger::sender_entries_response(const raft::node_id& from, const raft::node_id& to, const msg_entry_response_t& msg)
+bmcl::Option<raft::Error> Exchanger::sender_entries_response(const raft::NodeId& from, const raft::NodeId& to, const MsgAddEntryRep& msg)
 {
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
 }
@@ -81,7 +81,7 @@ bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(const raft::Server& from)
     return sender_poll_msg_data(from.nodes().get_my_id());
 }
 
-bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(raft::node_id from)
+bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(raft::NodeId from)
 {
     auto& s = _servers[from];
     if (s.outbox.empty())
@@ -91,14 +91,14 @@ bmcl::Option<msg_t> Exchanger::sender_poll_msg_data(raft::node_id from)
     return m;
 }
 
-bool Exchanger::sender_msgs_available(raft::node_id from)
+bool Exchanger::sender_msgs_available(raft::NodeId from)
 {
     auto& s = _servers[from];
     assert(s.raft != nullptr);
     return !s.inbox.empty();
 }
 
-void Exchanger::sender_poll_msgs(raft::node_id from)
+void Exchanger::sender_poll_msgs(raft::NodeId from)
 {
     auto& s = _servers[from];
     if (!s.raft)
@@ -106,7 +106,7 @@ void Exchanger::sender_poll_msgs(raft::node_id from)
         assert(false);
         return;
     }
-    raft::node_id me = s.raft->nodes().get_my_id();
+    raft::NodeId me = s.raft->nodes().get_my_id();
 
     for(const msg_t& m: s.inbox)
     {
@@ -114,35 +114,35 @@ void Exchanger::sender_poll_msgs(raft::node_id from)
         {
         case raft_message_type_e::RAFT_MSG_APPENDENTRIES:
         {
-            EXPECT_EQ(sizeof(msg_appendentries_t), m.data.size());
-            auto r = s.raft->accept_appendentries(m.sender, *(msg_appendentries_t*)m.data.data());
+            EXPECT_EQ(sizeof(MsgAppendEntriesReq), m.data.size());
+            auto r = s.raft->accept_req(m.sender, *(MsgAppendEntriesReq*)m.data.data());
             EXPECT_TRUE(r.isOk());
-            msg_appendentries_response_t response = r.unwrap();
+            MsgAppendEntriesRep response = r.unwrap();
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE);
         }
         break;
         case raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE:
-            EXPECT_EQ(sizeof(msg_appendentries_response_t), m.data.size());
-            s.raft->accept_appendentries_response(m.sender, *(msg_appendentries_response_t*)m.data.data());
+            EXPECT_EQ(sizeof(MsgAppendEntriesRep), m.data.size());
+            s.raft->accept_rep(m.sender, *(MsgAppendEntriesRep*)m.data.data());
             break;
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE:
         {
-            EXPECT_EQ(sizeof(msg_requestvote_t), m.data.size());
-            msg_requestvote_response_t response = s.raft->accept_requestvote(from, *(msg_requestvote_t*)m.data.data());
+            EXPECT_EQ(sizeof(MsgVoteReq), m.data.size());
+            MsgVoteRep response = s.raft->accept_req(from, *(MsgVoteReq*)m.data.data());
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
         }
         break;
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE:
-            EXPECT_EQ(sizeof(msg_requestvote_response_t), m.data.size());
-            s.raft->accept_requestvote_response(m.sender, *(msg_requestvote_response_t*)m.data.data());
+            EXPECT_EQ(sizeof(MsgVoteRep), m.data.size());
+            s.raft->accept_rep(m.sender, *(MsgVoteRep*)m.data.data());
             break;
         case raft_message_type_e::RAFT_MSG_ENTRY:
         {
-            EXPECT_EQ(sizeof(msg_entry_t), m.data.size());
-            auto r = s.raft->accept_entry(*(msg_entry_t*)m.data.data());
+            EXPECT_EQ(sizeof(MsgAddEntryReq), m.data.size());
+            auto r = s.raft->accept_entry(*(MsgAddEntryReq*)m.data.data());
             EXPECT_TRUE(r.isOk());
-            msg_entry_response_t response = r.unwrap();
-            __append_msg(me, m.sender, (msg_entry_t *)&response, sizeof(response), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
+            MsgAddEntryRep response = r.unwrap();
+            __append_msg(me, m.sender, (MsgAddEntryReq *)&response, sizeof(response), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
         }
         break;
 

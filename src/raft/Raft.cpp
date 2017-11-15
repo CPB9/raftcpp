@@ -24,7 +24,7 @@
 namespace raft
 {
 
-void Server::__log(node_id node, const char *fmt, ...) const
+void Server::__log(NodeId node, const char *fmt, ...) const
 {
     char buf[1024];
     va_list args;
@@ -33,14 +33,14 @@ void Server::__log(node_id node, const char *fmt, ...) const
     _saver->log(node, buf);
 }
 
-Server::Server(node_id id, bool is_voting, ISender* sender, ISaver* saver)
+Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
 {
     _me.current_term = 0;
     _me.timeout_elapsed = std::chrono::milliseconds(0);
     _me.request_timeout = std::chrono::milliseconds(200);
     _me.election_timeout = std::chrono::milliseconds(1000);
-    set_state(raft_state_e::FOLLOWER);
+    set_state(State::Follower);
 }
 
 void Server::election_start()
@@ -56,7 +56,7 @@ void Server::become_leader()
 {
     __log(_nodes.get_my_id(), "becoming leader term:%d", get_current_term());
 
-    set_state(raft_state_e::LEADER);
+    set_state(State::Leader);
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()))
@@ -75,20 +75,20 @@ void Server::become_candidate()
     _nodes.reset_all_votes();
     vote_for_nodeid(_nodes.get_my_id());
     _me.current_leader.clear();
-    set_state(raft_state_e::CANDIDATE);
+    set_state(State::Candidate);
 
     /* We need a random factor here to prevent simultaneous candidates.
      * If the randomness is always positive it's possible that a fast node
      * would deadlock the cluster by always gaining a headstart. To prevent
      * this, we allow a negative randomness as a potential handicap. */
     _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
-    _sender->send_requestvote(msg_requestvote_t(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
+    _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(0)));
 }
 
 void Server::become_follower()
 {
     __log(_nodes.get_my_id(), "becoming follower");
-    set_state(raft_state_e::FOLLOWER);
+    set_state(State::Follower);
 }
 
 bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_last_period)
@@ -121,11 +121,11 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     auto r = _log.entry_apply_one();
     if (r.isOk())
     {
-        const raft_entry_t& ety = r.unwrap();
-        if (logtype_e::ADD_NODE == ety.type)
+        const LogEntry& ety = r.unwrap();
+        if (LotType::AddNode == ety.type)
         {
             assert(ety.node.isSome());
-            node_id id = ety.node.unwrap();
+            NodeId id = ety.node.unwrap();
             entry_apply_node_add(ety, id);
         }
         __log(_nodes.get_my_id(), "applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.len);
@@ -137,7 +137,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     return r.unwrapErr();
 }
 
-bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const msg_appendentries_response_t& r)
+bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     __log(nodeid,
@@ -196,7 +196,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
         false == node->has_sufficient_logs()
         )
     {
-        raft_entry_t ety(get_current_term(), 0, logtype_e::ADD_NODE, node->get_id()); //insert node->get_id() into ety
+        LogEntry ety(get_current_term(), 0, LotType::AddNode, node->get_id()); //insert node->get_id() into ety
         auto e = entry_append(ety);
         if (e.isSome())
             return e;
@@ -208,7 +208,7 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
     std::size_t point = r.current_idx;
     if (point > 0)
     {
-        bmcl::Option<const raft_entry_t&> ety = _log.get_at_idx(point);
+        bmcl::Option<const LogEntry&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
         if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point))
         {
@@ -225,9 +225,9 @@ bmcl::Option<Error> Server::accept_appendentries_response(node_id nodeid, const 
     return bmcl::None;
 }
 
-bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(node_id nodeid, const msg_appendentries_t& ae)
+bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae)
 {
-    msg_appendentries_response_t r(_me.current_term, false, 0, 0);
+    MsgAppendEntriesRep r(_me.current_term, false, 0, 0);
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
         return Error::NodeUnknown;
@@ -259,20 +259,20 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     {
         /* 1. Reply false if term < currentTerm (§5.1) */
         __log(nodeid, "AE term %d is less than current term %d", ae.term, _me.current_term);
-        return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
+        return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
     }
 
     /* Not the first appendentries we've received */
     /* NOTE: the log starts at 1 */
     if (0 < ae.prev_log_idx)
     {
-        bmcl::Option<const raft_entry_t&> e = _log.get_at_idx(ae.prev_log_idx);
+        bmcl::Option<const LogEntry&> e = _log.get_at_idx(ae.prev_log_idx);
         if (e.isNone() || _log.get_current_idx() < ae.prev_log_idx)
         {
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
             whose term matches prevLogTerm (§5.3) */
             __log(nodeid, "AE no log at prev_idx %d", ae.prev_log_idx);
-            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
+            return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
         }
     }
 
@@ -281,10 +281,10 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     std::size_t i;
     for (i = 0; i < ae.n_entries; i++)
     {
-        const raft_entry_t* ety = &ae.entries[i];
+        const LogEntry* ety = &ae.entries[i];
         std::size_t ety_index = ae.prev_log_idx + 1 + i;
         r.current_idx = ety_index;
-        bmcl::Option<const raft_entry_t&> existing_ety = _log.get_at_idx(ety_index);
+        bmcl::Option<const LogEntry&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
         if (existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
@@ -295,7 +295,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
             bool flag = true;
             while (_log.get_current_idx() >= ety_index)
             {
-                bmcl::Option<raft_entry_t> pop = _log.entry_pop_back();
+                bmcl::Option<LogEntry> pop = _log.entry_pop_back();
                 if (pop.isNone())
                     flag = false;
                 else
@@ -317,7 +317,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
                 r.first_idx = 0;
                 return Error::Shutdown;
             }
-            return msg_appendentries_response_t(r.term, false, _log.get_current_idx(), 0);
+            return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
         }
         r.current_idx = ae.prev_log_idx + 1 + i;
     }
@@ -334,7 +334,7 @@ bmcl::Result<msg_appendentries_response_t, Error> Server::accept_appendentries(n
     return r;
 }
 
-static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
+static bool __should_grant_vote(Server* me, const MsgVoteReq& vr)
 {
     /* TODO: 4.2.3 Raft Dissertation:
      * if a server receives a RequestVote request within the minimum election
@@ -359,7 +359,7 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const raft_entry_t&> e = me->log().get_at_idx(current_idx);
+    bmcl::Option<const LogEntry&> e = me->log().get_at_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
@@ -374,17 +374,17 @@ static bool __should_grant_vote(Server* me, const msg_requestvote_t& vr)
     return false;
 }
 
-msg_requestvote_response_t Server::prepare_requestvote_response_t(node_id candidate, raft_request_vote vote)
+MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote)
 {
     __log(candidate, "node requested vote: %d replying: %s",
         candidate,
-        vote == raft_request_vote::GRANTED ? "granted" :
-        vote == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
+        vote == ReqVoteState::Granted ? "granted" :
+        vote == ReqVoteState::NotGranted ? "not granted" : "unknown");
 
-    return msg_requestvote_response_t(get_current_term(), vote);
+    return MsgVoteRep(get_current_term(), vote);
 }
 
-msg_requestvote_response_t Server::accept_requestvote(node_id nodeid, const msg_requestvote_t& vr)
+MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
@@ -395,7 +395,7 @@ msg_requestvote_response_t Server::accept_requestvote(node_id nodeid, const msg_
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(nodeid, raft_request_vote::UNKNOWN_NODE);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
     }
 
     if (get_current_term() < vr.term)
@@ -405,7 +405,7 @@ msg_requestvote_response_t Server::accept_requestvote(node_id nodeid, const msg_
     }
 
     if (!__should_grant_vote(this, vr))
-        return prepare_requestvote_response_t(nodeid, raft_request_vote::NOT_GRANTED);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
@@ -417,16 +417,16 @@ msg_requestvote_response_t Server::accept_requestvote(node_id nodeid, const msg_
     _me.current_leader.clear();
     _me.timeout_elapsed = std::chrono::milliseconds(0);
 
-    return prepare_requestvote_response_t(nodeid, raft_request_vote::GRANTED);
+    return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
 }
 
-bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const msg_requestvote_response_t& r)
+bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
     __log(nodeid, "node responded to requestvote status: %s",
-          r.vote_granted == raft_request_vote::GRANTED ? "granted" :
-          r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown");
+          r.vote_granted == ReqVoteState::Granted ? "granted" :
+          r.vote_granted == ReqVoteState::NotGranted ? "not granted" : "unknown");
 
     if (!is_candidate())
         return bmcl::None;
@@ -447,25 +447,25 @@ bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const ms
     }
 
     __log(nodeid, "node responded to requestvote status:%s ct:%d rt:%d",
-          r.vote_granted == raft_request_vote::GRANTED ? "granted" :
-          r.vote_granted == raft_request_vote::NOT_GRANTED ? "not granted" : "unknown",
+          r.vote_granted == ReqVoteState::Granted ? "granted" :
+          r.vote_granted == ReqVoteState::NotGranted ? "not granted" : "unknown",
           _me.current_term,
           r.term);
 
     switch (r.vote_granted)
     {
-        case raft_request_vote::GRANTED:
+        case ReqVoteState::Granted:
             if (node.isSome())
                 node->vote_for_me(true);
-            if (_nodes.raft_votes_is_majority(_me.voted_for))
+            if (_nodes.votes_has_majority(_me.voted_for))
                 become_leader();
             break;
 
-        case raft_request_vote::NOT_GRANTED:
+        case ReqVoteState::NotGranted:
             break;
 
-        case raft_request_vote::UNKNOWN_NODE:
-            if (_nodes.get_my_node().is_voting() && _me.connected == node_status::DISCONNECTING)
+        case ReqVoteState::UnknownNode:
+            if (_nodes.get_my_node().is_voting() && _me.connected == NodeStatus::Disconnecting)
                 return Error::Shutdown;
             break;
 
@@ -476,14 +476,14 @@ bmcl::Option<Error> Server::accept_requestvote_response(node_id nodeid, const ms
     return bmcl::None;
 }
 
-bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t& e)
+bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e)
 {
     if (!is_leader())
         return Error::NotLeader;
 
     __log(_nodes.get_my_id(), "received entry t:%d id: %d idx: %d", _me.current_term, e.id, _log.get_current_idx() + 1);
 
-    raft_entry_t ety = e;
+    LogEntry ety = e;
     ety.term = _me.current_term;
     auto r = entry_append(ety);
     if (r.isSome())
@@ -506,21 +506,21 @@ bmcl::Result<msg_entry_response_t, Error> Server::accept_entry(const msg_entry_t
             send_appendentries(i);
     }
 
-    return msg_entry_response_t(_me.current_term, e.id, _log.get_current_idx());
+    return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
 }
 
-void Server::entry_append_impl(const raft_entry_t& ety, const std::size_t idx)
+void Server::entry_append_impl(const LogEntry& ety, const std::size_t idx)
 {
     if (!ety.is_cfg_change())
         return;
 
     assert(ety.node.isSome());
-    node_id id = ety.node.unwrap();
+    NodeId id = ety.node.unwrap();
     bmcl::Option<Node&> node = _nodes.get_node(id);
 
     switch (ety.type)
     {
-    case logtype_e::ADD_NONVOTING_NODE:
+    case LotType::AddNonVotingNode:
         if (!_nodes.is_me(id))
         {
             bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
@@ -528,17 +528,17 @@ void Server::entry_append_impl(const raft_entry_t& ety, const std::size_t idx)
         }
         break;
 
-    case logtype_e::ADD_NODE:
+    case LotType::AddNode:
         node = _nodes.add_node(id);
         assert(node.isSome());
         assert(node->is_voting());
         break;
 
-    case logtype_e::DEMOTE_NODE:
+    case LotType::DemoteNode:
         node->set_voting(false);
         break;
 
-    case logtype_e::REMOVE_NODE:
+    case LotType::RemoveNode:
         if (node.isSome())
             _nodes.remove_node(node->get_id());
         break;
@@ -548,7 +548,7 @@ void Server::entry_append_impl(const raft_entry_t& ety, const std::size_t idx)
     }
 }
 
-void Server::entry_apply_node_add(const raft_entry_t& ety, node_id id)
+void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
 {
     bmcl::Option<Node&> node = _nodes.get_node(id);
     assert(node.isSome());
@@ -556,41 +556,41 @@ void Server::entry_apply_node_add(const raft_entry_t& ety, node_id id)
     {
         node->set_has_sufficient_logs();
         if (_nodes.is_me(node->get_id()))
-            _me.connected = node_status::CONNECTED;
+            _me.connected = NodeStatus::Connected;
     }
 }
 
-void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
+void Server::pop_log(const LogEntry& ety, const std::size_t idx)
 {
     if (!ety.is_cfg_change())
         return;
 
     assert(ety.node.isSome());
-    node_id id = ety.node.unwrap();
+    NodeId id = ety.node.unwrap();
 
     switch (ety.type)
     {
-    case logtype_e::DEMOTE_NODE:
+    case LotType::DemoteNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(true);
     }
     break;
 
-    case logtype_e::REMOVE_NODE:
+    case LotType::RemoveNode:
     {
         bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
         assert(node.isSome());
     }
     break;
 
-    case logtype_e::ADD_NONVOTING_NODE:
+    case LotType::AddNonVotingNode:
     {
         _nodes.remove_node(id);
     }
     break;
 
-    case logtype_e::ADD_NODE:
+    case LotType::AddNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(false);
@@ -603,7 +603,7 @@ void Server::pop_log(const raft_entry_t& ety, const std::size_t idx)
     }
 }
 
-bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
+bmcl::Option<Error> Server::entry_append(const LogEntry& ety)
 {
     auto e = _log.entry_append(ety);
     if (e.isSome())
@@ -612,7 +612,7 @@ bmcl::Option<Error> Server::entry_append(const raft_entry_t& ety)
     return bmcl::None;
 }
 
-bmcl::Option<Error> Server::send_appendentries(const bmcl::Option<node_id>& node)
+bmcl::Option<Error> Server::send_appendentries(const bmcl::Option<NodeId>& node)
 {
     bmcl::Option<Node&> n = _nodes.get_node(node);
     if (n.isNone()) return Error::NodeUnknown;
@@ -623,7 +623,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
 {
     assert(!_nodes.is_me(node.get_id()));
 
-    msg_appendentries_t ae(_me.current_term, 0, 0, _log.get_commit_idx());
+    MsgAppendEntriesReq ae(_me.current_term, 0, 0, _log.get_commit_idx());
     std::size_t next_idx = node.get_next_idx();
 
     ae.entries = _log.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
@@ -631,7 +631,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
     /* previous log is the log just before the new logs */
     if (1 < next_idx)
     {
-        bmcl::Option<const raft_entry_t&> prev_ety = _log.get_at_idx(next_idx - 1);
+        bmcl::Option<const LogEntry&> prev_ety = _log.get_at_idx(next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
             ae.prev_log_term = prev_ety.unwrap().term;
@@ -645,7 +645,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
           ae.prev_log_idx,
           ae.prev_log_term);
 
-    return _sender->send_appendentries(node.get_id(), ae);
+    return _sender->append_entries(node.get_id(), ae);
 }
 
 void Server::send_appendentries_all()
@@ -659,7 +659,7 @@ void Server::send_appendentries_all()
     }
 }
 
-void Server::vote_for_nodeid(node_id nodeid)
+void Server::vote_for_nodeid(NodeId nodeid)
 {
     _me.voted_for = nodeid;
     _saver->persist_vote(nodeid);
@@ -675,10 +675,10 @@ void Server::set_current_term(std::size_t term)
     }
 }
 
-void Server::set_state(raft_state_e state)
+void Server::set_state(State state)
 {
     /* if became the leader, then update the current leader entry */
-    if (state == raft_state_e::LEADER)
+    if (state == State::Leader)
         _me.current_leader = _nodes.get_my_id();
     _me.state = state;
 }

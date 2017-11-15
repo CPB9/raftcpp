@@ -17,21 +17,21 @@ public:
     std::size_t count() const;
     bool empty() const;
 
-    bmcl::Option<const raft_entry_t*> get_from_idx(std::size_t idx, std::size_t *n_etys) const;
-    bmcl::Option<const raft_entry_t&> get_at_idx(std::size_t idx) const;
-    bmcl::Option<const raft_entry_t&> back() const;
-    bmcl::Option<const raft_entry_t&> front() const;
+    bmcl::Option<const LogEntry*> get_from_idx(std::size_t idx, std::size_t *n_etys) const;
+    bmcl::Option<const LogEntry&> get_at_idx(std::size_t idx) const;
+    bmcl::Option<const LogEntry&> back() const;
+    bmcl::Option<const LogEntry&> front() const;
     std::size_t get_current_idx() const;
     std::size_t get_front_idx() const;
 
 protected:
-    void append(const raft_entry_t& c);
-    bmcl::Option<raft_entry_t> pop_front();
-    bmcl::Option<raft_entry_t> pop_back();
+    void append(const LogEntry& c);
+    bmcl::Option<LogEntry> pop_front();
+    bmcl::Option<LogEntry> pop_back();
 
 private:
     std::size_t _base;
-    std::vector<raft_entry_t> _entries;
+    std::vector<LogEntry> _entries;
 };
 
 class LogCommitter : public Logger
@@ -50,15 +50,15 @@ public:
     inline bool is_all_committed() const { return get_last_applied_idx() >= _commit_idx; }
     inline bool voting_change_is_in_progress() const { return _voting_cfg_change_log_idx.isSome(); }
     bmcl::Option<std::size_t> get_last_log_term() const;
-    raft_entry_state_e entry_get_state(const msg_entry_response_t& r) const;
+    EntryState entry_get_state(const MsgAddEntryRep& r) const;
 
     void commit_till(std::size_t idx);
     inline void commit_all() { set_commit_idx(get_current_idx()); }
     void set_commit_idx(std::size_t idx);
 
-    bmcl::Option<Error> entry_append(const raft_entry_t& ety);
-    bmcl::Result<raft_entry_t, Error> entry_apply_one();
-    bmcl::Option<raft_entry_t> entry_pop_back();
+    bmcl::Option<Error> entry_append(const LogEntry& ety);
+    bmcl::Result<LogEntry, Error> entry_apply_one();
+    bmcl::Option<LogEntry> entry_pop_back();
     void entry_pop_front();
 
 private:

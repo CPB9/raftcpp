@@ -14,12 +14,12 @@ TEST(TestScenario, leader_appears)
     const std::size_t Count = 3;
     for (std::size_t i = 0; i < Count; ++i)
     {
-        r.emplace_back(raft::Server(raft::node_id(i), true, nullptr, &saver));
+        r.emplace_back(raft::Server(raft::NodeId(i), true, nullptr, &saver));
         raft::Server& rx = r.back();
 
         for(std::size_t j = 1; j < Count; ++j)
         {
-            rx.nodes().add_node(raft::node_id((i + j) % Count));
+            rx.nodes().add_node(raft::NodeId((i + j) % Count));
         }
         rx.set_election_timeout(std::chrono::milliseconds(500));
     }
@@ -41,12 +41,12 @@ one_more_time:
         for (std::size_t j = 0; j < 3; j++)
         {
             std::cout << " (" << r[j].get_current_term() << ", "<< (int)r[j].get_state()<< ")";
-            sender.sender_poll_msgs(raft::node_id(j));
+            sender.sender_poll_msgs(raft::NodeId(j));
         }
         std::cout << std::endl;
 
         for (std::size_t j = 0; j < 3; j++)
-            if (sender.sender_msgs_available(raft::node_id(j)))
+            if (sender.sender_msgs_available(raft::NodeId(j)))
                 goto one_more_time;
 
         for (std::size_t j = 0; j < 3; j++)
