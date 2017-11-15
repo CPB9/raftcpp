@@ -128,7 +128,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
             NodeId id = ety.node.unwrap();
             entry_apply_node_add(ety, id);
         }
-        __log(_nodes.get_my_id(), "applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.len);
+        __log(_nodes.get_my_id(), "applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.data.size());
         return bmcl::None;
     }
 

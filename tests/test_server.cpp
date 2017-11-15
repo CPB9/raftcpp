@@ -121,15 +121,15 @@ TEST(TestLog, append_entry_is_retrievable)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.set_current_term(5);
+    r.set_state(State::Leader);
 
     LogEntry ety(3, 100, raft::LogEntryData("aaa", 4));
-    r.log().entry_append(ety);
+    r.accept_entry(ety);
 
     bmcl::Option<const LogEntry&> kept = r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
-    EXPECT_NE(nullptr, kept.unwrap().data.buf);
-    EXPECT_EQ(ety.data.len, kept.unwrap().data.len);
-    EXPECT_EQ(kept.unwrap().data.buf, ety.data.buf);
+    EXPECT_FALSE(kept.unwrap().data.data.empty());
+    EXPECT_EQ(ety.data.data, kept.unwrap().data.data);
     EXPECT_EQ(kept.unwrap().term, 5);
 }
 
@@ -141,25 +141,24 @@ TEST(TestLog, append_entry_user_can_set_data_buf)
     r.log().entry_append(ety);
     bmcl::Option<const LogEntry&> kept = r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
-    EXPECT_NE(nullptr, kept.unwrap().data.buf);
-    EXPECT_EQ(kept.unwrap().data.buf, ety.data.buf);
+    EXPECT_EQ(ety.data.data, kept.unwrap().data.data);
 }
 
 TEST(TestLog, entry_is_retrieveable_using_idx)
 {
-    char *str = "aaa";
-    char *str2 = "bbb";
+    std::vector<uint8_t> str = {1, 1, 1, 1};
+    std::vector<uint8_t> str2 = {2, 2, 2};
 
     raft::LogCommitter lc(&__Saver);
 
-    lc.entry_append(LogEntry(1, 1, raft::LogEntryData(str, 4)));
+    lc.entry_append(LogEntry(1, 1, raft::LogEntryData(str)));
 
     /* different ID so we can be successful */
-    lc.entry_append(LogEntry(1, 2, raft::LogEntryData(str2, 4)));
+    lc.entry_append(LogEntry(1, 2, raft::LogEntryData(str2)));
 
     bmcl::Option<const LogEntry&> ety_appended = lc.get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str2, 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, str2);
 }
 
 
@@ -621,30 +620,27 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
     EXPECT_FALSE(aer.unwrap().success);
 }
 
-static void __create_mock_entries_for_conflict_tests(raft::LogCommitter* lc, char** strs)
+static void __create_mock_entries_for_conflict_tests(raft::LogCommitter* lc, std::vector<uint8_t>* strs)
 {
     bmcl::Option<const LogEntry&> ety_appended;
 
     /* increase log size */
-    char *str1 = strs[0];
-    lc->entry_append(LogEntry(1, 1, raft::LogEntryData(str1, 3)));
+    lc->entry_append(LogEntry(1, 1, raft::LogEntryData(strs[0])));
     EXPECT_EQ(1, lc->count());
 
     /* this log will be overwritten by a later appendentries */
-    char *str2 = strs[1];
-    lc->entry_append(LogEntry(1, 2, raft::LogEntryData(str2, 3)));
+    lc->entry_append(LogEntry(1, 2, raft::LogEntryData(strs[1])));
     EXPECT_EQ(2, lc->count());
     ety_appended = lc->get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str2, 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, strs[1]);
 
     /* this log will be overwritten by a later appendentries */
-    char *str3 = strs[2];
-    lc->entry_append(LogEntry(1, 3, raft::LogEntryData(str3, 4)));
+    lc->entry_append(LogEntry(1, 3, raft::LogEntryData(strs[2])));
     EXPECT_EQ(3, lc->count());
     ety_appended = lc->get_at_idx(3);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str3, 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, strs[2]);
 }
 
 /* 5.3 */
@@ -654,7 +650,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     r.nodes().add_node(raft::NodeId(2));
     r.set_current_term(1);
 
-    char* strs[] = {"111", "222", "333"};
+    std::vector<uint8_t> strs[] = { {1, 1, 1}, {2, 2, 2}, {3, 3, 3} };
     __create_mock_entries_for_conflict_tests(&r.log(), strs);
 
     /* pass a appendentry that is newer  */
@@ -662,8 +658,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     /* entries from 2 onwards will be overwritten by this appendentries message */
     MsgAppendEntriesReq ae(2, 1, 1, 0);
     /* include one entry */
-    char *str4 = "444";
-    MsgAddEntryReq mety = MsgAddEntryReq(0, 4, LogEntryData(str4, 3));
+    std::vector<uint8_t> str4 = {4, 4, 4};
+    MsgAddEntryReq mety = MsgAddEntryReq(0, 4, LogEntryData(str4));
     ae.entries = &mety;
     ae.n_entries = 1;
 
@@ -675,12 +671,12 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 
     bmcl::Option<const LogEntry&> ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, strs[0], 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, strs[0]);
     /* str4 has overwritten the last 2 entries */
 
     ety_appended = r.log().get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str4, 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, str4);
 }
 
 TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entries_via_prev_log_idx_at_idx_0)
@@ -689,7 +685,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     r.nodes().add_node(raft::NodeId(2));
     r.set_current_term(1);
 
-    char* strs[] = {"111", "222", "333"};
+    std::vector<uint8_t> strs[] = { { 1, 1, 1 },{ 2, 2, 2 },{ 3, 3, 3 } };
     __create_mock_entries_for_conflict_tests(&r.log(), strs);
 
     /* pass a appendentry that is newer  */
@@ -697,8 +693,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     /* ALL append entries will be overwritten by this appendentries message */
     MsgAppendEntriesReq ae(2, 0, 0, 0);
     /* include one entry */
-    char *str4 = "444";
-    MsgAddEntryReq mety = LogEntry(0, 4, LogEntryData(str4, 3));
+    std::vector<uint8_t> str4 = { 4, 4, 4 };
+    MsgAddEntryReq mety = LogEntry(0, 4, LogEntryData(str4));
     ae.entries = &mety;
     ae.n_entries = 1;
 
@@ -709,7 +705,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     /* str1 is gone */
     bmcl::Option<const LogEntry&> ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, str4, 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, str4);
 }
 
 TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than_prev_log_idx)
@@ -719,9 +715,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
 
     r.set_current_term(1);
 
-    char* strs[] = {"111", "222", "333"};
-    bmcl::Option<const LogEntry&> ety_appended;
-    
+    std::vector<uint8_t> strs[] = { { 1, 1, 1 },{ 2, 2, 2 },{ 3, 3, 3 } };
     __create_mock_entries_for_conflict_tests(&r.log(), strs);
     EXPECT_EQ(3, r.log().count());
 
@@ -734,9 +728,9 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, r.log().count());
-    ety_appended = r.log().get_at_idx(1);
+    bmcl::Option<const LogEntry&> ety_appended = r.log().get_at_idx(1);
     EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(0, strncmp((const char*)ety_appended.unwrap().data.buf, strs[0], 3));
+    EXPECT_EQ(ety_appended.unwrap().data.data, strs[0]);
 }
 
 // TODO: add TestRaft_follower_recv_appendentries_delete_entries_if_term_is_different

@@ -70,10 +70,10 @@ using Index = std::size_t;
 
 struct LogEntryData
 {
-    LogEntryData() : buf(nullptr), len(0) {}
-    LogEntryData(void* buf, std::size_t len) : buf(buf), len(len) {}
-    void* buf;
-    std::size_t len;
+    LogEntryData() {}
+    LogEntryData(const std::vector<uint8_t>& data) : data(data) {}
+    LogEntryData(void* buf, std::size_t len) : data((uint8_t*)buf, (uint8_t*)buf + len){ }
+    std::vector<uint8_t> data;
 };
 
 /** Entry that is stored in the server's entry log. */
