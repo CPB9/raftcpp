@@ -97,7 +97,10 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     if (is_leader())
     {
         if (_me.request_timeout <= _me.timeout_elapsed)
+        {
             send_appendentries_all();
+            _me.timeout_elapsed = std::chrono::milliseconds(0);
+        }
     }
     else if (_me.election_timeout <= _me.timeout_elapsed)
     {
@@ -646,7 +649,6 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
 
 void Server::send_appendentries_all()
 {
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()))
