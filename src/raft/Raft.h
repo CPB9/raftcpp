@@ -79,7 +79,6 @@ public:
     void become_leader();
     void become_candidate();
     void become_follower();
-    void election_start();
     bmcl::Option<Error> send_appendentries(const bmcl::Option<NodeId>& node);
     bmcl::Option<Error> send_appendentries(const Node& node);
     void send_appendentries_all();

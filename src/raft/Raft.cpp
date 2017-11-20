@@ -43,15 +43,6 @@ Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     set_state(State::Follower);
 }
 
-void Server::election_start()
-{
-    __log(_nodes.get_my_id(), "election starting: %d %d, term: %d ci: %d",
-          _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
-          _log.get_current_idx());
-
-    become_candidate();
-}
-
 void Server::become_leader()
 {
     __log(_nodes.get_my_id(), "becoming leader term:%d", get_current_term());
@@ -114,7 +105,13 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
         {
             const Node& node = _nodes.get_my_node();
             if (node.is_voting())
-                election_start();
+            {
+                __log(_nodes.get_my_id(), "election starting: %d %d, term: %d ci: %d",
+                    _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
+                    _log.get_current_idx());
+
+                become_candidate();
+            }
         }
     }
 

@@ -67,11 +67,11 @@ TEST(TestServer, voting_results_in_voting)
     EXPECT_EQ(raft::NodeId(9), r.get_voted_for());
 }
 
-TEST(TestServer, election_start_increments_term)
+TEST(TestServer, become_candidate_increments_term)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.set_current_term(1);
-    r.election_start();
+    r.become_candidate();
     EXPECT_EQ(2, r.get_current_term());
 }
 
@@ -2182,7 +2182,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     r.set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
-    r.election_start();
+    r.become_candidate();
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
     EXPECT_TRUE(r.is_leader());
@@ -2202,7 +2202,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     r.set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
-    r.election_start();
+    r.become_candidate();
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
     EXPECT_TRUE(r.is_leader());
