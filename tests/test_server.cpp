@@ -78,7 +78,7 @@ TEST(TestServer, become_candidate_increments_term)
 TEST(TestServer, set_state)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.set_state(State::Leader);
+    r.become_leader();
     EXPECT_EQ(State::Leader, r.get_state());
 }
 
@@ -121,7 +121,7 @@ TEST(TestLog, append_entry_is_retrievable)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.set_current_term(5);
-    r.set_state(State::Leader);
+    r.become_leader();
 
     LogEntry ety(3, 100, raft::LogEntryData("aaa", 4));
     r.accept_entry(ety);
@@ -1340,7 +1340,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     r.nodes().add_node(raft::NodeId(2));
 
     /* I am the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
     EXPECT_EQ(0, r.log().count());
 
     /* receive entry */
@@ -1375,9 +1375,8 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
-
-    /* i'm leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+    sender.clear();
 
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
@@ -1398,16 +1397,11 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
-
-    /* i'm leader */
-    r.set_state(State::Leader);
-
-    for (int i=0; i<10; i++)
-    {
+    r.become_leader();
+    for (std::size_t i = 0; i < 10; i++)
         r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
-    }
-
     r.log().set_commit_idx(10);
+    sender.clear();
 
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
@@ -1426,9 +1420,9 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
+    r.become_leader();
+    sender.clear();
 
-    /* i'm leader */
-    r.set_state(State::Leader);
 
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
@@ -1479,9 +1473,8 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
-
-    /* i'm leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+    sender.clear();
 
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
@@ -1516,9 +1509,8 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
-
-    /* i'm leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+    sender.clear();
 
     /* receive appendentries messages */
     r.send_appendentries(raft::NodeId(2));
@@ -1538,7 +1530,8 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.set_state(State::Leader);
+    r.become_leader();
+
     EXPECT_EQ(0, r.log().count());
 
     auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
@@ -1557,7 +1550,8 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.nodes().add_node(raft::NodeId(5));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
     /* the last applied idx will became 1, and then 2 */
 
@@ -1609,7 +1603,8 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     r.nodes().add_non_voting_node(raft::NodeId(5));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
     /* the last applied idx will became 1, and then 2 */
 
@@ -1638,7 +1633,8 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     r.nodes().add_node(raft::NodeId(3));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
     /* the last applied idx will became 1, and then 2 */
 
@@ -1670,7 +1666,8 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.nodes().add_node(raft::NodeId(4));
     r.nodes().add_node(raft::NodeId(5));
 
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(2);
 
     /* append entries - we need two */
@@ -1864,9 +1861,8 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 
     r.nodes().add_node(raft::NodeId(2));
     r.nodes().add_node(raft::NodeId(3));
-
-    /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+    sender.clear();
     r.set_current_term(1);
     /* the last applied idx will became 1, and then 2 */
 
@@ -1893,7 +1889,8 @@ TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
     r.nodes().add_node(raft::NodeId(3));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
 
     /* receive mock success responses */
@@ -1904,7 +1901,8 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.set_election_timeout(std::chrono::milliseconds(1000));
-    r.set_state(State::Leader);
+    r.become_leader();
+
 
     r.raft_periodic(std::chrono::milliseconds(900));
 
@@ -1919,7 +1917,8 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
 
     /* receive entry */
@@ -1936,7 +1935,8 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
 
     /* receive entry */
@@ -1969,8 +1969,9 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     Exchanger sender(&r);
 
     r.nodes().add_node(raft::NodeId(2));
-    r.set_state(State::Leader);
+    r.become_leader();
     r.set_current_term(1);
+    sender.clear();
 
     /* make the node slow */
     r.nodes().get_node(raft::NodeId(2))->set_next_idx(1);
@@ -1997,7 +1998,8 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     r.nodes().add_node(raft::NodeId(2));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
 
     /* append entries */
@@ -2024,7 +2026,8 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
     r.nodes().add_node(raft::NodeId(2));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(1);
 
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
@@ -2044,7 +2047,8 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     r.nodes().add_node(raft::NodeId(2));
 
     /* I'm the leader */
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(2);
 
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
@@ -2061,7 +2065,8 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(5);
     /* check that node 0 considers itself the leader */
     EXPECT_TRUE(r.is_leader());
@@ -2081,7 +2086,8 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.set_state(State::Leader);
+    r.become_leader();
+
     r.set_current_term(5);
 
     auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(6, 5, 5, 0));

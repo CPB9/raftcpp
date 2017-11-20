@@ -70,6 +70,7 @@ class Exchanger
 public:
     explicit Exchanger(raft::Server* r = nullptr) { if (r) add(r); }
     void add(raft::Server* r);
+    void clear();
     bool msgs_available(raft::NodeId from);
     void poll_msgs(raft::NodeId from);
     bmcl::Option<msg_t> poll_msg_data(const raft::Server& from);

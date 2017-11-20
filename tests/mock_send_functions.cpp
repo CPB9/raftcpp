@@ -20,6 +20,15 @@ void Exchanger::add(raft::Server* r)
     r->set_sender(s.sender.get());
 }
 
+void Exchanger::clear()
+{
+    for (auto& i : _servers)
+    {
+        i.second.inbox.clear();
+        i.second.outbox.clear();
+    }
+}
+
 bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::NodeId& from, const raft::NodeId& to, const void* data, int len, raft_message_type_e type)
 {
     auto f = _servers[from].raft;
