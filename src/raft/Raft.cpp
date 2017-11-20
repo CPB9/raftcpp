@@ -331,36 +331,35 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     return r;
 }
 
-static bool __should_grant_vote(Server* me, const MsgVoteReq& vr)
+static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
 {
     /* TODO: 4.2.3 Raft Dissertation:
      * if a server receives a RequestVote request within the minimum election
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
 
-    if (!me->nodes().get_my_node().is_voting())
+    if (!me.nodes().get_my_node().is_voting())
         return false;
 
-    if (vr.term < me->get_current_term())
+    if (vr.term < me.get_current_term())
         return false;
 
     /* TODO: if voted for is candiate return 1 (if below checks pass) */
-    if (me->is_already_voted())
+    if (me.is_already_voted())
         return false;
 
     /* Below we check if log is more up-to-date... */
 
-    Index current_idx = me->log().get_current_idx();
+    Index current_idx = me.log().get_current_idx();
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const LogEntry&> e = me->log().get_at_idx(current_idx);
+    bmcl::Option<const LogEntry&> e = me.log().get_at_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
-
 
     if (e.unwrap().term < vr.last_log_term)
         return true;
@@ -401,7 +400,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
         become_follower();
     }
 
-    if (!__should_grant_vote(this, vr))
+    if (!__should_grant_vote(*this, vr))
         return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
@@ -609,7 +608,7 @@ bmcl::Option<Error> Server::entry_append(const LogEntry& ety)
     return bmcl::None;
 }
 
-bmcl::Option<Error> Server::send_appendentries(const bmcl::Option<NodeId>& node)
+bmcl::Option<Error> Server::send_appendentries(NodeId node)
 {
     bmcl::Option<Node&> n = _nodes.get_node(node);
     if (n.isNone()) return Error::NodeUnknown;

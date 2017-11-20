@@ -1384,7 +1384,7 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
     p->set_next_idx(4);
 
     /* receive appendentries messages */
-    r.send_appendentries(p.unwrap());
+    r.send_appendentries(p.unwrap().get_id());
 
     bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1446,7 +1446,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* receive appendentries messages */
     r.log().entry_append(MsgAddEntryReq(2, 100, raft::LogEntryData("aaa", 4)));
     n->set_next_idx(1);
-    r.send_appendentries(n.unwrap());
+    r.send_appendentries(n.unwrap().get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1498,7 +1498,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     bmcl::Option<raft::Node&> n = r.nodes().get_node(raft::NodeId(2));
     n->set_next_idx(1);
     r.log().entry_append(MsgAddEntryReq(1, 100, raft::LogEntryData("aaa", 4)));
-    r.send_appendentries(n.unwrap());
+    r.send_appendentries(n.unwrap().get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1545,37 +1545,6 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
 }
-
-#if 0
-// TODO no support for duplicates
-void T_estRaft_leader_doesnt_append_entry_if_unique_id_is_duplicate()
-{
-    void *r;
-
-    /* 2 nodes */
-    raft_node_configuration_t cfg[] = {
-        { (void*)1 },
-        { (void*)2 },
-        { NULL     }
-    };
-
-    msg_entry_t ety;
-    ety.id = 1;
-    ety.data = raft::raft_entry_data_t("aaa", 4);
-
-    r = raft_new();
-    raft_set_configuration(r, cfg, 0);
-
-    r.raft_set_state(raft_state_e::RAFT_STATE_LEADER);
-    EXPECT_EQ(0, r.raft_get_log_count());
-
-    r.raft_recv_entry(1, &ety);
-    EXPECT_EQ(1, r.raft_get_log_count());
-
-    r.raft_recv_entry(1, &ety);
-    EXPECT_EQ(1, r.raft_get_log_count());
-}
-#endif
 
 TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_have_entry_and_atleast_one_newer_entry)
 {

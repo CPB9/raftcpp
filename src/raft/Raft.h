@@ -79,11 +79,11 @@ public:
     void become_leader();
     void become_candidate();
     void become_follower();
-    bmcl::Option<Error> send_appendentries(const bmcl::Option<NodeId>& node);
-    bmcl::Option<Error> send_appendentries(const Node& node);
+    bmcl::Option<Error> send_appendentries(NodeId node);
     void send_appendentries_all();
 
 private:
+    bmcl::Option<Error> send_appendentries(const Node& node);
     void entry_apply_node_add(const LogEntry& ety, NodeId id);
     void pop_log(const LogEntry& ety, Index idx);
     bmcl::Option<Error> entry_append(const LogEntry& ety);
