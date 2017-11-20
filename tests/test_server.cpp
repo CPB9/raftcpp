@@ -168,8 +168,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
 
-    /* must be follower */
-    r.set_state(State::Follower);
+    r.become_follower();
     r.set_current_term(1);
 
     /* need at least one entry */
@@ -554,8 +553,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-
-    r.set_state(State::Follower);
+    r.become_follower();
 
     /*  log size s */
     EXPECT_EQ(0, r.log().count());
@@ -570,8 +568,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-
-    r.set_state(State::Follower);
+    r.become_follower();
 
     /*  log size s */
     EXPECT_EQ(0, r.log().count());
@@ -1356,8 +1353,7 @@ void TestRaft_non_leader_recv_entry_msg_fails()
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-
-    r.set_state(State::Follower);
+    r.become_follower();
 
     /* entry message */
     MsgAddEntryReq ety(0, 1, raft::LogEntryData("aaa", 4));
