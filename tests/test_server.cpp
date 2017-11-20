@@ -1177,7 +1177,8 @@ TEST(TestCandidate, requestvote_includes_logidx)
     sender.add(&r3);
 
     r.nodes().add_node(raft::NodeId(2));
-    r.set_state(State::Candidate);
+    r.become_candidate();
+    sender.clear();
 
     r.set_current_term(5);
     /* 3 entries */
@@ -1201,8 +1202,8 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
+    r.become_candidate();
     r.set_current_term(1);
-    r.set_state(State::Candidate);
     r.vote_for_nodeid(raft::NodeId(2));
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
@@ -1220,19 +1221,18 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.set_state(State::Candidate);
-    //r.vote_for_nodeid(bmcl::None);
+    r.become_candidate();
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
-    EXPECT_EQ(0, r.get_current_term());
+    EXPECT_EQ(1, r.get_current_term());
 
     /* receive recent appendentries */
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(2));
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(r.is_follower());
     /* after accepting a leader, it's available as the last known leader */
     EXPECT_EQ(raft::NodeId(2), r.get_current_leader());
-    EXPECT_EQ(1, r.get_current_term());
+    EXPECT_EQ(2, r.get_current_term());
     EXPECT_FALSE(r.get_voted_for().isSome());
 }
 
@@ -1289,7 +1289,7 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
     r.nodes().add_node(raft::NodeId(3));
 
     /* candidate to leader */
-    r.set_state(State::Candidate);
+    r.become_candidate();
     r.become_leader();
 
     int i;
@@ -1311,7 +1311,7 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     r.nodes().add_node(raft::NodeId(3));
 
     /* candidate to leader */
-    r.set_state(State::Candidate);
+    r.become_candidate();
     r.become_leader();
 
     /* receive appendentries messages for both nodes */
@@ -2103,7 +2103,8 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
     /* candidate to leader */
-    r.set_state(State::Candidate);
+    r.become_candidate();
+    sender.clear();
     r.become_leader();
 
     bmcl::Option<msg_t> msg;
