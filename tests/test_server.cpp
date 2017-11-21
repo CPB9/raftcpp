@@ -525,16 +525,24 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
 TEST(TestFollower, becomes_follower_is_follower)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.become_follower();
+    r.nodes().add_node(raft::NodeId(2));
+    prepare_follower(r);
     EXPECT_TRUE(r.is_follower());
 }
 
 TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.vote_for_nodeid(raft::NodeId(1));
+    r.nodes().add_node(raft::NodeId(2));
+    r.nodes().add_node(raft::NodeId(3));
+
+    prepare_candidate(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
-    r.become_follower();
+
+    raft::MsgAppendEntriesReq ae{ r.get_current_term(), r.log().get_current_idx(), r.log().get_last_log_term().unwrapOr(0), 0 };
+    r.accept_req(raft::NodeId(2), ae);
+    EXPECT_TRUE(r.is_follower());
+
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 }
 
@@ -597,7 +605,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.become_follower();
+    prepare_follower(r);
 
     /*  log size s */
     EXPECT_EQ(0, r.log().count());
@@ -612,7 +620,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.become_follower();
+    prepare_follower(r);
 
     /*  log size s */
     EXPECT_EQ(0, r.log().count());
@@ -1159,8 +1167,8 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
 
-    /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.get_election_timeout() + std::chrono::milliseconds(1));
+    /* clock over (ie. 2*1000 + 1) to overcome possible negative timeout, causing new election */
+    r.raft_periodic(2*r.get_election_timeout() + std::chrono::milliseconds(1));
     EXPECT_EQ(2, r.get_current_term());
 
     /*  receiving this vote gives the server majority */
@@ -1398,7 +1406,7 @@ void TestRaft_non_leader_recv_entry_msg_fails()
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.become_follower();
+    prepare_follower(r);
 
     /* entry message */
     MsgAddEntryReq ety(0, 1, raft::LogEntryData("aaa", 4));
@@ -1916,7 +1924,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     EXPECT_TRUE(sender.poll_msg_data(r).isSome());
     EXPECT_TRUE(sender.poll_msg_data(r).isSome());
 
-    r.become_follower();
+    prepare_follower(r);
 
     /* receive mock success responses */
     EXPECT_TRUE(r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1)).isSome());
