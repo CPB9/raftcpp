@@ -98,7 +98,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     {
         if (_me.request_timeout <= _me.timeout_elapsed)
         {
-            send_appendentries_all();
+            send_appendentries_to_all();
             _me.timeout_elapsed = std::chrono::milliseconds(0);
         }
     }
@@ -647,7 +647,7 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
     return _sender->append_entries(node.get_id(), ae);
 }
 
-void Server::send_appendentries_all()
+void Server::send_appendentries_to_all()
 {
     for (const Node& i: _nodes.items())
     {

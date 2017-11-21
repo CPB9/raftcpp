@@ -6,6 +6,48 @@
 
 using namespace raft;
 
+static void prepare_follower(raft::Server& r)
+{
+    EXPECT_GT(r.nodes().count(), 1);
+    raft::NodeId leader;
+    if (r.nodes().items().front().get_id() != r.nodes().get_my_id())
+        leader = r.nodes().items().front().get_id();
+    else
+        leader = r.nodes().items().back().get_id();
+
+    r.accept_req(leader, raft::MsgVoteReq(r.get_current_term() + 1, r.log().get_current_idx(), r.log().get_last_log_term().unwrapOr(0)));
+    EXPECT_TRUE(r.is_follower());
+}
+
+static void prepare_candidate(raft::Server& r)
+{
+    EXPECT_GT(r.nodes().count(), 1);
+    r.raft_periodic(r.get_election_timeout());
+    EXPECT_TRUE(r.is_candidate());
+}
+
+static void prepare_leader(raft::Server& r)
+{
+    EXPECT_GT(r.nodes().count(), 1);
+
+    if (r.nodes().count() > 1)
+    {
+        for (const auto& i : r.nodes().items())
+        {
+            r.nodes().get_node(i.get_id())->vote_for_me(true);
+        }
+    }
+    raft::NodeId last_voter;
+    if (r.nodes().items().front().get_id() != r.nodes().get_my_id())
+        last_voter = r.nodes().items().front().get_id();
+    else
+        last_voter = r.nodes().items().back().get_id();
+
+    r.accept_rep(last_voter, raft::MsgVoteRep(r.get_current_term(), raft::ReqVoteState::Granted));
+
+    EXPECT_TRUE(r.is_leader());
+}
+
 class DefualtSender : public ISender
 {
 public:
@@ -70,8 +112,9 @@ TEST(TestServer, voting_results_in_voting)
 TEST(TestServer, become_candidate_increments_term)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    r.nodes().add_node(raft::NodeId(2));
     r.set_current_term(1);
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(2, r.get_current_term());
 }
 
@@ -167,8 +210,9 @@ TEST(TestLog, entry_is_retrieveable_using_idx)
 TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    r.nodes().add_node(raft::NodeId(2));
 
-    r.become_follower();
+    prepare_follower(r);
     r.set_current_term(1);
 
     /* need at least one entry */
@@ -349,7 +393,7 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
     EXPECT_EQ(1, r.get_current_term());
 
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
@@ -427,7 +471,7 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.become_candidate();
+    prepare_candidate(r);
     r.set_current_term(1);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -442,7 +486,7 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.become_candidate();
+    prepare_candidate(r);
     r.set_current_term(1);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -1011,7 +1055,8 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
 TEST(TestCandidate, becomes_candidate_is_candidate)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.become_candidate();
+    r.nodes().add_node(raft::NodeId(2));
+    prepare_candidate(r);
     EXPECT_TRUE(r.is_candidate());
 }
 
@@ -1019,9 +1064,9 @@ TEST(TestCandidate, becomes_candidate_is_candidate)
 TEST(TestFollower, becoming_candidate_increments_current_term)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-
+    r.nodes().add_node(raft::NodeId(2));
     EXPECT_EQ(0, r.get_current_term());
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
 }
 
@@ -1029,17 +1074,18 @@ TEST(TestFollower, becoming_candidate_increments_current_term)
 TEST(TestFollower, becoming_candidate_votes_for_self)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-
+    r.nodes().add_node(raft::NodeId(2));
     EXPECT_FALSE(r.get_voted_for().isSome());
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(r.nodes().get_my_id(), r.get_voted_for());
-    EXPECT_EQ(1, r.nodes().count());
+    EXPECT_EQ(2, r.nodes().count());
 }
 
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_resets_election_timeout)
 {
-    raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    r.nodes().add_node(raft::NodeId(2));
 
     r.set_election_timeout(std::chrono::milliseconds(1000));
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
@@ -1047,9 +1093,9 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     r.raft_periodic(std::chrono::milliseconds(900));
     EXPECT_EQ(900, r.get_timeout_elapsed().count());
 
-    r.become_candidate();
+    prepare_candidate(r);
     /* time is selected randomly */
-    EXPECT_TRUE(r.get_timeout_elapsed().count() < 1000);
+    EXPECT_LT(r.get_timeout_elapsed().count(), 1000);
 }
 
 TEST(TestFollower, recv_appendentries_resets_election_timeout)
@@ -1082,7 +1128,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
     r.set_current_term(2);
 
     /* becoming candidate triggers vote requests */
-    r.become_candidate();
+    prepare_candidate(r);
 
     bmcl::Option<msg_t> msg;
     MsgVoteReq* rv;
@@ -1110,11 +1156,11 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     r.set_election_timeout(std::chrono::milliseconds(1000));
 
     /* server wants to be leader, so becomes candidate */
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.get_election_timeout() + std::chrono::milliseconds(1));
     EXPECT_EQ(2, r.get_current_term());
 
     /*  receiving this vote gives the server majority */
@@ -1136,7 +1182,7 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
     EXPECT_EQ(5, r.nodes().count());
 
     /* vote for self */
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
     EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
@@ -1177,15 +1223,14 @@ TEST(TestCandidate, requestvote_includes_logidx)
     sender.add(&r3);
 
     r.nodes().add_node(raft::NodeId(2));
-    r.become_candidate();
-    sender.clear();
+    r.nodes().add_node(raft::NodeId(3));
 
     r.set_current_term(5);
     /* 3 entries */
     r.log().entry_append(LogEntry(1, 100, raft::LogEntryData("aaa", 4)));
     r.log().entry_append(LogEntry(1, 101, raft::LogEntryData("aaa", 4)));
     r.log().entry_append(LogEntry(3, 102, raft::LogEntryData("aaa", 4)));
-    r.become_candidate(); //becoming candidate means new election term? so +1
+    prepare_candidate(r); //becoming candidate means new election term? so +1
 
     bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1202,7 +1247,7 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.become_candidate();
+    prepare_candidate(r);
     r.set_current_term(1);
     r.vote_for_nodeid(raft::NodeId(2));
     EXPECT_FALSE(r.is_follower());
@@ -1221,7 +1266,7 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
     EXPECT_EQ(1, r.get_current_term());
@@ -1243,7 +1288,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     r.nodes().add_node(raft::NodeId(2));
 
     r.set_current_term(1);
-    r.become_candidate();
+    prepare_candidate(r);
     EXPECT_FALSE(r.is_follower());
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -1289,7 +1334,7 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
     r.nodes().add_node(raft::NodeId(3));
 
     /* candidate to leader */
-    r.become_candidate();
+    prepare_candidate(r);
     r.become_leader();
 
     int i;
@@ -1311,7 +1356,7 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     r.nodes().add_node(raft::NodeId(3));
 
     /* candidate to leader */
-    r.become_candidate();
+    prepare_candidate(r);
     r.become_leader();
 
     /* receive appendentries messages for both nodes */
@@ -2103,7 +2148,7 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
     /* candidate to leader */
-    r.become_candidate();
+    prepare_candidate(r);
     sender.clear();
     r.become_leader();
 
@@ -2129,7 +2174,7 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     }
 
     /* force request timeout */
-    r.raft_periodic(std::chrono::milliseconds(501));
+    r.raft_periodic(3*r.get_request_timeout());
     {
         msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -2154,7 +2199,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     r.set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
-    r.become_candidate();
+    prepare_candidate(r);
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
     EXPECT_TRUE(r.is_leader());
@@ -2174,7 +2219,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     r.set_request_timeout(std::chrono::milliseconds(500));
     EXPECT_EQ(0, r.get_timeout_elapsed().count());
 
-    r.become_candidate();
+    prepare_candidate(r);
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
     EXPECT_TRUE(r.is_leader());
