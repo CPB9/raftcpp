@@ -72,12 +72,11 @@ public:
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgVoteRep& r);
     bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
 
-public:
-    void set_current_term(TermId term);
     bmcl::Option<Error> send_appendentries(NodeId node);
     void send_appendentries_to_all();
 
 private:
+    void set_current_term(TermId term);
     void vote_for_nodeid(NodeId nodeid);
     void become_follower();
     void become_candidate();
