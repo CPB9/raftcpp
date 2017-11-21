@@ -75,13 +75,13 @@ public:
 public:
     void vote_for_nodeid(NodeId nodeid);
     void set_current_term(TermId term);
-    void become_leader();
     bmcl::Option<Error> send_appendentries(NodeId node);
     void send_appendentries_to_all();
 
 private:
-    void become_candidate();
     void become_follower();
+    void become_candidate();
+    void become_leader();
     void set_state(State state);
     bmcl::Option<Error> send_appendentries(const Node& node);
     void entry_apply_node_add(const LogEntry& ety, NodeId id);
