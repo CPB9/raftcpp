@@ -91,7 +91,10 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     {
         const Node& node = _nodes.get_my_node();
         if (node.is_voting() && !is_leader())
+        {
+            vote_for_nodeid(node.get_id());
             become_leader();
+        }
     }
 
     if (is_leader())
