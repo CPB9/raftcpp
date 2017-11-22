@@ -153,10 +153,6 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     if (node.isNone())
         return Error::NodeUnknown;
 
-    /* Stale response -- ignore */
-    if (r.current_idx != 0 && r.current_idx <= node->get_match_idx())
-        return bmcl::None;
-
     if (!is_leader())
         return Error::NotLeader;
 
@@ -171,6 +167,10 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     }
 
     if (_me.current_term > r.term)
+        return bmcl::None;
+
+    /* Stale response -- ignore */
+    if (r.current_idx != 0 && r.current_idx <= node->get_match_idx())
         return bmcl::None;
 
     if (!r.success)
