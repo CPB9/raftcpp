@@ -274,7 +274,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     if (0 < ae.prev_log_idx)
     {
         bmcl::Option<const LogEntry&> e = _log.get_at_idx(ae.prev_log_idx);
-        if (e.isNone() || _log.get_current_idx() < ae.prev_log_idx)
+        if (e.isNone())
         {
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
             whose term matches prevLogTerm (§5.3) */
