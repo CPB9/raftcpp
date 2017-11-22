@@ -22,7 +22,7 @@ static void prepare_follower(raft::Server& r)
 static void prepare_candidate(raft::Server& r)
 {
     EXPECT_GT(r.nodes().count(), 1);
-    r.raft_periodic(r.get_election_timeout());
+    r.raft_periodic(r.get_max_election_timeout());
     EXPECT_TRUE(r.is_candidate());
 }
 
@@ -30,7 +30,7 @@ static void prepare_leader(raft::Server& r)
 {
     if (r.nodes().get_num_voting_nodes() == 1)
     {
-        r.raft_periodic(r.get_election_timeout());
+        r.raft_periodic(r.get_max_election_timeout());
         EXPECT_TRUE(r.is_leader());
         return;
     }
@@ -927,8 +927,8 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
     /*  1 second election timeout */
     r.set_election_timeout(std::chrono::milliseconds(1000));
 
-    /*  1.001 seconds have passed */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    /*  max election timeout have passed */
+    r.raft_periodic(r.get_max_election_timeout() + std::chrono::milliseconds(1));
 
     /* is a candidate now */
     EXPECT_TRUE(r.is_candidate());
@@ -1166,8 +1166,8 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
 
-    /* clock over (ie. 2*1000 + 1) to overcome possible negative timeout, causing new election */
-    r.raft_periodic(2*r.get_election_timeout() + std::chrono::milliseconds(1));
+    /* clock over (i.e. max election timeout + 1) to overcome possible negative timeout, causing new election */
+    r.raft_periodic(r.get_max_election_timeout() + std::chrono::milliseconds(1));
     EXPECT_EQ(2, r.get_current_term());
 
     /*  receiving this vote gives the server majority */

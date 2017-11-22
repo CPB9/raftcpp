@@ -33,6 +33,14 @@ void Server::__log(NodeId node, const char *fmt, ...) const
     _saver->log(node, buf);
 }
 
+
+void Server::randomize_election_timeout()
+{
+    /* [election_timeout, 2 * election_timeout) */
+    _me.election_timeout_rand = _me.election_timeout + std::chrono::milliseconds(rand() % _me.election_timeout.count());
+    __log(_nodes.get_my_id(), "randomize election timeout to %d", _me.election_timeout_rand);
+}
+
 Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
 {
@@ -41,6 +49,7 @@ Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     _me.request_timeout = std::chrono::milliseconds(200);
     _me.election_timeout = std::chrono::milliseconds(1000);
     set_state(State::Follower);
+    randomize_election_timeout();
 }
 
 void Server::become_leader()
@@ -48,6 +57,7 @@ void Server::become_leader()
     __log(_nodes.get_my_id(), "becoming leader term:%d", get_current_term());
 
     set_state(State::Leader);
+    _me.timeout_elapsed = std::chrono::milliseconds(0);
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()))
@@ -68,11 +78,8 @@ void Server::become_candidate()
     _me.current_leader.clear();
     set_state(State::Candidate);
 
-    /* We need a random factor here to prevent simultaneous candidates.
-     * If the randomness is always positive it's possible that a fast node
-     * would deadlock the cluster by always gaining a headstart. To prevent
-     * this, we allow a negative randomness as a potential handicap. */
-    _me.timeout_elapsed = std::chrono::milliseconds(_me.election_timeout.count() - 2 * (rand() % _me.election_timeout.count()));
+    randomize_election_timeout();
+    _me.timeout_elapsed = std::chrono::milliseconds(0);
     _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(TermId(0))));
 }
 
@@ -80,6 +87,8 @@ void Server::become_follower()
 {
     __log(_nodes.get_my_id(), "becoming follower");
     set_state(State::Follower);
+    randomize_election_timeout();
+    _me.timeout_elapsed = std::chrono::milliseconds(0);
 }
 
 bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_last_period)
@@ -105,7 +114,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
             _me.timeout_elapsed = std::chrono::milliseconds(0);
         }
     }
-    else if (_me.election_timeout <= _me.timeout_elapsed)
+    else if (_me.election_timeout_rand <= _me.timeout_elapsed)
     {
         if (1 < _nodes.get_num_voting_nodes())
         {
@@ -113,7 +122,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
             if (node.is_voting())
             {
                 __log(_nodes.get_my_id(), "election starting: %d %d, term: %d ci: %d",
-                    _me.election_timeout.count(), _me.timeout_elapsed.count(), _me.current_term,
+                    _me.election_timeout_rand.count(), _me.timeout_elapsed.count(), _me.current_term,
                     _log.get_current_idx());
 
                 become_candidate();
@@ -236,8 +245,6 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     if (node.isNone())
         return Error::NodeUnknown;
 
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
-
     if (0 < ae.n_entries)
         __log(nodeid, "recvd appendentries t:%d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
@@ -268,6 +275,8 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
 
     /* update current leader because ae->term is up to date */
     _me.current_leader = node->get_id();
+
+    _me.timeout_elapsed = std::chrono::milliseconds(0);
 
     /* Not the first appendentries we've received */
     /* NOTE: the log starts at 1 */

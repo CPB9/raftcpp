@@ -33,8 +33,9 @@ class Server
         bmcl::Option<NodeId>   current_leader;                 /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
 
         std::chrono::milliseconds timeout_elapsed;              /**< amount of time left till timeout */
-        std::chrono::milliseconds election_timeout;
         std::chrono::milliseconds request_timeout;
+        std::chrono::milliseconds election_timeout;
+        std::chrono::milliseconds election_timeout_rand;
         NodeStatus connected;                                  /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
 
@@ -49,6 +50,7 @@ public:
     inline std::chrono::milliseconds get_timeout_elapsed() const { return _me.timeout_elapsed; }
     inline std::chrono::milliseconds get_request_timeout() const { return _me.request_timeout; }
     inline std::chrono::milliseconds get_election_timeout() const { return _me.election_timeout; }
+    inline std::chrono::milliseconds get_max_election_timeout() const { return std::chrono::milliseconds(2 * get_election_timeout().count()); }
 
     inline bmcl::Option<NodeId> get_current_leader() const { return _me.current_leader; }
     inline TermId get_current_term() const { return _me.current_term; }
@@ -89,6 +91,7 @@ private:
     void entry_append_impl(const LogEntry& ety, Index idx);
     void __log(NodeId node, const char *fmt, ...) const;
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
+    void randomize_election_timeout();
 
     Nodes _nodes;
     LogCommitter _log;
