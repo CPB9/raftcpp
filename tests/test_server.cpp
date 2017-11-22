@@ -2080,6 +2080,24 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     EXPECT_EQ(1, p->get_next_idx());
 }
 
+TEST(TestLeader, recv_appendentries_response_steps_down_if_term_is_newer)
+{
+    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    r.nodes().add_node(raft::NodeId(2));
+
+    prepare_follower(r);
+    prepare_leader(r);
+
+    bmcl::Option<const raft::Node&> n2 = r.nodes().get_node(raft::NodeId(2));
+    EXPECT_TRUE(n2.isSome());
+    EXPECT_EQ(1, n2->get_next_idx());
+
+    /* receive NEW mock failed responses */
+    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term() + 1, false, 2, 0));
+    EXPECT_TRUE(r.is_follower());
+    EXPECT_FALSE(r.get_current_leader().isSome());
+}
+
 TEST(TestLeader, recv_appendentries_steps_down_if_newer)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
@@ -2087,17 +2105,17 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
 
     prepare_leader(r);
 
-    /* check that node 0 considers itself the leader */
+    /* check that node 1 considers itself the leader */
     EXPECT_TRUE(r.is_leader());
     EXPECT_EQ(raft::NodeId(1), r.get_current_leader());
 
     auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 6, 5, 0));
     EXPECT_TRUE(aer.isOk());
 
-    /* after more recent appendentries from node 1, node 0 should
-     * consider node 1 the leader. */
+    /* after more recent appendentries from node 2, node 1 should
+     * consider node 2 the leader. */
     EXPECT_TRUE(r.is_follower());
-    EXPECT_EQ(raft::NodeId(1), r.get_current_leader());
+    EXPECT_EQ(raft::NodeId(2), r.get_current_leader());
 }
 
 TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)

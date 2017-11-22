@@ -166,6 +166,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     {
         set_current_term(r.term);
         become_follower();
+        _me.current_leader.clear();
         return bmcl::None;
     }
 
@@ -265,6 +266,9 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
     }
 
+    /* update current leader because ae->term is up to date */
+    _me.current_leader = node->get_id();
+
     /* Not the first appendentries we've received */
     /* NOTE: the log starts at 1 */
     if (0 < ae.prev_log_idx)
@@ -328,9 +332,6 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     /* 4. If leaderCommit > commitIndex, set commitIndex =
         min(leaderCommit, index of most recent entry) */
     _log.commit_till(ae.leader_commit);
-
-    /* update current leader because we accepted appendentries from it */
-    _me.current_leader = nodeid;
 
     r.success = true;
     r.first_idx = ae.prev_log_idx + 1;
@@ -404,6 +405,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     {
         set_current_term(vr.term);
         become_follower();
+        _me.current_leader = node->get_id();
     }
 
     if (!__should_grant_vote(*this, vr))
@@ -437,6 +439,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
     {
         set_current_term(r.term);
         become_follower();
+        _me.current_leader.clear();
         return bmcl::None;
     }
 
