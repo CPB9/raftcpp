@@ -27,7 +27,7 @@ bmcl::Option<Node&> Nodes::get_node(bmcl::Option<NodeId> id)
 
 bmcl::Option<const Node&> Nodes::get_node(NodeId id) const
 {
-    auto& i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
+    const auto& i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
     if (i == _nodes.end())
         return bmcl::None;
     return *i;
@@ -35,7 +35,7 @@ bmcl::Option<const Node&> Nodes::get_node(NodeId id) const
 
 bmcl::Option<Node&> Nodes::get_node(NodeId id)
 {
-    auto& i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
+    const auto& i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
     if (i == _nodes.end())
         return bmcl::None;
     return *i;
@@ -50,7 +50,7 @@ const Node& Nodes::get_my_node() const
 
 Node& Nodes::get_my_node()
 {
-    auto& n = get_node(_me);
+    bmcl::Option<Node&> n = get_node(_me);
     assert(n.isSome());
     return n.unwrap();
 }
@@ -84,7 +84,7 @@ bmcl::Option<Node&> Nodes::add_non_voting_node(NodeId id)
 void Nodes::remove_node(NodeId id)
 {
     assert(id != _me);
-    auto i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
+    const auto i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
     assert(i != _nodes.end());
     _nodes.erase(i);
 }
