@@ -20,23 +20,52 @@
 namespace raft
 {
 
+class Timer
+{
+public:
+    Timer()
+    {
+        timeout_elapsed = std::chrono::milliseconds(0);
+        request_timeout = std::chrono::milliseconds(200);
+        election_timeout = std::chrono::milliseconds(1000);
+        randomize_election_timeout();
+    }
+    inline void add_elapsed(std::chrono::milliseconds msec) { timeout_elapsed += msec; }
+    inline void reset_elapsed() { timeout_elapsed = std::chrono::milliseconds(0); }
+    inline void set_election_timeout(std::chrono::milliseconds msec) { election_timeout = msec; }
+    inline void set_request_timeout(std::chrono::milliseconds msec) { request_timeout = msec; }
+    void randomize_election_timeout()
+    {
+        /* [election_timeout, 2 * election_timeout) */
+        election_timeout_rand = election_timeout + std::chrono::milliseconds(rand() % election_timeout.count());
+    }
+
+    bool is_time_to_elect() const { return election_timeout_rand <= timeout_elapsed; }
+    bool is_time_to_ping() const { return request_timeout <= timeout_elapsed; }
+    inline std::chrono::milliseconds get_timeout_elapsed() const { return timeout_elapsed; }
+    inline std::chrono::milliseconds get_request_timeout() const { return request_timeout; }
+    inline std::chrono::milliseconds get_election_timeout() const { return election_timeout; }
+    inline std::chrono::milliseconds get_election_timeout_rand() const { return election_timeout_rand; }
+    inline std::chrono::milliseconds get_max_election_timeout() const { return std::chrono::milliseconds(2 * get_election_timeout().count()); }
+private:
+    std::chrono::milliseconds timeout_elapsed;          /**< amount of time left till timeout */
+    std::chrono::milliseconds request_timeout;
+    std::chrono::milliseconds election_timeout;
+    std::chrono::milliseconds election_timeout_rand;
+};
+
 class Server
 {
     struct server_private_t
     {
         /* Persistent state: */
-        TermId  current_term;              /**< the server's best guess of what the current term is starts at zero */
-        bmcl::Option<NodeId> voted_for;        /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
+        TermId  current_term;                       /**< the server's best guess of what the current term is starts at zero */
+        bmcl::Option<NodeId> voted_for;             /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
 
         /* Volatile state: */
-        State state;                                     /**< follower/leader/candidate indicator */
-        bmcl::Option<NodeId>   current_leader;                 /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
-
-        std::chrono::milliseconds timeout_elapsed;              /**< amount of time left till timeout */
-        std::chrono::milliseconds request_timeout;
-        std::chrono::milliseconds election_timeout;
-        std::chrono::milliseconds election_timeout_rand;
-        NodeStatus connected;                                  /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
+        State                   state;              /**< follower/leader/candidate indicator */
+        bmcl::Option<NodeId>    current_leader;     /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
+        NodeStatus              connected;          /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
 
     friend class Logger;
@@ -45,12 +74,6 @@ public:
     inline void set_sender(ISender* sender) {_sender = sender; }
     inline void set_saver(ISaver* saver) { _saver = saver; }
     inline const ISaver* get_saver() const { return _saver; }
-    inline void set_election_timeout(std::chrono::milliseconds msec) {_me.election_timeout = msec;}
-    inline void set_request_timeout(std::chrono::milliseconds msec) { _me.request_timeout = msec; }
-    inline std::chrono::milliseconds get_timeout_elapsed() const { return _me.timeout_elapsed; }
-    inline std::chrono::milliseconds get_request_timeout() const { return _me.request_timeout; }
-    inline std::chrono::milliseconds get_election_timeout() const { return _me.election_timeout; }
-    inline std::chrono::milliseconds get_max_election_timeout() const { return std::chrono::milliseconds(2 * get_election_timeout().count()); }
 
     inline bmcl::Option<NodeId> get_current_leader() const { return _me.current_leader; }
     inline TermId get_current_term() const { return _me.current_term; }
@@ -65,6 +88,8 @@ public:
     Nodes& nodes() { return _nodes; }
     const LogCommitter& log() const { return _log; }
     LogCommitter& log() { return _log; }
+    Timer& timer() { return _timer; }
+    const Timer& timer() const { return _timer; }
 
     bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
 
@@ -91,8 +116,8 @@ private:
     void entry_append_impl(const LogEntry& ety, Index idx);
     void __log(NodeId node, const char *fmt, ...) const;
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
-    void randomize_election_timeout();
 
+    Timer _timer;
     Nodes _nodes;
     LogCommitter _log;
     server_private_t _me;

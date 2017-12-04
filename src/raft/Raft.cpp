@@ -33,23 +33,11 @@ void Server::__log(NodeId node, const char *fmt, ...) const
     _saver->log(node, buf);
 }
 
-
-void Server::randomize_election_timeout()
-{
-    /* [election_timeout, 2 * election_timeout) */
-    _me.election_timeout_rand = _me.election_timeout + std::chrono::milliseconds(rand() % _me.election_timeout.count());
-    __log(_nodes.get_my_id(), "randomize election timeout to %d", _me.election_timeout_rand);
-}
-
 Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
     : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
 {
     _me.current_term = TermId(0);
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
-    _me.request_timeout = std::chrono::milliseconds(200);
-    _me.election_timeout = std::chrono::milliseconds(1000);
-    set_state(State::Follower);
-    randomize_election_timeout();
+    become_follower();
 }
 
 void Server::become_leader()
@@ -57,7 +45,7 @@ void Server::become_leader()
     __log(_nodes.get_my_id(), "becoming leader term:%d", get_current_term());
 
     set_state(State::Leader);
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
+    _timer.reset_elapsed();
     for (const Node& i: _nodes.items())
     {
         if (_nodes.is_me(i.get_id()))
@@ -70,30 +58,32 @@ void Server::become_leader()
 
 void Server::become_candidate()
 {
-    __log(_nodes.get_my_id(), "becoming candidate");
-
     set_current_term(get_current_term() + 1);
     _nodes.reset_all_votes();
     vote_for_nodeid(_nodes.get_my_id());
     _me.current_leader.clear();
     set_state(State::Candidate);
+    _timer.randomize_election_timeout();
+    _timer.reset_elapsed();
 
-    randomize_election_timeout();
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
+    __log(_nodes.get_my_id(), "becoming candidate");
+    __log(_nodes.get_my_id(), "randomize election timeout to %d", _timer.get_election_timeout_rand());
+
     _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(TermId(0))));
 }
 
 void Server::become_follower()
 {
-    __log(_nodes.get_my_id(), "becoming follower");
     set_state(State::Follower);
-    randomize_election_timeout();
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
+    _timer.randomize_election_timeout();
+    _timer.reset_elapsed();
+    __log(_nodes.get_my_id(), "becoming follower");
+    __log(_nodes.get_my_id(), "randomize election timeout to %d", _timer.get_election_timeout_rand());
 }
 
 bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_last_period)
 {
-    _me.timeout_elapsed += msec_since_last_period;
+    _timer.add_elapsed(msec_since_last_period);
 
     /* Only one voting node means it's safe for us to become the leader */
     if (1 == _nodes.get_num_voting_nodes())
@@ -108,13 +98,13 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
 
     if (is_leader())
     {
-        if (_me.request_timeout <= _me.timeout_elapsed)
+        if (_timer.is_time_to_ping())
         {
             send_appendentries_to_all();
-            _me.timeout_elapsed = std::chrono::milliseconds(0);
+            _timer.reset_elapsed();
         }
     }
-    else if (_me.election_timeout_rand <= _me.timeout_elapsed)
+    else if (_timer.is_time_to_elect())
     {
         if (1 < _nodes.get_num_voting_nodes())
         {
@@ -122,7 +112,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
             if (node.is_voting())
             {
                 __log(_nodes.get_my_id(), "election starting: %d %d, term: %d ci: %d",
-                    _me.election_timeout_rand.count(), _me.timeout_elapsed.count(), _me.current_term,
+                    _timer.get_election_timeout_rand().count(), _timer.get_timeout_elapsed(), _me.current_term,
                     _log.get_current_idx());
 
                 become_candidate();
@@ -276,7 +266,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     /* update current leader because ae->term is up to date */
     _me.current_leader = node->get_id();
 
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
+    _timer.reset_elapsed();
 
     /* Not the first appendentries we've received */
     /* NOTE: the log starts at 1 */
@@ -428,7 +418,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
 
     /* there must be in an election. */
     _me.current_leader.clear();
-    _me.timeout_elapsed = std::chrono::milliseconds(0);
+    _timer.reset_elapsed();
 
     return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
 }
