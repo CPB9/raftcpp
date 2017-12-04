@@ -3,9 +3,9 @@
 #include "mock_send_functions.h"
 
 Sender::Sender(Exchanger* ex, raft::Server* r) : _ex(ex), _r(r) {}
-bmcl::Option<Error> Sender::request_vote(const MsgVoteReq& msg)
+bmcl::Option<Error> Sender::request_vote(const NodeId& node, const MsgVoteReq& msg)
 {
-    return _ex->request_vote_req(_r, msg);
+    return _ex->request_vote_req(_r, node, msg);
 }
 
 bmcl::Option<Error> Sender::append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) 
@@ -49,14 +49,13 @@ bmcl::Option<raft::Error> Exchanger::__append_msg(const raft::NodeId& from, cons
     return bmcl::None;
 }
 
-bmcl::Option<raft::Error> Exchanger::request_vote_req(const raft::Server* raft, const MsgVoteReq& msg)
+bmcl::Option<raft::Error> Exchanger::request_vote_req(const raft::Server* raft, const raft::NodeId& node, const MsgVoteReq& msg)
 {
     //return __append_msg(from->nodes().get_my_id(), to.get_id(), &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
-
     for (const auto& to : _servers)
     {
         if (to.first != raft->nodes().get_my_id())
-            __append_msg(raft->nodes().get_my_id(), to.first, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
+            __append_msg(raft->nodes().get_my_id(), node, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_REQUESTVOTE);
     }
     return bmcl::None;
 }

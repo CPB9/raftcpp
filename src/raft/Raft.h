@@ -103,7 +103,7 @@ public:
     bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
 
     bmcl::Option<Error> send_appendentries(NodeId node);
-    void send_appendentries_to_all();
+    bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);
 
 private:
     void set_current_term(TermId term);
@@ -112,7 +112,8 @@ private:
     void become_candidate();
     void become_leader();
     void set_state(State state);
-    bmcl::Option<Error> send_appendentries(const Node& node);
+    bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
+    bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
     void entry_apply_node_add(const LogEntry& ety, NodeId id);
     void pop_log(const LogEntry& ety, Index idx);
     bmcl::Option<Error> entry_append(const LogEntry& ety);

@@ -55,7 +55,7 @@ static void prepare_leader(raft::Server& r)
 class DefualtSender : public ISender
 {
 public:
-    bmcl::Option<Error> request_vote(const MsgVoteReq& msg) override { return bmcl::None; }
+    bmcl::Option<Error> request_vote(const NodeId& node, const MsgVoteReq& msg) override { return bmcl::None; }
     bmcl::Option<Error> append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) override { return bmcl::None; }
 };
 
@@ -1469,12 +1469,12 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2));
+    bmcl::Option<raft::Node&> n = r.nodes().add_node(raft::NodeId(2));
     prepare_leader(r);
     sender.clear();
 
     /* receive appendentries messages */
-    r.send_appendentries(raft::NodeId(2));
+    r.send_appendentries(n->get_id());
 
     bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
@@ -1482,14 +1482,11 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     EXPECT_NE(nullptr, ae);
     EXPECT_EQ(0, ae->prev_log_idx);
 
-    bmcl::Option<raft::Node&> n = r.nodes().get_node(raft::NodeId(2));
-    EXPECT_TRUE(n.isSome());
-
     /* add 1 entry */
     /* receive appendentries messages */
     r.log().entry_append(MsgAddEntryReq(2, 100, raft::LogEntryData("aaa", 4)));
     n->set_next_idx(1);
-    r.send_appendentries(n.unwrap().get_id());
+    r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1505,7 +1502,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     /* set next_idx */
     /* receive appendentries messages */
     n->set_next_idx(2);
-    r.send_appendentries(raft::NodeId(2));
+    r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1521,12 +1518,12 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2));
+    bmcl::Option<raft::Node&> n = r.nodes().add_node(raft::NodeId(2));
     prepare_leader(r);
     sender.clear();
 
     /* receive appendentries messages */
-    r.send_appendentries(raft::NodeId(2));
+    r.send_appendentries(n->get_id());
     MsgAppendEntriesReq*  ae;
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
@@ -1537,10 +1534,9 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 
     /* add an entry */
     /* receive appendentries messages */
-    bmcl::Option<raft::Node&> n = r.nodes().get_node(raft::NodeId(2));
     n->set_next_idx(1);
     r.log().entry_append(MsgAddEntryReq(1, 100, raft::LogEntryData("aaa", 4)));
-    r.send_appendentries(n.unwrap().get_id());
+    r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1761,7 +1757,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     Exchanger sender(&r);
-    r.nodes().add_node(raft::NodeId(2));
+    bmcl::Option<raft::Node&> node = r.nodes().add_node(raft::NodeId(2));
     prepare_follower(r);
 
     /* append entries */
@@ -1774,8 +1770,6 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     /* become leader sets next_idx to current_idx */
     prepare_leader(r);
-    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
-    EXPECT_TRUE(node.isSome());
     EXPECT_EQ(5, node->get_next_idx());
 
     {
@@ -1788,7 +1782,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.send_appendentries(raft::NodeId(2));
+    r.send_appendentries(node->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1800,7 +1794,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term(), false, 1, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1, 0));
     EXPECT_EQ(2, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -1821,7 +1815,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     Exchanger sender(&r);
-    r.nodes().add_node(raft::NodeId(2));
+    bmcl::Option<raft::Node&> node = r.nodes().add_node(raft::NodeId(2));
     prepare_follower(r);
 
     /* append entries */
@@ -1834,8 +1828,6 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* become leader sets next_idx to current_idx */
     prepare_leader(r);
-    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
-    EXPECT_TRUE(node.isSome());
     EXPECT_EQ(5, node->get_next_idx());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
@@ -1847,7 +1839,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.send_appendentries(raft::NodeId(2));
+    r.send_appendentries(node->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1859,7 +1851,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
     EXPECT_EQ(4, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -1874,7 +1866,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
     EXPECT_EQ(3, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */

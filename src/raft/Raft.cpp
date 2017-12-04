@@ -46,13 +46,14 @@ void Server::become_leader()
 
     set_state(State::Leader);
     _timer.reset_elapsed();
+
     for (const Node& i: _nodes.items())
     {
-        if (_nodes.is_me(i.get_id()))
-            continue;
-        _nodes.get_node(i.get_id()).unwrap().set_next_idx(_log.get_current_idx() + 1);
-        _nodes.get_node(i.get_id()).unwrap().set_match_idx(0);
-        send_appendentries(i);
+        Node& n = _nodes.get_node(i.get_id()).unwrap();
+        n.set_next_idx(_log.get_current_idx() + 1);
+        n.set_match_idx(0);
+        n.set_need_vote_req(false);
+        send_appendentries(n, _sender);
     }
 }
 
@@ -65,11 +66,15 @@ void Server::become_candidate()
     set_state(State::Candidate);
     _timer.randomize_election_timeout();
     _timer.reset_elapsed();
+    _nodes.set_all_need_pings(false);
 
     __log(_nodes.get_my_id(), "becoming candidate");
     __log(_nodes.get_my_id(), "randomize election timeout to %d", _timer.get_election_timeout_rand());
-
-    _sender->request_vote(MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(TermId(0))));
+    for (const Node& i : _nodes.items())
+    {
+        Node& n = _nodes.get_node(i.get_id()).unwrap();
+        send_reqvote(n, _sender);
+    }
 }
 
 void Server::become_follower()
@@ -77,6 +82,8 @@ void Server::become_follower()
     set_state(State::Follower);
     _timer.randomize_election_timeout();
     _timer.reset_elapsed();
+    _nodes.set_all_need_vote_req(false);
+    _nodes.set_all_need_pings(false);
     __log(_nodes.get_my_id(), "becoming follower");
     __log(_nodes.get_my_id(), "randomize election timeout to %d", _timer.get_election_timeout_rand());
 }
@@ -100,7 +107,10 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     {
         if (_timer.is_time_to_ping())
         {
-            send_appendentries_to_all();
+            for (const Node& i : _nodes.items())
+            {
+                send_appendentries(_nodes.get_node(i.get_id()).unwrap(), _sender);
+            }
             _timer.reset_elapsed();
         }
     }
@@ -184,7 +194,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
             node->set_next_idx(next_idx - 1);
 
         /* retry */
-        send_appendentries(node.unwrap());
+        send_appendentries(node.unwrap(), _sender);
         return bmcl::None;
     }
 
@@ -221,7 +231,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     /* Aggressively send remaining entries */
     if (_log.get_at_idx(node->get_next_idx()).isSome())
-        send_appendentries(node.unwrap());
+        send_appendentries(node.unwrap(), _sender);
 
     /* periodic applies committed entries lazily */
 
@@ -507,7 +517,10 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
          * becoming congested. */
         Index next_idx = i.get_next_idx();
         if (next_idx == _log.get_current_idx())
-            send_appendentries(i);
+        {
+            Node& n = _nodes.get_node(i.get_id()).unwrap();
+            send_appendentries(n, _sender);
+        }
     }
 
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
@@ -616,20 +629,68 @@ bmcl::Option<Error> Server::entry_append(const LogEntry& ety)
     return bmcl::None;
 }
 
+bmcl::Option<Error> Server::send_smth_for(NodeId node, ISender* sender)
+{
+    bmcl::Option<Node&> n = _nodes.get_node(node);
+    if (n.isNone()) return Error::NodeUnknown;
+
+    bmcl::Option<Error> e;
+    if (n->need_vote_req())
+    {
+        e = send_reqvote(n.unwrap(), sender);
+        n->set_need_vote_req(false);
+        return e;
+    }
+
+    if (n->need_append_endtries_req())
+    {
+        e = send_appendentries(n.unwrap(), sender);
+        n->set_need_append_endtries_req(false);
+        return e;
+    }
+
+    return Error::NothingToSend;
+}
+
+bmcl::Option<Error> Server::send_reqvote(Node& node, ISender* sender)
+{
+    if (_nodes.is_me(node.get_id()))
+        return Error::CantSendToMyself;
+
+    if (!is_candidate())
+        return Error::NotCandidate;
+
+    if (!sender)
+    {
+        node.set_need_vote_req(true);
+        return bmcl::None;
+    }
+    return sender->request_vote(node.get_id(), MsgVoteReq(_me.current_term, _log.get_current_idx(), _log.get_last_log_term().unwrapOr(TermId(0))));
+}
+
 bmcl::Option<Error> Server::send_appendentries(NodeId node)
 {
     bmcl::Option<Node&> n = _nodes.get_node(node);
     if (n.isNone()) return Error::NodeUnknown;
-    return send_appendentries(n.unwrap());
+    return send_appendentries(n.unwrap(), _sender);
 }
 
-bmcl::Option<Error> Server::send_appendentries(const Node& node)
+bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
 {
-    assert(!_nodes.is_me(node.get_id()));
+    if (_nodes.is_me(node.get_id()))
+        return Error::CantSendToMyself;
+
+    if (!is_leader())
+        return Error::NotLeader;
+
+    if (!sender)
+    {
+        node.set_need_append_endtries_req(true);
+        return bmcl::None;
+    }
 
     MsgAppendEntriesReq ae(_me.current_term, 0, TermId(0), _log.get_commit_idx());
     Index next_idx = node.get_next_idx();
-
     ae.entries = _log.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
 
     /* previous log is the log just before the new logs */
@@ -650,16 +711,6 @@ bmcl::Option<Error> Server::send_appendentries(const Node& node)
           ae.prev_log_term);
 
     return _sender->append_entries(node.get_id(), ae);
-}
-
-void Server::send_appendentries_to_all()
-{
-    for (const Node& i: _nodes.items())
-    {
-        if (_nodes.is_me(i.get_id()))
-            continue;
-        send_appendentries(i);
-    }
 }
 
 void Server::vote_for_nodeid(NodeId nodeid)

@@ -50,7 +50,7 @@ private:
     raft::Server* _r;
 public:
     explicit Sender(Exchanger* ex, raft::Server* r);
-    bmcl::Option<Error> request_vote(const MsgVoteReq& msg) override;
+    bmcl::Option<Error> request_vote(const NodeId& node, const MsgVoteReq& msg) override;
     bmcl::Option<Error> append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) override;
 };
 
@@ -75,7 +75,7 @@ public:
     void poll_msgs(raft::NodeId from);
     bmcl::Option<msg_t> poll_msg_data(const raft::Server& from);
     bmcl::Option<msg_t> poll_msg_data(raft::NodeId from);
-    bmcl::Option<raft::Error> request_vote_req(const raft::Server* raft, const MsgVoteReq& msg);
+    bmcl::Option<raft::Error> request_vote_req(const raft::Server* raft, const raft::NodeId& node, const MsgVoteReq& msg);
     bmcl::Option<raft::Error> request_vote_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgVoteRep& msg);
     bmcl::Option<raft::Error> append_entries_req(const raft::Server* raft, const raft::NodeId& node, const MsgAppendEntriesReq& msg);
     bmcl::Option<raft::Error> append_entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg);

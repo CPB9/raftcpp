@@ -21,11 +21,13 @@ class Node
     {
         VotedForMe              = 0,
         NodeVoting              = 1,
-        NodeHasSufficientLog    = 2,
+        NeedVoteReq             = 2,
+        NodeHasSufficientLog    = 3,
+        NeedAppendEntriesReq    = 4,
     };
 
 public:
-    inline explicit Node(NodeId id) : _next_idx(1),  _match_idx(0), _id(id)
+    inline explicit Node(NodeId id) : _next_idx(1),  _match_idx(0), _id(id), _flags(0)
     {
         _flags.set(NodeVoting, true);
     }
@@ -47,6 +49,12 @@ public:
     inline void set_has_sufficient_logs() { _flags.set(NodeHasSufficientLog, true); }
     inline bool has_sufficient_logs() const { return _flags.test(NodeHasSufficientLog); }
 
+    inline void set_need_vote_req(bool need) { _flags.set(NeedVoteReq, need); }
+    inline bool need_vote_req() const { return _flags.test(NeedVoteReq); }
+
+    inline void set_need_append_endtries_req(bool need) { _flags.set(NeedAppendEntriesReq, need); }
+    inline bool need_append_endtries_req() const { return _flags.test(NeedAppendEntriesReq); }
+
 private:
     Index           _next_idx;
     Index           _match_idx;
@@ -64,15 +72,14 @@ public:
     inline NodeId get_my_id() const { return _me; }
     inline bool is_me(NodeId id) const { return _me == id; }
     void reset_all_votes();
-    bmcl::Option<Node&> get_node(bmcl::Option<NodeId> id);
+    void set_all_need_vote_req(bool need);
+    void set_all_need_pings(bool need);
     bmcl::Option<const Node&> get_node(NodeId id) const;
     bmcl::Option<Node&> get_node(NodeId id);
     const Node& get_my_node() const;
-    Node& get_my_node();
     bmcl::Option<Node&> add_node(NodeId id);
     bmcl::Option<Node&> add_non_voting_node(NodeId id);
     void remove_node(NodeId id);
-    void remove_node(const bmcl::Option<Node&>& node);
     std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
     std::size_t get_num_voting_nodes() const;
     bool votes_has_majority(bmcl::Option<NodeId> voted_for) const;

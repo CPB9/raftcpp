@@ -23,6 +23,9 @@ enum class Error : uint8_t
     OneVotingChangeOnly,
     NodeUnknown,
     NothingToApply,
+    NothingToSend, 
+    CantSendToMyself,
+    NotCandidate,
 };
 
 enum class ReqVoteState
@@ -53,6 +56,7 @@ enum class LotType
     AddNode,
     DemoteNode,
     RemoveNode,
+    ChangeCfg
 };
 
 enum class NodeStatus
@@ -101,7 +105,6 @@ struct LogEntry
             LotType::DemoteNode == type ||
             LotType::RemoveNode == type);
     }
-
 };
 
 /** Message sent from client to server.
@@ -180,7 +183,7 @@ class ISender
 {
 public:
     /** Callback for sending request vote messages to all cluster's members */
-    virtual bmcl::Option<Error> request_vote(const MsgVoteReq& msg) = 0;
+    virtual bmcl::Option<Error> request_vote(const NodeId& node, const MsgVoteReq& msg) = 0;
 
     /** Callback for sending appendentries messages */
     virtual bmcl::Option<Error> append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) = 0;
