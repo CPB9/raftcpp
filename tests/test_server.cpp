@@ -240,7 +240,7 @@ TEST(TestServer, periodic_elapses_election_timeout)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     /* we don't want to set the timeout to zero */
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     r.raft_periodic(std::chrono::milliseconds(0));
@@ -254,7 +254,7 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -265,7 +265,7 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
 TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_voting_node)
 {
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -278,7 +278,7 @@ TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting
 {
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
     r.nodes().add_non_voting_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -289,7 +289,7 @@ TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting
 TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_node)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -301,7 +301,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_non_voting_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -313,7 +313,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_non_voting_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     r.raft_periodic(r.timer().get_election_timeout());
     EXPECT_EQ(0, r.log().get_commit_idx());
 
@@ -328,7 +328,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_non_voting_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     r.raft_periodic(r.timer().get_election_timeout());
     EXPECT_TRUE(r.is_leader());
     EXPECT_EQ(0, r.log().get_commit_idx());
@@ -457,7 +457,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     r.nodes().add_node(raft::NodeId(2));
     prepare_follower(r);
 
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     r.raft_periodic(std::chrono::milliseconds(900));
 
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
@@ -927,7 +927,7 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
     r.nodes().add_node(raft::NodeId(2));
 
     /*  1 second election timeout */
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /*  max election timeout have passed */
     r.raft_periodic(r.timer().get_max_election_timeout() + std::chrono::milliseconds(1));
@@ -1095,7 +1095,7 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
 
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     r.raft_periodic(std::chrono::milliseconds(900));
@@ -1110,7 +1110,7 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     r.raft_periodic(std::chrono::milliseconds(900));
 
@@ -1162,7 +1162,7 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* server wants to be leader, so becomes candidate */
     prepare_candidate(r);
@@ -1936,7 +1936,7 @@ TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
 TEST(TestLeader, recv_entry_resets_election_timeout)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
+    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     prepare_leader(r);
 
     r.raft_periodic(std::chrono::milliseconds(900));
@@ -2139,8 +2139,7 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
 
     r.nodes().add_node(raft::NodeId(2));
     r.nodes().add_node(raft::NodeId(3));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
-    r.timer().set_request_timeout(std::chrono::milliseconds(500));
+    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     prepare_leader(r);
@@ -2188,8 +2187,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
 
     r.nodes().add_node(raft::NodeId(2));
     r.nodes().add_node(raft::NodeId(3));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
-    r.timer().set_request_timeout(std::chrono::milliseconds(500));
+    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     prepare_candidate(r);
@@ -2208,8 +2206,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     Exchanger sender(&r);
     r.nodes().add_node(raft::NodeId(2));
     r.nodes().add_node(raft::NodeId(3));
-    r.timer().set_election_timeout(std::chrono::milliseconds(1000));
-    r.timer().set_request_timeout(std::chrono::milliseconds(500));
+    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     prepare_candidate(r);

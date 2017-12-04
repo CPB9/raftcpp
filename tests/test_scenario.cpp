@@ -21,7 +21,7 @@ TEST(TestScenario, leader_appears)
         {
             rx.nodes().add_node(raft::NodeId((i + j) % Count));
         }
-        rx.timer().set_election_timeout(std::chrono::milliseconds(500));
+        rx.timer().set_timeout(std::chrono::milliseconds(100), 5);
     }
 
     for (std::size_t i = 0; i < 3; ++i)

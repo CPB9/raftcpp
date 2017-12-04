@@ -26,14 +26,17 @@ public:
     Timer()
     {
         timeout_elapsed = std::chrono::milliseconds(0);
-        request_timeout = std::chrono::milliseconds(200);
-        election_timeout = std::chrono::milliseconds(1000);
+        set_timeout(std::chrono::milliseconds(200), 5);
         randomize_election_timeout();
     }
     inline void add_elapsed(std::chrono::milliseconds msec) { timeout_elapsed += msec; }
     inline void reset_elapsed() { timeout_elapsed = std::chrono::milliseconds(0); }
-    inline void set_election_timeout(std::chrono::milliseconds msec) { election_timeout = msec; }
-    inline void set_request_timeout(std::chrono::milliseconds msec) { request_timeout = msec; }
+    inline void set_timeout(std::chrono::milliseconds msec, std::size_t factor)
+    {
+        request_timeout = msec;
+        election_timeout = msec* factor;
+        randomize_election_timeout();
+    }
     void randomize_election_timeout()
     {
         /* [election_timeout, 2 * election_timeout) */
