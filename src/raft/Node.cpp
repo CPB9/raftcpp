@@ -1,11 +1,10 @@
-#pragma once
 #include <algorithm>
 #include <assert.h>
 #include "Node.h"
 
 namespace raft
 {
-    
+
 Nodes::Nodes(NodeId id, bool isVoting) : _me(id)
 {
     auto r = add_node(id);
