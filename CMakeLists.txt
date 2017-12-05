@@ -2,6 +2,10 @@ project(raftcpp)
 
 cmake_minimum_required(VERSION 2.8.11)
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/bmcl/cmake/Bmcl.cmake)
+
+enable_testing()
+
 if(RAFTCPP_FOUND)
     return()
 endif()
@@ -16,13 +20,11 @@ if(HAS_PARENT_SCOPE)
     )
 endif()
 
-if(NOT HAS_PARENT_SCOPE)
-    set(BMCL_NO_QT 1)
-    add_subdirectory(thirdparty/bmcl EXCLUDE_FROM_ALL)
-    add_subdirectory(thirdparty/gtest)
-endif()
+set(BMCL_NO_QT 1)
+bmcl_add_dep_gtest(thirdparty/gtest)
+bmcl_add_dep_bmcl(thirdparty/bmcl)
 
-add_library(raftcpp STATIC
+bmcl_add_library(raftcpp STATIC
     src/raft/Raft.h
     src/raft/Raft.cpp
     src/raft/Log.h
@@ -31,22 +33,14 @@ add_library(raftcpp STATIC
     src/raft/Node.cpp
     src/raft/Types.h
 )
+
 target_include_directories(raftcpp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(raftcpp
     bmcl
 )
 
-if(NOT MSVC)
-    set(RAFTCPP_DEFS -std=c++11)
-endif()
-
-target_compile_options(raftcpp PUBLIC ${RAFTCPP_DEFS})
-
 if(NOT HAS_PARENT_SCOPE)
-    set(GTEST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/gtest/include)
     add_subdirectory(tests)
 endif()
-
-
 
