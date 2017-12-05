@@ -1,47 +1,19 @@
-include_directories(
-    ${RAFT_INCLUDE_DIRS}
-    SYSTEM
-    ${GTEST_INCLUDE_DIRS}
-    ${LINKED_LIST_QUEUE_INCLUDE_DIRS}
+bmcl_add_library(raftcpp-mocks
+    mock_send_functions.h mock_send_functions.cpp
 )
 
-set(TESTS_DIR ${CMAKE_BINARY_DIR}/bin)
-file(MAKE_DIRECTORY ${TESTS_DIR})
-
-set(ALL_TESTS "")
+target_link_libraries(raftcpp-mocks raftcpp)
 
 macro(add_unit_test test file)
-    add_executable(${test} ${file} mock_send_functions.h mock_send_functions.cpp)
-    target_link_libraries(${test}
-        ${ARGN}
+    bmcl_add_unit_test(raftcpp-test-${test} ${file})
+    target_link_libraries(raftcpp-test-${test}
+        raftcpp-mocks
         raftcpp
-        gtest
-        gtest_main
     )
-
-    set_target_properties(${test}
-        PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TESTS_DIR}
-        FOLDER "tests"
-    )
-    add_test(${test} ${TESTS_DIR}/${test})
-    list(APPEND ALL_TESTS ${file})
 endmacro()
 
-add_unit_test(raft_log_tests test_log.cpp)
-add_unit_test(raft_node_tests test_node.cpp)
-add_unit_test(raft_scenario_tests test_scenario.cpp)
-add_unit_test(raft_server_tests test_server.cpp)
+add_unit_test(log test_log.cpp)
+add_unit_test(node test_node.cpp)
+add_unit_test(scenario test_scenario.cpp)
+add_unit_test(server test_server.cpp)
 
-add_executable(all_tests EXCLUDE_FROM_ALL ${ALL_TESTS} mock_send_functions.h mock_send_functions.cpp)
-target_link_libraries(all_tests
-    raftcpp
-    gtest
-    gtest_main
-)
-
-set_target_properties(all_tests
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${TESTS_DIR}
-    FOLDER "tests"
-)

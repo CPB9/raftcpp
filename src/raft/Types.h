@@ -23,7 +23,7 @@ enum class Error : uint8_t
     OneVotingChangeOnly,
     NodeUnknown,
     NothingToApply,
-    NothingToSend, 
+    NothingToSend,
     CantSendToMyself,
     NotCandidate,
 };
@@ -76,7 +76,7 @@ struct LogEntryData
 {
     LogEntryData() {}
     LogEntryData(const std::vector<uint8_t>& data) : data(data) {}
-    LogEntryData(void* buf, std::size_t len) : data((uint8_t*)buf, (uint8_t*)buf + len){ }
+    LogEntryData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len){ }
     std::vector<uint8_t> data;
 };
 
