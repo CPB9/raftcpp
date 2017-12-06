@@ -61,14 +61,10 @@ class Server
 {
     struct server_private_t
     {
-        /* Persistent state: */
-        TermId  current_term;                       /**< the server's best guess of what the current term is starts at zero */
-        bmcl::Option<NodeId> voted_for;             /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
-
-        /* Volatile state: */
-        State                   state;              /**< follower/leader/candidate indicator */
-        bmcl::Option<NodeId>    current_leader;     /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
-        NodeStatus              connected;          /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
+        TermId                  current_term;   /**< the server's best guess of what the current term is starts at zero */
+        bmcl::Option<NodeId>    voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
+        State                   state;          /**< follower/leader/candidate indicator */
+        bmcl::Option<NodeId>    current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
     };
 
     friend class Logger;
@@ -119,7 +115,7 @@ private:
     bmcl::Option<Error> entry_append(const LogEntry& ety);
     void entry_append_impl(const LogEntry& ety, Index idx);
     void __log(NodeId node, const char *fmt, ...) const;
-    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
+    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, bool vote);
 
     Timer _timer;
     Nodes _nodes;

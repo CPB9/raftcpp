@@ -47,7 +47,7 @@ static void prepare_leader(raft::Server& r)
     else
         last_voter = r.nodes().items().back().get_id();
 
-    r.accept_rep(last_voter, raft::MsgVoteRep(r.get_current_term(), raft::ReqVoteState::Granted));
+    r.accept_rep(last_voter, raft::MsgVoteRep(r.get_current_term(), true));
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -374,7 +374,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_g
     prepare_follower(r);
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
-    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgVoteRep(r.get_current_term(), ReqVoteState::NotGranted));
+    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgVoteRep(r.get_current_term(), false));
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 }
@@ -385,7 +385,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_
     r.nodes().add_node(raft::NodeId(2));
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(2, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(2, true));
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 }
 
@@ -398,7 +398,7 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
     prepare_candidate(r);
     EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
-    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgVoteRep(r.get_current_term(), ReqVoteState::Granted));
+    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgVoteRep(r.get_current_term(), true));
     EXPECT_FALSE(e.isSome());
     EXPECT_EQ(2, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 }
@@ -412,7 +412,7 @@ TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
         r.nodes().get_node(i.get_id())->vote_for_me(false);
     EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, true));
     EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 }
 
@@ -425,7 +425,7 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
 
     /* term is less than current term */
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() - 1, 0, 0));
-    EXPECT_EQ(ReqVoteState::NotGranted, rvr.vote_granted);
+    EXPECT_FALSE(rvr.vote_granted);
 }
 
 TEST(TestServer, leader_recv_requestvote_does_not_step_down)
@@ -448,7 +448,7 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
 
     /* term is less than current term */
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
-    EXPECT_EQ(ReqVoteState::Granted, rvr.vote_granted);
+    EXPECT_TRUE(rvr.vote_granted);
 }
 
 TEST(TestServer, recv_requestvote_reset_timeout)
@@ -461,7 +461,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     r.raft_periodic(std::chrono::milliseconds(900));
 
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
-    EXPECT_EQ(ReqVoteState::Granted, rvr.vote_granted);
+    EXPECT_TRUE(rvr.vote_granted);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 }
 
@@ -507,7 +507,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     EXPECT_EQ(r.get_voted_for(), raft::NodeId(1));
     {
         MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1));
-        EXPECT_EQ(ReqVoteState::NotGranted, rvr.vote_granted);
+        EXPECT_FALSE(rvr.vote_granted);
     }
 
     /* vote for ID 2 */
@@ -516,7 +516,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
     EXPECT_EQ(r.get_voted_for(), raft::NodeId(2));
     {
         MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1));
-        EXPECT_EQ(ReqVoteState::NotGranted, rvr.vote_granted);
+        EXPECT_FALSE(rvr.vote_granted);
     }
 }
 
@@ -954,14 +954,14 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
     /* vote not granted */
     {
         MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(term, 1, 1));
-        EXPECT_EQ(ReqVoteState::NotGranted, rvr.vote_granted);
+        EXPECT_FALSE(rvr.vote_granted);
     }
 
     /* approve vote, because last_log_term is higher */
     prepare_follower(r);
     {
         MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term(), 1, r.get_current_term() + 1));
-        EXPECT_EQ(ReqVoteState::Granted, rvr.vote_granted);
+        EXPECT_TRUE(rvr.vote_granted);
     }
 }
 
@@ -1197,13 +1197,13 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
 
     /* a vote for us */
     /* get one vote */
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, true));
     EXPECT_EQ(2, r.nodes().get_nvotes_for_me(r.get_voted_for()));
     EXPECT_FALSE(r.is_leader());
 
     /* get another vote
      * now has majority (ie. 3/5 votes) */
-    r.accept_rep(raft::NodeId(3), MsgVoteRep(1, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(3), MsgVoteRep(1, true));
     EXPECT_TRUE(r.is_leader());
 }
 
@@ -1217,7 +1217,7 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(0, 0, 0));
 
     /* we've vote already, so won't respond with a vote granted... */
-    EXPECT_EQ(ReqVoteState::NotGranted, rvr.vote_granted);
+    EXPECT_FALSE(rvr.vote_granted);
 }
 
 /* Candidate 5.2 */
@@ -1262,7 +1262,7 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
     EXPECT_FALSE(r.get_current_leader().isSome());
     raft::TermId term = r.get_current_term();
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(term + 1, ReqVoteState::NotGranted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(term + 1, false));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(term + 1, r.get_current_term());
     EXPECT_FALSE(r.get_voted_for().isSome());
@@ -2184,12 +2184,12 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
 
     prepare_candidate(r);
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, true));
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
     MsgVoteRep opt = r.accept_req(raft::NodeId(3), MsgVoteReq(1, 0, 0));
-    EXPECT_EQ(ReqVoteState::NotGranted, opt.vote_granted);
+    EXPECT_FALSE(opt.vote_granted);
 }
 
 TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
@@ -2203,7 +2203,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
 
     prepare_candidate(r);
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, ReqVoteState::Granted));
+    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, true));
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */

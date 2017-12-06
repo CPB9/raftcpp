@@ -28,13 +28,6 @@ enum class Error : uint8_t
     NotCandidate,
 };
 
-enum class ReqVoteState
-{
-    Granted         = 1,
-    NotGranted     = 0,
-    UnknownNode    = -1,
-};
-
 enum class State
 {
     Follower,
@@ -140,9 +133,9 @@ struct MsgVoteReq
  * Indicates if node has accepted the server's vote request. */
 struct MsgVoteRep
 {
-    MsgVoteRep(TermId term, ReqVoteState vote) : term(term), vote_granted(vote) {}
-    TermId term;                   /**< currentTerm, for candidate to update itself */
-    ReqVoteState vote_granted;     /**< true means candidate received vote */
+    MsgVoteRep(TermId term, bool vote) : term(term), vote_granted(vote) {}
+    TermId term;            /**< currentTerm, for candidate to update itself */
+    bool vote_granted;      /**< true means candidate received vote */
 };
 
 /** Appendentries message.

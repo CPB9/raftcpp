@@ -24,6 +24,8 @@
 namespace raft
 {
 
+static inline const char* vote_to_str(bool vote) { return vote ? "granted" : "not granted"; }
+
 void Server::__log(NodeId node, const char *fmt, ...) const
 {
     char buf[1024];
@@ -386,13 +388,9 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
     return false;
 }
 
-MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote)
+MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, bool vote)
 {
-    __log(candidate, "node requested vote: %d replying: %s",
-        candidate,
-        vote == ReqVoteState::Granted ? "granted" :
-        vote == ReqVoteState::NotGranted ? "not granted" : "unknown");
-
+    __log(candidate, "node requested vote: %d replying: %s", candidate, vote_to_str(vote));
     return MsgVoteRep(get_current_term(), vote);
 }
 
@@ -407,7 +405,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
+        return prepare_requestvote_response_t(nodeid, false);
     }
 
     if (get_current_term() < vr.term)
@@ -418,7 +416,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     }
 
     if (!__should_grant_vote(*this, vr))
-        return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
+        return prepare_requestvote_response_t(nodeid, false);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
@@ -430,16 +428,14 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     _me.current_leader.clear();
     _timer.reset_elapsed();
 
-    return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
+    return prepare_requestvote_response_t(nodeid, true);
 }
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
-    __log(nodeid, "node responded to requestvote status: %s",
-          r.vote_granted == ReqVoteState::Granted ? "granted" :
-          r.vote_granted == ReqVoteState::NotGranted ? "not granted" : "unknown");
+    __log(nodeid, "node responded to requestvote status: %s", vote_to_str(r.vote_granted));
 
     if (!is_candidate())
         return bmcl::None;
@@ -460,31 +456,14 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         return bmcl::None;
     }
 
-    __log(nodeid, "node responded to requestvote status:%s ct:%d rt:%d",
-          r.vote_granted == ReqVoteState::Granted ? "granted" :
-          r.vote_granted == ReqVoteState::NotGranted ? "not granted" : "unknown",
-          _me.current_term,
-          r.term);
+    __log(nodeid, "node responded to requestvote status:%s ct:%d rt:%d", vote_to_str(r.vote_granted), _me.current_term, r.term);
 
-    switch (r.vote_granted)
+    if (r.vote_granted)
     {
-        case ReqVoteState::Granted:
-            if (node.isSome())
-                node->vote_for_me(true);
-            if (_nodes.votes_has_majority(_me.voted_for))
-                become_leader();
-            break;
-
-        case ReqVoteState::NotGranted:
-            break;
-
-        case ReqVoteState::UnknownNode:
-            if (_nodes.get_my_node().is_voting() && _me.connected == NodeStatus::Disconnecting)
-                return Error::Shutdown;
-            break;
-
-        default:
-            assert(0);
+        if (node.isSome())
+            node->vote_for_me(true);
+        if (_nodes.votes_has_majority(_me.voted_for))
+            become_leader();
     }
 
     return bmcl::None;
@@ -572,8 +551,6 @@ void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
     if (node.isSome())
     {
         node->set_has_sufficient_logs();
-        if (_nodes.is_me(node->get_id()))
-            _me.connected = NodeStatus::Connected;
     }
 }
 
