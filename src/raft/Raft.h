@@ -23,25 +23,11 @@ namespace raft
 class Timer
 {
 public:
-    Timer()
-    {
-        timeout_elapsed = std::chrono::milliseconds(0);
-        set_timeout(std::chrono::milliseconds(200), 5);
-        randomize_election_timeout();
-    }
+    Timer();
     inline void add_elapsed(std::chrono::milliseconds msec) { timeout_elapsed += msec; }
     inline void reset_elapsed() { timeout_elapsed = std::chrono::milliseconds(0); }
-    inline void set_timeout(std::chrono::milliseconds msec, std::size_t factor)
-    {
-        request_timeout = msec;
-        election_timeout = msec* factor;
-        randomize_election_timeout();
-    }
-    void randomize_election_timeout()
-    {
-        /* [election_timeout, 2 * election_timeout) */
-        election_timeout_rand = election_timeout + std::chrono::milliseconds(rand() % election_timeout.count());
-    }
+    void set_timeout(std::chrono::milliseconds msec, std::size_t factor);
+    void randomize_election_timeout();
 
     bool is_time_to_elect() const { return election_timeout_rand <= timeout_elapsed; }
     bool is_time_to_ping() const { return request_timeout <= timeout_elapsed; }
