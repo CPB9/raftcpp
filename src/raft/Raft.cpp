@@ -710,7 +710,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
           ae.prev_log_idx,
           ae.prev_log_term);
 
-    return _sender->append_entries(node.get_id(), ae);
+    return sender->append_entries(node.get_id(), ae);
 }
 
 void Server::vote_for_nodeid(NodeId nodeid)
