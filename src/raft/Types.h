@@ -35,6 +35,17 @@ enum class State
     Leader
 } ;
 
+inline const char* to_string(State s)
+{
+    switch (s)
+    {
+    case State::Follower: return "follower";
+    case State::Candidate: return "candidate";
+    case State::Leader: return "leader";
+    }
+    return "unknown";
+}
+
 enum class EntryState
 {
     Invalidated = -1,
@@ -145,8 +156,8 @@ struct MsgVoteRep
 struct MsgAppendEntriesReq
 {
     MsgAppendEntriesReq(TermId term) : term(term), prev_log_idx(0), prev_log_term(TermId(0)), leader_commit(0), n_entries(0), entries(nullptr) {}
-    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit)
-        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), n_entries(0), entries(nullptr) {}
+    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index n_entries = 0, const MsgAddEntryReq* entries = nullptr)
+        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), n_entries(n_entries), entries(entries) {}
     TermId  term;           /**< currentTerm, to force other leader/candidate to step down */
     Index   prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     TermId  prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
