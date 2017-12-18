@@ -136,7 +136,7 @@ void Exchanger::poll_msgs(raft::NodeId from)
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE:
         {
             EXPECT_EQ(sizeof(MsgVoteReq), m.data.size());
-            MsgVoteRep response = s.raft->accept_req(from, *(MsgVoteReq*)m.data.data());
+            MsgVoteRep response = s.raft->accept_req(m.sender, *(MsgVoteReq*)m.data.data());
             __append_msg(me, m.sender, &response, sizeof(response), raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE);
         }
         break;
