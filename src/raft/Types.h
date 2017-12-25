@@ -26,6 +26,7 @@ enum class Error : uint8_t
     NothingToSend,
     CantSendToMyself,
     NotCandidate,
+    CantSend,
 };
 
 enum class State
