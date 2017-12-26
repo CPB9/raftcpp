@@ -19,7 +19,7 @@ TEST(TestScenario, leader_appears)
 
         for(std::size_t j = 1; j < Count; ++j)
         {
-            rx.nodes().add_node(raft::NodeId((i + j) % Count));
+            rx.nodes().add_node(raft::NodeId((i + j) % Count), true);
         }
         rx.timer().set_timeout(std::chrono::milliseconds(100), 5);
     }

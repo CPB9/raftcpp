@@ -7,7 +7,7 @@ namespace raft
 
 Nodes::Nodes(NodeId id, bool isVoting) : _me(id)
 {
-    Node& r = add_node(id);
+    Node& r = add_node(id, true);
     r.set_voting(isVoting);
 }
 
@@ -53,28 +53,19 @@ const Node& Nodes::get_my_node() const
     return n.unwrap();
 }
 
-Node& Nodes::add_node(NodeId id)
+Node& Nodes::add_node(NodeId id, bool is_voting)
 {   /* set to voting if node already exists */
     bmcl::Option<Node&> node = get_node(id);
     if (node.isSome())
     {
-        node->set_voting(true);
+        if (is_voting)
+            node->set_voting(true);
         return node.unwrap();
     }
 
     _nodes.emplace_back(Node(id));
+    _nodes.back().set_voting(is_voting);
     return _nodes.back();
-}
-
-const Node& Nodes::add_non_voting_node(NodeId id)
-{
-    bmcl::Option<Node&> node = get_node(id);
-    if (node.isSome())
-        return node.unwrap();
-
-    node = add_node(id);
-    node.unwrap().set_voting(false);
-    return node.unwrap();
 }
 
 void Nodes::remove_node(NodeId id)

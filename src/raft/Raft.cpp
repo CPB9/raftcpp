@@ -542,13 +542,13 @@ void Server::entry_append_impl(const LogEntry& ety, Index idx)
     case LotType::AddNonVotingNode:
         if (!_nodes.is_me(id) && node.isNone())
         {
-            const Node& n = _nodes.add_non_voting_node(id);
+            const Node& n = _nodes.add_node(id, false);
             assert(!n.is_voting());
         }
         break;
 
     case LotType::AddNode:
-        node = _nodes.add_node(id);
+        node = _nodes.add_node(id, true);
         assert(node.isSome());
         assert(node->is_voting());
         break;
@@ -596,7 +596,7 @@ void Server::pop_log(const LogEntry& ety, const Index idx)
 
     case LotType::RemoveNode:
     {
-        const Node& node = _nodes.add_non_voting_node(id);
+        const Node& node = _nodes.add_node(id, false);
     }
     break;
 
