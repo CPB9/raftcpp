@@ -124,9 +124,6 @@ bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety)
     if (ety.is_voting_cfg_change() && voting_change_is_in_progress())
         return Error::OneVotingChangeOnly;
 
-    if (ety.is_voting_cfg_change())
-        _voting_cfg_change_log_idx = get_current_idx();
-
     if (_saver)
     {
         bmcl::Option<Error> e = _saver->push_back(ety, get_current_idx() + 1);
@@ -135,6 +132,9 @@ bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety)
     }
 
     append(ety);
+    if (ety.is_voting_cfg_change())
+        _voting_cfg_change_log_idx = get_current_idx();
+
     return bmcl::None;
 }
 

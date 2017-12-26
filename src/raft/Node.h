@@ -77,8 +77,8 @@ public:
     bmcl::Option<const Node&> get_node(NodeId id) const;
     bmcl::Option<Node&> get_node(NodeId id);
     const Node& get_my_node() const;
-    bmcl::Option<Node&> add_node(NodeId id);
-    bmcl::Option<Node&> add_non_voting_node(NodeId id);
+    Node& add_node(NodeId id);
+    const Node& add_non_voting_node(NodeId id);
     void remove_node(NodeId id);
     std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
     std::size_t get_num_voting_nodes() const;

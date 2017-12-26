@@ -20,6 +20,8 @@ if(HAS_PARENT_SCOPE)
     )
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
+
 set(BMCL_NO_QT 1)
 bmcl_add_dep_gtest(thirdparty/gtest)
 bmcl_add_dep_bmcl(thirdparty/bmcl)

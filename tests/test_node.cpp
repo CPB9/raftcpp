@@ -54,29 +54,28 @@ TEST(TestNode, add_node_with_already_existing_id_doesnt_add_new_one)
     nodes.add_node(raft::NodeId(11));
 
     const auto& node = nodes.add_node(raft::NodeId(9));
-    EXPECT_TRUE(node.isSome());
-    EXPECT_EQ(node->get_id(), raft::NodeId(9));
-    EXPECT_TRUE(node->is_voting());
+    EXPECT_EQ(node.get_id(), raft::NodeId(9));
+    EXPECT_TRUE(node.is_voting());
 }
 
-TEST(TestNode, add_non_voting_node_with_already_existing_id_is_not_allowed)
+TEST(TestNode, add_non_voting_node_with_already_existing_id_doesnt_change_voting)
 {
     raft::Nodes nodes(raft::NodeId(1), true);
     nodes.add_non_voting_node(raft::NodeId(9));
     nodes.add_non_voting_node(raft::NodeId(11));
 
-    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(9)).isSome());
-    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(11)).isSome());
+    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(9)).is_voting());
+    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(11)).is_voting());
 }
 
-TEST(TestNode, add_non_voting_node_with_already_existing_voting_id_is_not_allowed)
+TEST(TestNode, add_non_voting_node_with_already_existing_voting_doesnt_change_voting)
 {
     raft::Nodes nodes(raft::NodeId(1), true);
     nodes.add_node(raft::NodeId(9));
     nodes.add_node(raft::NodeId(11));
 
-    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(9)).isSome());
-    EXPECT_FALSE(nodes.add_non_voting_node(raft::NodeId(11)).isSome());
+    EXPECT_TRUE(nodes.add_non_voting_node(raft::NodeId(9)).is_voting());
+    EXPECT_TRUE(nodes.add_non_voting_node(raft::NodeId(11)).is_voting());
 }
 
 TEST(TestNode, remove_node)

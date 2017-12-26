@@ -540,10 +540,10 @@ void Server::entry_append_impl(const LogEntry& ety, Index idx)
     switch (ety.type)
     {
     case LotType::AddNonVotingNode:
-        if (!_nodes.is_me(id))
+        if (!_nodes.is_me(id) && node.isNone())
         {
-            bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
-            assert(node.isSome());
+            const Node& n = _nodes.add_non_voting_node(id);
+            assert(!n.is_voting());
         }
         break;
 
@@ -596,8 +596,7 @@ void Server::pop_log(const LogEntry& ety, const Index idx)
 
     case LotType::RemoveNode:
     {
-        bmcl::Option<Node&> node = _nodes.add_non_voting_node(id);
-        assert(node.isSome());
+        const Node& node = _nodes.add_non_voting_node(id);
     }
     break;
 
