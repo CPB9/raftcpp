@@ -118,17 +118,17 @@ void LogCommitter::commit_till(Index idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety)
+bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety, bool needVoteChecks)
 {
     /* Only one voting cfg change at a time */
-    if (ety.is_voting_cfg_change() && voting_change_is_in_progress())
+    if (needVoteChecks && ety.is_voting_cfg_change() && voting_change_is_in_progress())
         return Error::OneVotingChangeOnly;
 
     if (_saver)
     {
         bmcl::Option<Error> e = _saver->push_back(ety, get_current_idx() + 1);
-        if (e == Error::Shutdown)
-            return Error::Shutdown;
+        if (e.isSome())
+            return e;
     }
 
     append(ety);
@@ -152,10 +152,9 @@ bmcl::Result<LogEntry, Error> LogCommitter::entry_apply_one()
 
     _last_applied_idx = log_idx;
     assert(_saver);
-    bmcl::Option<Error> e = _saver->apply_log(ety, _last_applied_idx - 1);
-    if (e == Error::Shutdown)
-        return Error::Shutdown;
-    assert(e.isNone());
+    bmcl::Option<Error> e = _saver->apply_log(ety, _last_applied_idx);
+    if (e.isSome())
+        return e.unwrap();
 
     /* voting cfg change is now complete */
     if (log_idx == _voting_cfg_change_log_idx.unwrapOr(0))

@@ -101,15 +101,6 @@ struct LogEntry
     {
         return LotType::AddNode == type || LotType::DemoteNode == type;
     }
-
-    inline bool is_cfg_change() const
-    {
-        return (
-            LotType::AddNode == type ||
-            LotType::AddNonVotingNode == type ||
-            LotType::DemoteNode == type ||
-            LotType::RemoveNode == type);
-    }
 };
 
 /** Message sent from client to server.

@@ -235,7 +235,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
         )
     {
         LogEntry ety(get_current_term(), EntryId(0), LotType::AddNode, node->get_id()); //insert node->get_id() into ety
-        auto e = entry_append(ety);
+        auto e = entry_append(ety, false);
         if (e.isSome())
             return e;
 
@@ -349,7 +349,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     /* Pick up remainder in case of mismatch or missing entry */
     for (; i < ae.n_entries; i++)
     {
-        bmcl::Option<Error> e = entry_append(ae.entries[i]);
+        bmcl::Option<Error> e = entry_append(ae.entries[i], false);
         if (e.isSome())
         {
             if (e.unwrap() == Error::Shutdown)
@@ -358,7 +358,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
                 r.first_idx = 0;
                 return Error::Shutdown;
             }
-            return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
+            break;
         }
         r.current_idx = ae.prev_log_idx + 1 + i;
     }
@@ -501,7 +501,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
 
     LogEntry ety = e;
     ety.term = _me.current_term;
-    auto r = entry_append(ety);
+    auto r = entry_append(ety, true);
     if (r.isSome())
         return r.unwrap();
 
@@ -528,45 +528,6 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
 }
 
-void Server::entry_append_impl(const LogEntry& ety, Index idx)
-{
-    if (!ety.is_cfg_change())
-        return;
-
-    assert(ety.node.isSome());
-    NodeId id = ety.node.unwrap();
-    bmcl::Option<Node&> node = _nodes.get_node(id);
-
-    switch (ety.type)
-    {
-    case LotType::AddNonVotingNode:
-        if (!_nodes.is_me(id) && node.isNone())
-        {
-            const Node& n = _nodes.add_node(id, false);
-            assert(!n.is_voting());
-        }
-        break;
-
-    case LotType::AddNode:
-        node = _nodes.add_node(id, true);
-        assert(node.isSome());
-        assert(node->is_voting());
-        break;
-
-    case LotType::DemoteNode:
-        node->set_voting(false);
-        break;
-
-    case LotType::RemoveNode:
-        if (node.isSome())
-            _nodes.remove_node(node->get_id());
-        break;
-
-    default:
-        assert(0);
-    }
-}
-
 void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
 {
     bmcl::Option<Node&> node = _nodes.get_node(id);
@@ -579,10 +540,9 @@ void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
 
 void Server::pop_log(const LogEntry& ety, const Index idx)
 {
-    if (!ety.is_cfg_change())
+    if (ety.node.isNone())
         return;
 
-    assert(ety.node.isSome());
     NodeId id = ety.node.unwrap();
 
     switch (ety.type)
@@ -619,12 +579,47 @@ void Server::pop_log(const LogEntry& ety, const Index idx)
     }
 }
 
-bmcl::Option<Error> Server::entry_append(const LogEntry& ety)
+bmcl::Option<Error> Server::entry_append(const LogEntry& ety, bool needVoteChecks)
 {
-    auto e = _log.entry_append(ety);
+    auto e = _log.entry_append(ety, needVoteChecks);
     if (e.isSome())
         return e;
-    entry_append_impl(ety, _log.get_current_idx());
+
+    if (ety.node.isNone())
+        return bmcl::None;
+
+    NodeId id = ety.node.unwrap();
+    bmcl::Option<Node&> node = _nodes.get_node(id);
+
+    switch (ety.type)
+    {
+    case LotType::AddNonVotingNode:
+        if (!_nodes.is_me(id) && node.isNone())
+        {
+            const Node& n = _nodes.add_node(id, false);
+            assert(!n.is_voting());
+        }
+        break;
+
+    case LotType::AddNode:
+        node = _nodes.add_node(id, true);
+        assert(node.isSome());
+        assert(node->is_voting());
+        break;
+
+    case LotType::DemoteNode:
+        node->set_voting(false);
+        break;
+
+    case LotType::RemoveNode:
+        if (node.isSome())
+            _nodes.remove_node(node->get_id());
+        break;
+
+    default:
+        assert(0);
+    }
+
     return bmcl::None;
 }
 

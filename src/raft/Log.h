@@ -56,7 +56,7 @@ public:
     inline void commit_all() { set_commit_idx(get_current_idx()); }
     void set_commit_idx(Index idx);
 
-    bmcl::Option<Error> entry_append(const LogEntry& ety);
+    bmcl::Option<Error> entry_append(const LogEntry& ety, bool needVoteChecks = false);
     bmcl::Result<LogEntry, Error> entry_apply_one();
     bmcl::Option<LogEntry> entry_pop_back();
     void entry_pop_front();

@@ -1318,6 +1318,33 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 }
 
+TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
+{
+    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    r.nodes().add_node(raft::NodeId(2), true);
+
+    prepare_follower(r);
+    EXPECT_TRUE(r.is_follower());
+
+    raft::TermId term = r.get_current_term();
+    raft::LogEntry entries[3] =
+    { raft::LogEntry(term, 1, raft::LotType::AddNode, raft::NodeId(3))
+    , raft::LogEntry(term, 2, raft::LotType::AddNode, raft::NodeId(4))
+    , raft::LogEntry(term, 3, raft::LotType::AddNode, raft::NodeId(5))
+    };
+
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term(), 0, 1, 4, 3, entries));
+    EXPECT_TRUE(aer.isOk());
+    EXPECT_EQ(3, r.log().count());
+    EXPECT_EQ(3, r.log().get_commit_idx());
+
+    r.raft_periodic(std::chrono::milliseconds(0));
+    r.raft_periodic(std::chrono::milliseconds(0));
+    r.raft_periodic(std::chrono::milliseconds(0));
+    EXPECT_FALSE(r.log().has_not_applied());
+    EXPECT_EQ(5, r.nodes().count());
+}
+
 TEST(TestLeader, becomes_leader_is_leader)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
