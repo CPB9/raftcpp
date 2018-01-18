@@ -1,2 +1,6 @@
 /cmake-make
 build
+
+subprojects/bmcl/
+subprojects/googletest-release-1.8.0/
+subprojects/packagecache/
