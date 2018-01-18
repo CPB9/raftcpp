@@ -3,7 +3,7 @@ test_inc = include_directories('.')
 mock_lib = static_library('raftcpp-test-mocks',
   sources : ['mock_send_functions.h', 'mock_send_functions.cpp'],
   include_directories : test_inc,
-    dependencies : raftcpp_dep,
+  dependencies : [raftcpp_dep, gtest_dep],
 )
 
 tests = [
