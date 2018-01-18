@@ -56,12 +56,12 @@ public:
 
 class Saver : public raft::ISaver
 {
-    bmcl::Option<Error> apply_log(const LogEntry& entry, std::size_t entry_idx) override { return bmcl::None; }
+    bmcl::Option<Error> apply_log(const Entry& entry, std::size_t entry_idx) override { return bmcl::None; }
     bmcl::Option<Error> persist_vote(NodeId node) override { return bmcl::None; }
     bmcl::Option<Error> persist_term(TermId node) override { return bmcl::None; }
-    bmcl::Option<Error> push_back(const LogEntry& entry, Index entry_idx) override { return bmcl::None; }
-    void pop_front(const LogEntry& entry, Index entry_idx) override {}
-    void pop_back(const LogEntry& entry, Index entry_idx) override {}
+    bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) override { return bmcl::None; }
+    void pop_front(const Entry& entry, Index entry_idx) override {}
+    void pop_back(const Entry& entry, Index entry_idx) override {}
     void log(NodeId node, const char *buf) override {}
 };
 

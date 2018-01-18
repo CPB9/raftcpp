@@ -12,6 +12,7 @@
 #include <chrono>
 #include <functional>
 #include <bmcl/Option.h>
+#include <bmcl/Either.h>
 
 namespace raft
 {
@@ -54,15 +55,6 @@ enum class EntryState
     Committed = 1,
 };
 
-enum class LotType
-{
-    Normal,
-    AddNonVotingNode,
-    AddNode,
-    DemoteNode,
-    RemoveNode,
-    ChangeCfg
-};
 
 enum class NodeStatus
 {
@@ -85,28 +77,50 @@ struct LogEntryData
     std::vector<uint8_t> data;
 };
 
-/** Entry that is stored in the server's entry log. */
-struct LogEntry
+
+struct EntryInternal
 {
-    LogEntry(TermId term, EntryId id, LogEntryData data = LogEntryData{}) : term(term), id(id), type(LotType::Normal), data(data) {}
-    LogEntry(TermId term, EntryId id, LotType type, NodeId node, LogEntryData data = LogEntryData{})
-        : term(term), id(id), type(type), node(node), data(data) {}
-    TermId  term;               /**< the entry's term at the point it was created */
-    EntryId id;                 /**< the entry's unique ID */
-    LotType type;               /**< type of entry */
-    bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
-    LogEntryData data;
+    enum class Type : uint8_t
+    {
+        AddNonVotingNode,
+        AddNode,
+        DemoteNode,
+        RemoveNode,
+    };
 
     inline bool is_voting_cfg_change() const
     {
-        return LotType::AddNode == type || LotType::DemoteNode == type;
+        return Type::AddNode == type || Type::DemoteNode == type;
     }
+
+    EntryInternal(Type type, NodeId node) : type(type), node(node) {}
+    Type   type;
+    NodeId node;
+};
+
+struct EntryUser
+{
+    EntryUser() {}
+    EntryUser(const std::vector<uint8_t>& data) : data(data) {}
+    EntryUser(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len) { }
+    bool operator==(const EntryUser& r) const { return data == r.data; }
+    std::vector<uint8_t> data;
+};
+
+/** Entry that is stored in the server's entry log. */
+struct Entry
+{
+    Entry(TermId term, EntryId id, const EntryUser& ety) : term(term), id(id), entry(ety) {}
+    Entry(TermId term, EntryId id, const EntryInternal& ety) : term(term), id(id), entry(ety) {}
+    TermId  term;               /**< the entry's term at the point it was created */
+    EntryId id;                 /**< the entry's unique ID */
+    bmcl::Either<EntryInternal, EntryUser> entry;
 };
 
 /** Message sent from client to server.
  * The client sends this message to a server with the intention of having it
  * applied to the FSM. */
-using MsgAddEntryReq = LogEntry;
+using MsgAddEntryReq = Entry;
 
 /** Entry message response.
  * Indicates to client if entry was committed or not. */
@@ -191,7 +205,7 @@ public:
     /** Callback for finite state machine application
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> apply_log(const LogEntry& entry, Index entry_idx) = 0;
+    virtual bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for persisting vote data
     * For safety reasons this callback MUST flush the change to disk. */
@@ -205,19 +219,19 @@ public:
     * For safety reasons this callback MUST flush the change to disk.
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> push_back(const LogEntry& entry, Index entry_idx) = 0;
+    virtual bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the oldest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void pop_front(const LogEntry& entry, Index entry_idx) = 0;
+    virtual void pop_front(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the youngest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void pop_back(const LogEntry& entry, Index entry_idx) = 0;
+    virtual void pop_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for catching debugging log messages
     * This callback is optional */
