@@ -178,6 +178,8 @@ struct MsgAppendEntriesRep
 class ISender
 {
 public:
+    virtual ~ISender();
+
     /** Callback for sending request vote messages to all cluster's members */
     virtual bmcl::Option<Error> request_vote(const NodeId& node, const MsgVoteReq& msg) = 0;
 
@@ -188,6 +190,8 @@ public:
 class ISaver
 {
 public:
+    virtual ~ISaver();
+
     /** Callback for finite state machine application
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
