@@ -65,7 +65,8 @@ Node& Nodes::add_node(NodeId id, bool is_voting)
 
     _nodes.emplace_back(Node(id));
     _nodes.back().set_voting(is_voting);
-    return _nodes.back();
+    std::sort(_nodes.begin(), _nodes.end(), [](const Node& l, const Node& r) { return l.get_id() < r.get_id(); });
+    return *std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& n) { return n.get_id() == id; });
 }
 
 void Nodes::remove_node(NodeId id)
