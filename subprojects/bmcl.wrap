@@ -1,0 +1,4 @@
+[wrap-git]
+directory = bmcl
+url = https://github.com/CPB9/bmcl.git
+revision = head
