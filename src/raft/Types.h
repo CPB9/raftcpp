@@ -225,7 +225,7 @@ public:
 
     /** Callback for catching debugging log messages
     * This callback is optional */
-    virtual void log(const NodeId node, const char *buf) = 0;
+    virtual void log(const char *buf) = 0;
 };
 
 

@@ -62,7 +62,7 @@ class Saver : public raft::ISaver
     bmcl::Option<Error> push_back(const LogEntry& entry, Index entry_idx) override { return bmcl::None; }
     void pop_front(const LogEntry& entry, Index entry_idx) override {}
     void pop_back(const LogEntry& entry, Index entry_idx) override {}
-    void log(NodeId node, const char *buf) override {}
+    void log(const char *buf) override {}
 };
 
 class Exchanger
