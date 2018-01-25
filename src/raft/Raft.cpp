@@ -47,7 +47,16 @@ void Timer::randomize_election_timeout()
     election_timeout_rand = std::chrono::milliseconds(distr(eng));
 }
 
-static inline const char* vote_to_str(bool vote) { return vote ? "granted" : "not granted"; }
+static inline const char* vote_to_str(ReqVoteState vote)
+{
+    switch (vote)
+    {
+    case raft::ReqVoteState::Granted: return "granted";
+    case raft::ReqVoteState::NotGranted: return "not granted";
+    case raft::ReqVoteState::UnknownNode: return "unknown node";
+    }
+    return "unknown";
+}
 
 void Server::__log(const char *fmt, ...) const
 {
@@ -59,7 +68,7 @@ void Server::__log(const char *fmt, ...) const
 }
 
 Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
-    : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
+    : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver), _new_cfg(id, true), _old_cfg(id, true), _backup_cfg (id, true)
 {
     _me.current_term = TermId(0);
     become_follower();
@@ -74,6 +83,8 @@ void Server::become_leader()
 
     for (const Node& i: _nodes.items())
     {
+        if (_nodes.is_me(i.get_id()))
+            continue;
         Node& n = _nodes.get_node(i.get_id()).unwrap();
         n.set_next_idx(_log.get_current_idx() + 1);
         n.set_match_idx(0);
@@ -118,7 +129,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     _timer.add_elapsed(msec_since_last_period);
 
     /* Only one voting node means it's safe for us to become the leader */
-    if (1 == _nodes.get_num_voting_nodes())
+    if (1 == _nodes.get_num_voting_nodes(_nodes))
     {
         const Node& node = _nodes.get_my_node();
         if (node.is_voting() && !is_leader())
@@ -141,7 +152,7 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     }
     else if (_timer.is_time_to_elect())
     {
-        if (1 < _nodes.get_num_voting_nodes())
+        if (1 < _nodes.get_num_voting_nodes(_nodes))
         {
             const Node& node = _nodes.get_my_node();
             if (node.is_voting())
@@ -159,11 +170,54 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     if (r.isOk())
     {
         const LogEntry& ety = r.unwrap();
+        //**************************************************//**************************************************
+        if (LotType::ChangeCfg == ety.type)
+        {
+
+            assert(ety.newcfg.isSome());
+            std::size_t NewCfgCount = ety.newcfg.unwrap().size();
+
+        /*	for (std::size_t i = 0; i < NewCfgCount; ++i)
+            {
+                NodeId id = ety.newcfg.unwrap()[i+1];
+                entry_apply_node_add(id);
+            }*/
+            __log("applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), nullptr, ety.data.data.size());
+
+            _nodes = _new_cfg;
+
+            if (is_leader())
+            {
+                accept_entry((MsgAddEntryReq(TermId(0), _log.get_current_idx(), LotType::ChangeCfgFinish, vectorid.unwrap())));
+            }
+            return bmcl::None;
+
+        }
+
+        if (LotType::ChangeCfgFinish == ety.type)
+        {
+            assert(ety.newcfg.isSome());
+            std::size_t NewCfgCount = ety.newcfg.unwrap().size();
+/*
+            for (std::size_t i = 0; i < NewCfgCount; ++i)
+            {
+                NodeId id = ety.newcfg.unwrap()[i + 1];
+                entry_apply_node_add(id);
+            }
+        */
+            __log("applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), nullptr, ety.data.data.size());
+
+            _backup_cfg = _nodes;
+
+            return bmcl::None;
+
+        }
+        //**************************************************//**************************************************
         if (LotType::AddNode == ety.type)
         {
             assert(ety.node.isSome());
             NodeId id = ety.node.unwrap();
-            entry_apply_node_add(ety, id);
+            entry_apply_node_add(/*ety,*/ id);
         }
         __log("applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.data.size());
         return bmcl::None;
@@ -248,7 +302,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     {
         bmcl::Option<const LogEntry&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
-        if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point))
+        if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point, _old_cfg) && _nodes.is_committed(point, _new_cfg))
         {
             _log.set_commit_idx(point);
         }
@@ -380,8 +434,8 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
 
-    if (!me.nodes().get_my_node().is_voting())
-        return false;
+//  if (!me.nodes().get_my_node().is_voting())
+//      return false;
 
     if (vr.term < me.get_current_term())
         return false;
@@ -412,7 +466,7 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
     return false;
 }
 
-MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, bool vote)
+MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote)
 {
     __log("requested vote: %d replying: %s", candidate, vote_to_str(vote));
     return MsgVoteRep(get_current_term(), vote);
@@ -423,13 +477,13 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
     {
-        assert(false);
+        // assert(false);
         /* It's possible the candidate node has been removed from the cluster but
         * hasn't received the appendentries that confirms the removal. Therefore
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(nodeid, false);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
     }
 
     if (get_current_term() < vr.term)
@@ -440,7 +494,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     }
 
     if (!__should_grant_vote(*this, vr))
-        return prepare_requestvote_response_t(nodeid, false);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
@@ -452,7 +506,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     _me.current_leader.clear();
     _timer.reset_elapsed();
 
-    return prepare_requestvote_response_t(nodeid, true);
+    return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
 }
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
@@ -460,6 +514,9 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
     __log("node %d responded to requestvote status: %s", nodeid, vote_to_str(r.vote_granted));
+
+    if (node.isNone())
+        return Error::NodeUnknown;
 
     if (!is_candidate())
         return bmcl::None;
@@ -482,12 +539,26 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 
     __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, vote_to_str(r.vote_granted), _me.current_term, r.term);
 
-    if (r.vote_granted)
+    switch (r.vote_granted)
     {
-        if (node.isSome())
-            node->vote_for_me(true);
-        if (_nodes.votes_has_majority(_me.voted_for))
-            become_leader();
+        case ReqVoteState::Granted:
+            if (node.isSome())
+                node->vote_for_me(true);
+
+            if (_nodes.votes_has_majority(_me.voted_for, _old_cfg) && _nodes.votes_has_majority(_me.voted_for, _new_cfg))
+                become_leader();
+            break;
+
+        case ReqVoteState::NotGranted:
+            break;
+
+        case ReqVoteState::UnknownNode:
+            if (/*_nodes.get_my_node().is_voting() &&*/ _me.connected == NodeStatus::Disconnecting)
+                return Error::Shutdown;
+            break;
+
+        default:
+            assert(0);
     }
 
     return bmcl::None;
@@ -507,7 +578,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
         return r.unwrap();
 
     /* if we're the only node, we can consider the entry committed */
-    if (1 == _nodes.get_num_voting_nodes())
+    if (1 == _nodes.get_num_voting_nodes(_nodes))
         _log.commit_all();
 
     for (const Node& i: _nodes.items())
@@ -529,25 +600,36 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
 }
 
-void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
+void Server::entry_apply_node_add(/*const LogEntry& ety,*/ NodeId id)
 {
     bmcl::Option<Node&> node = _nodes.get_node(id);
     assert(node.isSome());
     if (node.isSome())
     {
         node->set_has_sufficient_logs();
+        if (_nodes.is_me(node->get_id()))
+            _me.connected = NodeStatus::Connected;
     }
 }
 
 void Server::pop_log(const LogEntry& ety, const Index idx)
 {
-    if (ety.node.isNone())
+    if (!ety.is_cfg_change())
         return;
 
+    assert(ety.node.isSome());
     NodeId id = ety.node.unwrap();
 
     switch (ety.type)
     {
+    case LotType::ChangeCfg:
+    {
+        _nodes = _backup_cfg;
+        _old_cfg = _backup_cfg;
+        _new_cfg = _backup_cfg;
+    }
+    break;
+
     case LotType::DemoteNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
@@ -586,39 +668,96 @@ bmcl::Option<Error> Server::entry_append(const LogEntry& ety, bool needVoteCheck
     if (e.isSome())
         return e;
 
-    if (ety.node.isNone())
+    if (!ety.is_cfg_change())
         return bmcl::None;
-
-    NodeId id = ety.node.unwrap();
-    bmcl::Option<Node&> node = _nodes.get_node(id);
 
     switch (ety.type)
     {
     case LotType::AddNonVotingNode:
-        if (!_nodes.is_me(id) && node.isNone())
+    {
+        NodeId id = ety.node.unwrap();
+        bmcl::Option<Node&> node = _nodes.get_node(id);
+        if (!_nodes.is_me(id))
         {
             const Node& n = _nodes.add_node(id, false);
             assert(!n.is_voting());
         }
-        break;
+    }
+    break;
 
     case LotType::AddNode:
+    {
+        NodeId id = ety.node.unwrap();
+        bmcl::Option<Node&> node = _nodes.get_node(id);
         node = _nodes.add_node(id, true);
         assert(node.isSome());
         assert(node->is_voting());
-        break;
+    }
+    break;
 
     case LotType::DemoteNode:
+    {
+        NodeId id = ety.node.unwrap();
+        bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(false);
-        break;
+    }
+    break;
 
     case LotType::RemoveNode:
+    {
+        NodeId id = ety.node.unwrap();
+        bmcl::Option<Node&> node = _nodes.get_node(id);
         if (node.isSome())
             _nodes.remove_node(node->get_id());
-        break;
+    }
+    break;
+
+    case LotType::ChangeCfg:
+    {
+        const NodesCfg& Cfg = ety.newcfg.unwrap();
+        auto x = _new_cfg.items();
+
+        for (auto i : x)
+        {
+            NodeId n = i.get_id();
+            _new_cfg.remove_node(n);
+        }
+
+        for (NodeId i : Cfg)
+            _new_cfg.add_node(i, true);
+
+        _old_cfg = _nodes;
+
+        x = _new_cfg.items();
+        for (auto i : x)
+        {
+            NodeId n = i.get_id();
+            _nodes.add_node(n, true);
+        }
+
+        vectorid = ety.newcfg;
+    }
+    break;
+
+    case LotType::ChangeCfgFinish:
+    {
+        const NodesCfg& Cfg = ety.newcfg.unwrap();
+        auto x = _new_cfg.items();
+        for (auto i : x)
+        {
+            NodeId n = i.get_id();
+            _new_cfg.remove_node(n);
+        }
+
+        for (NodeId i : Cfg)
+            _new_cfg.add_node(i, true);
+        _nodes = _new_cfg;
+        _old_cfg = _new_cfg;
+    }
+    break;
 
     default:
-        assert(0);
+        assert(false);
     }
 
     return bmcl::None;

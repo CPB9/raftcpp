@@ -29,7 +29,14 @@ enum class Error : uint8_t
     CantSend,
 };
 
-enum class State
+enum class ReqVoteState : int8_t
+{
+    Granted         = 1,
+    NotGranted     = 0,
+    UnknownNode    = -1,
+};
+
+enum class State : uint8_t
 {
     Follower,
     Candidate,
@@ -47,24 +54,25 @@ inline const char* to_string(State s)
     return "unknown";
 }
 
-enum class EntryState
+enum class EntryState : int8_t
 {
     Invalidated = -1,
     NotCommitted = 0,
     Committed = 1,
 };
 
-enum class LotType
+enum class LotType : uint8_t
 {
     Normal,
     AddNonVotingNode,
     AddNode,
     DemoteNode,
     RemoveNode,
-    ChangeCfg
+    ChangeCfg,
+    ChangeCfgFinish,
 };
 
-enum class NodeStatus
+enum class NodeStatus : uint8_t
 {
     Disconnected,
     Connected,
@@ -73,6 +81,7 @@ enum class NodeStatus
 };
 
 enum class NodeId : std::size_t {};
+using NodesCfg = std::vector<NodeId>;
 using EntryId = std::size_t;
 using TermId = std::size_t;
 using Index = std::size_t;
@@ -91,15 +100,30 @@ struct LogEntry
     LogEntry(TermId term, EntryId id, LogEntryData data = LogEntryData{}) : term(term), id(id), type(LotType::Normal), data(data) {}
     LogEntry(TermId term, EntryId id, LotType type, NodeId node, LogEntryData data = LogEntryData{})
         : term(term), id(id), type(type), node(node), data(data) {}
+    LogEntry(TermId term, EntryId id, LotType type, NodesCfg newcfg, LogEntryData data = LogEntryData{})
+        : term(term), id(id), type(type), newcfg(newcfg), data(data) {}
+
     TermId  term;               /**< the entry's term at the point it was created */
     EntryId id;                 /**< the entry's unique ID */
     LotType type;               /**< type of entry */
     bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
+    bmcl::Option<NodesCfg> newcfg;
     LogEntryData data;
 
     inline bool is_voting_cfg_change() const
     {
         return LotType::AddNode == type || LotType::DemoteNode == type;
+    }
+
+    inline bool is_cfg_change() const
+    {
+        return (
+            LotType::AddNode == type ||
+            LotType::AddNonVotingNode == type ||
+            LotType::DemoteNode == type ||
+            LotType::RemoveNode == type ||
+            LotType::ChangeCfg == type ||
+            LotType::ChangeCfgFinish == type);
     }
 };
 
@@ -136,9 +160,9 @@ struct MsgVoteReq
  * Indicates if node has accepted the server's vote request. */
 struct MsgVoteRep
 {
-    MsgVoteRep(TermId term, bool vote) : term(term), vote_granted(vote) {}
-    TermId term;            /**< currentTerm, for candidate to update itself */
-    bool vote_granted;      /**< true means candidate received vote */
+    MsgVoteRep(TermId term, ReqVoteState vote) : term(term), vote_granted(vote) {}
+    TermId term;                   /**< currentTerm, for candidate to update itself */
+    ReqVoteState vote_granted;     /**< true means candidate received vote */
 };
 
 /** Appendentries message.

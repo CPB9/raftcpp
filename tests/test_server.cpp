@@ -994,7 +994,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     }
 
     /* receive a heartbeat
-     * NOTE: the leader hasn't received the response to the last AE so it can 
+     * NOTE: the leader hasn't received the response to the last AE so it can
      * only assume prev_Log_idx is still 1 */
     ae = MsgAppendEntriesReq(1, 1, 1, 0);
     /* receipt of appendentries changes commit idx */

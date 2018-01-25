@@ -79,14 +79,14 @@ public:
     const Node& get_my_node() const;
     Node& add_node(NodeId id, bool is_voting);
     void remove_node(NodeId id);
-    std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
-    std::size_t get_num_voting_nodes() const;
-    bool votes_has_majority(bmcl::Option<NodeId> voted_for) const;
+    std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for, const Nodes& cfg) const;
+    std::size_t get_num_voting_nodes(const Nodes& cfg) const;
+    bool votes_has_majority(bmcl::Option<NodeId> voted_for, const Nodes& cfg) const;
     static bool votes_has_majority(std::size_t num_nodes, std::size_t nvotes);
-    bool is_committed(Index idx) const;
+    bool is_committed(Index idx, const Nodes& cfg) const;
 private:
     NodeId _me;
-    Items _nodes;
+    Items  _nodes;
 };
 
 

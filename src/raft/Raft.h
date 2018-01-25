@@ -51,6 +51,7 @@ class Server
         bmcl::Option<NodeId>    voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
         State                   state;          /**< follower/leader/candidate indicator */
         bmcl::Option<NodeId>    current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
+        NodeStatus              connected;      /**< our membership with the cluster is confirmed (ie. configuration log was committed) */
     };
 
     friend class Logger;
@@ -71,6 +72,10 @@ public:
 
     const Nodes& nodes() const { return _nodes; }
     Nodes& nodes() { return _nodes; }
+    const Nodes& new_cfg() const { return _new_cfg; }
+    Nodes& new_cfg() { return _new_cfg; }
+    const Nodes& old_cfg() const { return _old_cfg; }
+    Nodes& old_cfg() { return _old_cfg; }
     const LogCommitter& log() const { return _log; }
     LogCommitter& log() { return _log; }
     Timer& timer() { return _timer; }
@@ -87,6 +92,7 @@ public:
 
     bmcl::Option<Error> send_appendentries(NodeId node);
     bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);
+    void send_appendentries_to_all();
 
 private:
     void set_current_term(TermId term);
@@ -97,14 +103,16 @@ private:
     void set_state(State state);
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
     bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
-    void entry_apply_node_add(const LogEntry& ety, NodeId id);
+    void entry_apply_node_add(/*const LogEntry& ety, */NodeId id);
     void pop_log(const LogEntry& ety, Index idx);
     bmcl::Option<Error> entry_append(const LogEntry& ety, bool needVoteChecks);
     void __log(const char *fmt, ...) const;
-    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, bool vote);
+    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
 
     Timer _timer;
-    Nodes _nodes;
+    bmcl::Option<NodesCfg> vectorid;
+    Nodes _backup_cfg;
+    Nodes _nodes, _new_cfg, _old_cfg;
     LogCommitter _log;
     server_private_t _me;
     ISender* _sender;

@@ -71,41 +71,48 @@ Node& Nodes::add_node(NodeId id, bool is_voting)
 
 void Nodes::remove_node(NodeId id)
 {
-    assert(id != _me);
+    //assert(id != _me);
     const auto i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
     assert(i != _nodes.end());
     _nodes.erase(i);
 }
 
-std::size_t Nodes::get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const
+std::size_t Nodes::get_nvotes_for_me(bmcl::Option<NodeId> voted_for, const Nodes& cfg) const
 {
     //std::count_if(_nodes.begin(), _nodes.end(), [_me](const Node& i) { return _});
     std::size_t votes = 0;
 
     for (const Node& i : _nodes)
     {
-        if (_me != i.get_id() && i.is_voting() && i.has_vote_for_me())
-            votes += 1;
+        for (const Node& j : cfg._nodes)
+        {
+                if (_me != i.get_id() && i.is_voting() && i.has_vote_for_me() && j.get_id() == i.get_id())
+                    votes += 1;
+        }
     }
-
     if (voted_for == _me)
         votes += 1;
 
     return votes;
 }
 
-std::size_t Nodes::get_num_voting_nodes() const
+std::size_t Nodes::get_num_voting_nodes(const Nodes& cfg) const
 {
     std::size_t num = 0;
     for (const Node& i : _nodes)
-        if (i.is_voting())
-            num++;
+    {
+        for (const Node& j : cfg._nodes)
+        {
+            if (j.get_id() == i.get_id() && i.is_voting())
+                num++;
+        }
+    }
     return num;
 }
 
-bool Nodes::votes_has_majority(bmcl::Option<NodeId> voted_for) const
+bool Nodes::votes_has_majority(bmcl::Option<NodeId> voted_for, const Nodes& cfg) const
 {
-    return votes_has_majority(get_num_voting_nodes(), get_nvotes_for_me(voted_for));
+    return votes_has_majority(get_num_voting_nodes(cfg), get_nvotes_for_me(voted_for, cfg));
 }
 
 bool Nodes::votes_has_majority(std::size_t num_nodes, std::size_t nvotes)
@@ -116,7 +123,7 @@ bool Nodes::votes_has_majority(std::size_t num_nodes, std::size_t nvotes)
     return half + 1 <= nvotes;
 }
 
-bool Nodes::is_committed(Index idx) const
+bool Nodes::is_committed(Index idx, const Nodes& cfg) const
 {
     std::size_t votes = 1;
     for (const Node& i : _nodes)
@@ -127,7 +134,7 @@ bool Nodes::is_committed(Index idx) const
         }
     }
 
-    return (get_num_voting_nodes() / 2 < votes);
+    return (get_num_voting_nodes(cfg) / 2 < votes);
 }
 
 }
