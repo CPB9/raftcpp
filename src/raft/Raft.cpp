@@ -47,8 +47,6 @@ void Timer::randomize_election_timeout()
     election_timeout_rand = std::chrono::milliseconds(distr(eng));
 }
 
-static inline const char* vote_to_str(bool vote) { return vote ? "granted" : "not granted"; }
-
 void Server::__log(const char *fmt, ...) const
 {
     char buf[1024];
@@ -412,9 +410,9 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
     return false;
 }
 
-MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, bool vote)
+MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote)
 {
-    __log("requested vote: %d replying: %s", candidate, vote_to_str(vote));
+    __log("requested vote: %d replying: %s", candidate, to_string(vote));
     return MsgVoteRep(get_current_term(), vote);
 }
 
@@ -423,13 +421,12 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
     {
-        assert(false);
         /* It's possible the candidate node has been removed from the cluster but
         * hasn't received the appendentries that confirms the removal. Therefore
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(nodeid, false);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
     }
 
     if (get_current_term() < vr.term)
@@ -440,7 +437,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     }
 
     if (!__should_grant_vote(*this, vr))
-        return prepare_requestvote_response_t(nodeid, false);
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
@@ -452,14 +449,14 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
     _me.current_leader.clear();
     _timer.reset_elapsed();
 
-    return prepare_requestvote_response_t(nodeid, true);
+    return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
 }
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
-    __log("node %d responded to requestvote status: %s", nodeid, vote_to_str(r.vote_granted));
+    __log("node %d responded to requestvote status: %s", nodeid, to_string(r.vote_granted));
 
     if (!is_candidate())
         return bmcl::None;
@@ -480,15 +477,30 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         return bmcl::None;
     }
 
-    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, vote_to_str(r.vote_granted), _me.current_term, r.term);
+    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, to_string(r.vote_granted), _me.current_term, r.term);
 
-    if (r.vote_granted)
+    switch (r.vote_granted)
     {
+    case ReqVoteState::Granted:
         if (node.isSome())
             node->vote_for_me(true);
+
         if (_nodes.votes_has_majority(_me.voted_for))
             become_leader();
+        break;
+
+    case ReqVoteState::NotGranted:
+        break;
+
+    case ReqVoteState::UnknownNode:
+        //if (/*_nodes.get_my_node().is_voting() &&*/ _me.connected == NodeStatus::Disconnecting)
+        //    return Error::Shutdown;
+        break;
+
+    default:
+        assert(0);
     }
+
 
     return bmcl::None;
 }

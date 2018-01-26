@@ -101,7 +101,7 @@ private:
     void pop_log(const Entry& ety, Index idx);
     bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks);
     void __log(const char *fmt, ...) const;
-    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, bool vote);
+    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
 
     Timer _timer;
     Nodes _nodes;

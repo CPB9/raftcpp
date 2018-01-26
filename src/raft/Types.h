@@ -29,6 +29,25 @@ enum class Error : uint8_t
     CantSend,
 };
 
+enum class ReqVoteState : int8_t
+{
+    Granted = 1,
+    NotGranted = 0,
+    UnknownNode = -1,
+};
+
+
+inline const char* to_string(ReqVoteState vote)
+{
+    switch (vote)
+    {
+    case ReqVoteState::Granted: return "granted";
+    case ReqVoteState::NotGranted: return "not granted";
+    case ReqVoteState::UnknownNode: return "unknown node";
+    }
+    return "unknown";
+}
+
 enum class State
 {
     Follower,
@@ -150,9 +169,9 @@ struct MsgVoteReq
  * Indicates if node has accepted the server's vote request. */
 struct MsgVoteRep
 {
-    MsgVoteRep(TermId term, bool vote) : term(term), vote_granted(vote) {}
-    TermId term;            /**< currentTerm, for candidate to update itself */
-    bool vote_granted;      /**< true means candidate received vote */
+    MsgVoteRep(TermId term, ReqVoteState vote) : term(term), vote_granted(vote) {}
+    TermId term;                   /**< currentTerm, for candidate to update itself */
+    ReqVoteState vote_granted;     /**< true means candidate received vote */
 };
 
 /** Appendentries message.
