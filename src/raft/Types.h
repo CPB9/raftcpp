@@ -31,10 +31,22 @@ enum class Error : uint8_t
 
 enum class ReqVoteState : int8_t
 {
-    Granted         = 1,
+    Granted        = 1,
     NotGranted     = 0,
     UnknownNode    = -1,
 };
+
+
+inline const char* to_string(ReqVoteState vote)
+{
+    switch (vote)
+    {
+    case ReqVoteState::Granted: return "granted";
+    case ReqVoteState::NotGranted: return "not granted";
+    case ReqVoteState::UnknownNode: return "unknown node";
+    }
+    return "unknown";
+}
 
 enum class State : uint8_t
 {

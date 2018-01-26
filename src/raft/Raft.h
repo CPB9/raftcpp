@@ -92,7 +92,6 @@ public:
 
     bmcl::Option<Error> send_appendentries(NodeId node);
     bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);
-    void send_appendentries_to_all();
 
 private:
     void set_current_term(TermId term);

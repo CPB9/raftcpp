@@ -47,17 +47,6 @@ void Timer::randomize_election_timeout()
     election_timeout_rand = std::chrono::milliseconds(distr(eng));
 }
 
-static inline const char* vote_to_str(ReqVoteState vote)
-{
-    switch (vote)
-    {
-    case raft::ReqVoteState::Granted: return "granted";
-    case raft::ReqVoteState::NotGranted: return "not granted";
-    case raft::ReqVoteState::UnknownNode: return "unknown node";
-    }
-    return "unknown";
-}
-
 void Server::__log(const char *fmt, ...) const
 {
     char buf[1024];
@@ -468,7 +457,7 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
 
 MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote)
 {
-    __log("requested vote: %d replying: %s", candidate, vote_to_str(vote));
+    __log("requested vote: %d replying: %s", candidate, to_string(vote));
     return MsgVoteRep(get_current_term(), vote);
 }
 
@@ -513,7 +502,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
 
-    __log("node %d responded to requestvote status: %s", nodeid, vote_to_str(r.vote_granted));
+    __log("node %d responded to requestvote status: %s", nodeid, to_string(r.vote_granted));
 
     if (node.isNone())
         return Error::NodeUnknown;
@@ -537,7 +526,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         return bmcl::None;
     }
 
-    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, vote_to_str(r.vote_granted), _me.current_term, r.term);
+    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, to_string(r.vote_granted), _me.current_term, r.term);
 
     switch (r.vote_granted)
     {
