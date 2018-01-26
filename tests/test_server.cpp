@@ -79,7 +79,7 @@ TEST(TestLog, idx_starts_at_1)
     raft::LogCommitter lc(&__Saver);
     EXPECT_EQ(0, lc.get_current_idx());
 
-    lc.entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     EXPECT_EQ(1, lc.get_current_idx());
 }
 
@@ -143,7 +143,7 @@ TEST(TestLog, entry_append_increases_logidx)
 {
     raft::LogCommitter lc(&__Saver);
     EXPECT_EQ(0, lc.get_current_idx());
-    lc.entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     EXPECT_EQ(1, lc.get_current_idx());
 }
 
@@ -157,7 +157,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
     EXPECT_GT(r.get_current_term(), 2);
 
     EXPECT_EQ(0, r.log().get_current_idx());
-    r.accept_entry(raft::MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    r.accept_entry(raft::MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_EQ(1, r.log().get_current_idx());
     EXPECT_EQ(r.get_current_term(), r.log().back()->term);
 }
@@ -170,7 +170,7 @@ TEST(TestLog, append_entry_is_retrievable)
     prepare_follower(r);
     prepare_leader(r);
 
-    Entry ety(1, 100, raft::LogEntryData("aaa", 4));
+    Entry ety(1, 100, raft::EntryData("aaa", 4));
     r.accept_entry(ety);
 
     bmcl::Option<const Entry&> kept = r.log().get_at_idx(1);
@@ -183,7 +183,7 @@ TEST(TestLog, append_entry_is_retrievable)
 TEST(TestLog, append_entry_user_can_set_data_buf)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Entry ety(1, 100, raft::LogEntryData("aaa", 4));
+    Entry ety(1, 100, raft::EntryData("aaa", 4));
     r.log().entry_append(ety);
     bmcl::Option<const Entry&> kept = r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
@@ -197,10 +197,10 @@ TEST(TestLog, entry_is_retrieveable_using_idx)
 
     raft::LogCommitter lc(&__Saver);
 
-    lc.entry_append(Entry(1, 1, raft::LogEntryData(str)));
+    lc.entry_append(Entry(1, 1, raft::EntryData(str)));
 
     /* different ID so we can be successful */
-    lc.entry_append(Entry(1, 2, raft::LogEntryData(str2)));
+    lc.entry_append(Entry(1, 2, raft::EntryData(str2)));
 
     bmcl::Option<const Entry&> ety_appended = lc.get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
@@ -218,7 +218,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
     prepare_follower(r);
 
     /* need at least one entry */
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     r.log().set_commit_idx(1);
 
     /* let time lapse */
@@ -230,7 +230,7 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
 
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     r.log().set_commit_idx(1);
     r.log().entry_apply_one();
     EXPECT_EQ(1, r.log().get_last_applied_idx());
@@ -318,7 +318,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
     EXPECT_EQ(0, r.log().get_commit_idx());
 
     /* receive entry */
-    auto cr = r.accept_entry(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(Entry(1, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
     EXPECT_EQ(1, r.log().get_commit_idx());
@@ -334,7 +334,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     EXPECT_EQ(0, r.log().get_commit_idx());
 
     /* entry message */
-    MsgAddEntryReq ety(0, 1, EntryType::AddNode, raft::NodeId(1), raft::LogEntryData("aaa", 4));
+    MsgAddEntryReq ety(0, 1, EntryType::AddNode, raft::NodeId(1), raft::EntryData("aaa", 4));
 
     /* receive entry */
     EXPECT_TRUE(r.accept_entry(ety).isOk());
@@ -631,7 +631,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
     /* first appendentries msg */
     MsgAppendEntriesReq ae(3, 0, 1, 5);
     /* include one entry */
-    MsgAddEntryReq ety(2, 1, raft::LogEntryData("aaa", 4));
+    MsgAddEntryReq ety(2, 1, raft::EntryData("aaa", 4));
     /* check that old terms are passed onto the log */
     ae.entries = &ety;
     ae.n_entries = 1;
@@ -659,7 +659,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
     /* prev_log_term is less than current term (ie. 2) */
     MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, r.get_current_term(), 0);
     /* include one entry */
-    MsgAddEntryReq ety(r.get_current_term()-1, 1, raft::LogEntryData("aaa", 4));
+    MsgAddEntryReq ety(r.get_current_term()-1, 1, raft::EntryData("aaa", 4));
     ae.entries = &ety;
     ae.n_entries = 1;
 
@@ -676,18 +676,18 @@ static void __create_mock_entries_for_conflict_tests(raft::LogCommitter* lc, std
     bmcl::Option<const Entry&> ety_appended;
 
     /* increase log size */
-    lc->entry_append(Entry(1, 1, raft::LogEntryData(strs[0])));
+    lc->entry_append(Entry(1, 1, raft::EntryData(strs[0])));
     EXPECT_EQ(1, lc->count());
 
     /* this log will be overwritten by a later appendentries */
-    lc->entry_append(Entry(1, 2, raft::LogEntryData(strs[1])));
+    lc->entry_append(Entry(1, 2, raft::EntryData(strs[1])));
     EXPECT_EQ(2, lc->count());
     ety_appended = lc->get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_EQ(ety_appended.unwrap().data.data, strs[1]);
 
     /* this log will be overwritten by a later appendentries */
-    lc->entry_append(Entry(1, 3, raft::LogEntryData(strs[2])));
+    lc->entry_append(Entry(1, 3, raft::EntryData(strs[2])));
     EXPECT_EQ(3, lc->count());
     ety_appended = lc->get_at_idx(3);
     EXPECT_TRUE(ety_appended.isSome());
@@ -710,7 +710,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, 1, 0);
     /* include one entry */
     std::vector<uint8_t> str4 = {4, 4, 4};
-    MsgAddEntryReq mety = MsgAddEntryReq(r.get_current_term() - 1, 4, LogEntryData(str4));
+    MsgAddEntryReq mety = MsgAddEntryReq(r.get_current_term() - 1, 4, EntryData(str4));
     ae.entries = &mety;
     ae.n_entries = 1;
 
@@ -745,7 +745,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     MsgAppendEntriesReq ae(2, 0, 0, 0);
     /* include one entry */
     std::vector<uint8_t> str4 = { 4, 4, 4 };
-    MsgAddEntryReq mety = Entry(0, 4, LogEntryData(str4));
+    MsgAddEntryReq mety = Entry(0, 4, EntryData(str4));
     ae.entries = &mety;
     ae.n_entries = 1;
 
@@ -901,7 +901,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     r.nodes().add_node(raft::NodeId(2), true);
     prepare_follower(r);
 
-    r.log().entry_append(Entry(r.get_current_term(), 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(r.get_current_term(), 1, raft::EntryData("aaa", 4)));
 
     /* receive an appendentry with commit */
     /* lower term means failure */
@@ -914,7 +914,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     }
 
     /* try again with a higher current_idx */
-    r.log().entry_append(Entry(r.get_current_term(), 2, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(r.get_current_term(), 2, raft::EntryData("aaa", 4)));
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
     EXPECT_FALSE(aer.unwrap().success);
@@ -948,8 +948,8 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
     /* server's idx are more up-to-date */
     raft::TermId term = r.get_current_term();
-    r.log().entry_append(Entry(term, 100, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(term + 1, 101, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(term, 100, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(term + 1, 101, raft::EntryData("aaa", 4)));
 
     /* vote not granted */
     {
@@ -1236,9 +1236,9 @@ TEST(TestCandidate, requestvote_includes_logidx)
 
     raft::TermId term = r.get_current_term();
     /* 3 entries */
-    r.log().entry_append(Entry(1, 100, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(1, 101, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(3, 102, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 100, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 101, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(3, 102, raft::EntryData("aaa", 4)));
     prepare_candidate(r); //becoming candidate means new election term? so +1
     EXPECT_EQ(term + 1, r.get_current_term());
 
@@ -1422,7 +1422,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     EXPECT_EQ(0, r.log().count());
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
 
@@ -1437,7 +1437,7 @@ void TestRaft_non_leader_recv_entry_msg_fails()
     prepare_follower(r);
 
     /* entry message */
-    MsgAddEntryReq ety(0, 1, raft::LogEntryData("aaa", 4));
+    MsgAddEntryReq ety(0, 1, raft::EntryData("aaa", 4));
 
     /* receive entry */
     auto cr = r.accept_entry(ety);
@@ -1476,7 +1476,7 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
     r.nodes().add_node(raft::NodeId(2), true);
     prepare_leader(r);
     for (std::size_t i = 0; i < 10; i++)
-        r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
+        r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
     r.log().set_commit_idx(10);
     sender.clear();
 
@@ -1511,7 +1511,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
 
     /* add 1 entry */
     /* receive appendentries messages */
-    r.log().entry_append(MsgAddEntryReq(2, 100, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(2, 100, raft::EntryData("aaa", 4)));
     n->set_next_idx(1);
     r.send_appendentries(n->get_id());
     {
@@ -1562,7 +1562,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
     /* add an entry */
     /* receive appendentries messages */
     n->set_next_idx(1);
-    r.log().entry_append(MsgAddEntryReq(1, 100, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 100, raft::EntryData("aaa", 4)));
     r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
@@ -1605,7 +1605,7 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     prepare_leader(r);
     EXPECT_EQ(0, r.log().count());
 
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
 }
@@ -1624,9 +1624,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(1, 2, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(1, 3, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 2, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 3, raft::EntryData("aaa", 4)));
 
     /* FIRST entry log application */
     /* send appendentries -
@@ -1674,7 +1674,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
 
     /* FIRST entry log application */
     /* send appendentries -
@@ -1701,9 +1701,9 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
-    r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(MsgAddEntryReq(1, 2, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(MsgAddEntryReq(1, 3, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 2, raft::EntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 3, raft::EntryData("aaa", 4)));
 
     /* receive msg 1 */
     r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
@@ -1733,9 +1733,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     EXPECT_GT(r.get_current_term(), 1);
 
     /* append entries - we need two */
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(1, 2, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(2, 3, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 2, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(2, 3, raft::EntryData("aaa", 4)));
 
     /* FIRST entry log application */
     /* send appendentries -
@@ -1788,10 +1788,10 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     prepare_follower(r);
 
     /* append entries */
-    r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(MsgAddEntryReq(2, 2, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(MsgAddEntryReq(3, 3, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(MsgAddEntryReq(4, 4, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(2, 2, raft::EntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(3, 3, raft::EntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(4, 4, raft::EntryData("aaa", 4)));
 
     MsgAppendEntriesReq* ae;
 
@@ -1846,10 +1846,10 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     prepare_follower(r);
 
     /* append entries */
-    r.log().entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(2, 2, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(3, 3, raft::LogEntryData("aaa", 4)));
-    r.log().entry_append(Entry(4, 4, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(2, 2, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(3, 3, raft::EntryData("aaa", 4)));
+    r.log().entry_append(Entry(4, 4, raft::EntryData("aaa", 4)));
 
     MsgAppendEntriesReq* ae;
 
@@ -1923,7 +1923,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 
     /* append entries - we need two */
     raft::TermId term = r.get_current_term();
-    r.log().entry_append(MsgAddEntryReq(term, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(term, 1, raft::EntryData("aaa", 4)));
 
     r.send_appendentries(raft::NodeId(2));
     r.send_appendentries(raft::NodeId(3));
@@ -1961,7 +1961,7 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
     r.raft_periodic(std::chrono::milliseconds(900));
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 }
@@ -1974,7 +1974,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     prepare_leader(r);
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(EntryState::NotCommitted, r.log().entry_get_state(cr.unwrap()));
 
@@ -1990,7 +1990,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     prepare_leader(r);
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("aaa", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(EntryState::NotCommitted, r.log().entry_get_state(cr.unwrap()));
     EXPECT_EQ(1, cr.unwrap().term);
@@ -2001,7 +2001,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     /* append entry that invalidates entry message */
     MsgAppendEntriesReq ae(2, 0, 0, 1);
 
-    MsgAddEntryReq e(2, 999, raft::LogEntryData("aaa", 4));
+    MsgAddEntryReq e(2, 999, raft::EntryData("aaa", 4));
     ae.entries = &e;
     ae.n_entries = 1;
     auto aer = r.accept_req(raft::NodeId(2), ae);
@@ -2026,10 +2026,10 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     r.nodes().get_node(raft::NodeId(2))->set_next_idx(1);
 
     /* append entries */
-    r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::LogEntryData("bbb", 4)));
+    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("bbb", 4)));
     EXPECT_TRUE(cr.isOk());
 
     /* check if the slow node got sent this appendentries */
@@ -2049,7 +2049,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     prepare_leader(r);
 
     /* append entries */
-    r.log().entry_append(MsgAddEntryReq(1, 1, raft::LogEntryData("aaa", 4)));
+    r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
 
     /* send appendentries -
      * server will be waiting for response */

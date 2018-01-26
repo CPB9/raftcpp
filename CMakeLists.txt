@@ -27,6 +27,8 @@ bmcl_add_dep_gtest(thirdparty/gtest)
 bmcl_add_dep_bmcl(thirdparty/bmcl)
 
 bmcl_add_library(raftcpp STATIC
+    src/raft/Ids.h
+    src/raft/Entry.h
     src/raft/Raft.h
     src/raft/Raft.cpp
     src/raft/Log.h

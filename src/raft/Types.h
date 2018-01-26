@@ -9,9 +9,10 @@
 
 #pragma once
 #include <vector>
-#include <chrono>
-#include <functional>
 #include <bmcl/Option.h>
+#include "Ids.h"
+#include "Entry.h"
+
 
 namespace raft
 {
@@ -35,7 +36,6 @@ enum class ReqVoteState : int8_t
     NotGranted = 0,
     UnknownNode = -1,
 };
-
 
 inline const char* to_string(ReqVoteState vote)
 {
@@ -66,74 +66,12 @@ inline const char* to_string(State s)
     return "unknown";
 }
 
-enum class EntryState
-{
-    Invalidated = -1,
-    NotCommitted = 0,
-    Committed = 1,
-};
-
-enum class EntryType
-{
-    User,
-    AddNonVotingNode,
-    AddNode,
-    DemoteNode,
-    RemoveNode,
-    ChangeCfg
-};
-
-inline const char* to_string(EntryType t)
-{
-    switch (t)
-    {
-    case EntryType::User: return "User";
-    case EntryType::AddNonVotingNode: return "AddNonVotingNode";
-    case EntryType::AddNode: return "AddNode";
-    case EntryType::DemoteNode: return "DemoteNode";
-    case EntryType::RemoveNode: return "RemoveNode";
-    case EntryType::ChangeCfg: return "ChangeCfg";
-    }
-    return "unknown";
-}
-
 enum class NodeStatus
 {
     Disconnected,
     Connected,
     Connecting,
     Disconnecting,
-};
-
-enum class NodeId : std::size_t {};
-using EntryId = std::size_t;
-using TermId = std::size_t;
-using Index = std::size_t;
-
-struct LogEntryData
-{
-    LogEntryData() {}
-    LogEntryData(const std::vector<uint8_t>& data) : data(data) {}
-    LogEntryData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len){ }
-    std::vector<uint8_t> data;
-};
-
-/** Entry that is stored in the server's entry log. */
-struct Entry
-{
-    Entry(TermId term, EntryId id, LogEntryData data = LogEntryData{}) : term(term), id(id), type(EntryType::User), data(data) {}
-    Entry(TermId term, EntryId id, EntryType type, NodeId node, LogEntryData data = LogEntryData{})
-        : term(term), id(id), type(type), node(node), data(data) {}
-    TermId  term;               /**< the entry's term at the point it was created */
-    EntryId id;                 /**< the entry's unique ID */
-    EntryType type;               /**< type of entry */
-    bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
-    LogEntryData data;
-
-    inline bool is_voting_cfg_change() const
-    {
-        return EntryType::AddNode == type || EntryType::DemoteNode == type;
-    }
 };
 
 /** Message sent from client to server.

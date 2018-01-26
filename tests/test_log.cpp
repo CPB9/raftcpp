@@ -136,7 +136,7 @@ TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 
-    lc.entry_append(Entry(1, 1, raft::LogEntryData("aaa", 4)));
+    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     lc.entry_apply_one();
     /* Not allowed to be applied because we haven't confirmed a majority yet */
     EXPECT_EQ(0, lc.get_last_applied_idx());
