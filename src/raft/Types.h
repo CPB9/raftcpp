@@ -54,15 +54,29 @@ enum class EntryState
     Committed = 1,
 };
 
-enum class LotType
+enum class EntryType
 {
-    Normal,
+    User,
     AddNonVotingNode,
     AddNode,
     DemoteNode,
     RemoveNode,
     ChangeCfg
 };
+
+inline const char* to_string(EntryType t)
+{
+    switch (t)
+    {
+    case EntryType::User: return "User";
+    case EntryType::AddNonVotingNode: return "AddNonVotingNode";
+    case EntryType::AddNode: return "AddNode";
+    case EntryType::DemoteNode: return "DemoteNode";
+    case EntryType::RemoveNode: return "RemoveNode";
+    case EntryType::ChangeCfg: return "ChangeCfg";
+    }
+    return "unknown";
+}
 
 enum class NodeStatus
 {
@@ -86,27 +100,27 @@ struct LogEntryData
 };
 
 /** Entry that is stored in the server's entry log. */
-struct LogEntry
+struct Entry
 {
-    LogEntry(TermId term, EntryId id, LogEntryData data = LogEntryData{}) : term(term), id(id), type(LotType::Normal), data(data) {}
-    LogEntry(TermId term, EntryId id, LotType type, NodeId node, LogEntryData data = LogEntryData{})
+    Entry(TermId term, EntryId id, LogEntryData data = LogEntryData{}) : term(term), id(id), type(EntryType::User), data(data) {}
+    Entry(TermId term, EntryId id, EntryType type, NodeId node, LogEntryData data = LogEntryData{})
         : term(term), id(id), type(type), node(node), data(data) {}
     TermId  term;               /**< the entry's term at the point it was created */
     EntryId id;                 /**< the entry's unique ID */
-    LotType type;               /**< type of entry */
+    EntryType type;               /**< type of entry */
     bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
     LogEntryData data;
 
     inline bool is_voting_cfg_change() const
     {
-        return LotType::AddNode == type || LotType::DemoteNode == type;
+        return EntryType::AddNode == type || EntryType::DemoteNode == type;
     }
 };
 
 /** Message sent from client to server.
  * The client sends this message to a server with the intention of having it
  * applied to the FSM. */
-using MsgAddEntryReq = LogEntry;
+using MsgAddEntryReq = Entry;
 
 /** Entry message response.
  * Indicates to client if entry was committed or not. */
@@ -195,7 +209,7 @@ public:
     /** Callback for finite state machine application
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> apply_log(const LogEntry& entry, Index entry_idx) = 0;
+    virtual bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for persisting vote data
     * For safety reasons this callback MUST flush the change to disk. */
@@ -209,19 +223,19 @@ public:
     * For safety reasons this callback MUST flush the change to disk.
     * Return 0 on success.
     * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
-    virtual bmcl::Option<Error> push_back(const LogEntry& entry, Index entry_idx) = 0;
+    virtual bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the oldest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void pop_front(const LogEntry& entry, Index entry_idx) = 0;
+    virtual void pop_front(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the youngest entry from the log
     * For safety reasons this callback MUST flush the change to disk.
     * @note If memory was malloc'd in log_offer then this should be the right
     *  time to free the memory. */
-    virtual void pop_back(const LogEntry& entry, Index entry_idx) = 0;
+    virtual void pop_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for catching debugging log messages
     * This callback is optional */

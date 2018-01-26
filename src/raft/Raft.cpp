@@ -158,8 +158,8 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
     auto r = _log.entry_apply_one();
     if (r.isOk())
     {
-        const LogEntry& ety = r.unwrap();
-        if (LotType::AddNode == ety.type)
+        const Entry& ety = r.unwrap();
+        if (EntryType::AddNode == ety.type)
         {
             assert(ety.node.isSome());
             NodeId id = ety.node.unwrap();
@@ -234,7 +234,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
         false == node->has_sufficient_logs()
         )
     {
-        LogEntry ety(get_current_term(), EntryId(0), LotType::AddNode, node->get_id()); //insert node->get_id() into ety
+        Entry ety(get_current_term(), EntryId(0), EntryType::AddNode, node->get_id()); //insert node->get_id() into ety
         auto e = entry_append(ety, false);
         if (e.isSome())
             return e;
@@ -246,7 +246,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     Index point = r.current_idx;
     if (point > 0)
     {
-        bmcl::Option<const LogEntry&> ety = _log.get_at_idx(point);
+        bmcl::Option<const Entry&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
         if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point))
         {
@@ -308,7 +308,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     /* NOTE: the log starts at 1 */
     if (0 < ae.prev_log_idx)
     {
-        bmcl::Option<const LogEntry&> e = _log.get_at_idx(ae.prev_log_idx);
+        bmcl::Option<const Entry&> e = _log.get_at_idx(ae.prev_log_idx);
         if (e.isNone())
         {
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
@@ -323,10 +323,10 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     Index i;
     for (i = 0; i < ae.n_entries; i++)
     {
-        const LogEntry* ety = &ae.entries[i];
+        const Entry* ety = &ae.entries[i];
         Index ety_index = ae.prev_log_idx + 1 + i;
         r.current_idx = ety_index;
-        bmcl::Option<const LogEntry&> existing_ety = _log.get_at_idx(ety_index);
+        bmcl::Option<const Entry&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
         if (existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
@@ -337,7 +337,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
             bool flag = true;
             while (_log.get_current_idx() >= ety_index)
             {
-                bmcl::Option<LogEntry> pop = _log.entry_pop_back();
+                bmcl::Option<Entry> pop = _log.entry_pop_back();
                 if (pop.isNone())
                     flag = false;
                 else
@@ -398,7 +398,7 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const LogEntry&> e = me.log().get_at_idx(current_idx);
+    bmcl::Option<const Entry&> e = me.log().get_at_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
@@ -500,7 +500,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
 
     __log("received entry from %d t:%d id: %d idx: %d", _nodes.get_my_id(), _me.current_term, e.id, _log.get_current_idx() + 1);
 
-    LogEntry ety = e;
+    Entry ety = e;
     ety.term = _me.current_term;
     auto r = entry_append(ety, true);
     if (r.isSome())
@@ -529,7 +529,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
 }
 
-void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
+void Server::entry_apply_node_add(const Entry& ety, NodeId id)
 {
     bmcl::Option<Node&> node = _nodes.get_node(id);
     assert(node.isSome());
@@ -539,7 +539,7 @@ void Server::entry_apply_node_add(const LogEntry& ety, NodeId id)
     }
 }
 
-void Server::pop_log(const LogEntry& ety, const Index idx)
+void Server::pop_log(const Entry& ety, const Index idx)
 {
     if (ety.node.isNone())
         return;
@@ -548,26 +548,26 @@ void Server::pop_log(const LogEntry& ety, const Index idx)
 
     switch (ety.type)
     {
-    case LotType::DemoteNode:
+    case EntryType::DemoteNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(true);
     }
     break;
 
-    case LotType::RemoveNode:
+    case EntryType::RemoveNode:
     {
         const Node& node = _nodes.add_node(id, false);
     }
     break;
 
-    case LotType::AddNonVotingNode:
+    case EntryType::AddNonVotingNode:
     {
         _nodes.remove_node(id);
     }
     break;
 
-    case LotType::AddNode:
+    case EntryType::AddNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(false);
@@ -580,7 +580,7 @@ void Server::pop_log(const LogEntry& ety, const Index idx)
     }
 }
 
-bmcl::Option<Error> Server::entry_append(const LogEntry& ety, bool needVoteChecks)
+bmcl::Option<Error> Server::entry_append(const Entry& ety, bool needVoteChecks)
 {
     auto e = _log.entry_append(ety, needVoteChecks);
     if (e.isSome())
@@ -594,7 +594,7 @@ bmcl::Option<Error> Server::entry_append(const LogEntry& ety, bool needVoteCheck
 
     switch (ety.type)
     {
-    case LotType::AddNonVotingNode:
+    case EntryType::AddNonVotingNode:
         if (!_nodes.is_me(id) && node.isNone())
         {
             const Node& n = _nodes.add_node(id, false);
@@ -602,17 +602,17 @@ bmcl::Option<Error> Server::entry_append(const LogEntry& ety, bool needVoteCheck
         }
         break;
 
-    case LotType::AddNode:
+    case EntryType::AddNode:
         node = _nodes.add_node(id, true);
         assert(node.isSome());
         assert(node->is_voting());
         break;
 
-    case LotType::DemoteNode:
+    case EntryType::DemoteNode:
         node->set_voting(false);
         break;
 
-    case LotType::RemoveNode:
+    case EntryType::RemoveNode:
         if (node.isSome())
             _nodes.remove_node(node->get_id());
         break;
@@ -691,7 +691,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
     /* previous log is the log just before the new logs */
     if (1 < next_idx)
     {
-        bmcl::Option<const LogEntry&> prev_ety = _log.get_at_idx(next_idx - 1);
+        bmcl::Option<const Entry&> prev_ety = _log.get_at_idx(next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
             ae.prev_log_term = prev_ety.unwrap().term;

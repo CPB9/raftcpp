@@ -42,12 +42,12 @@ Index Logger::get_front_idx() const
     return _base + 1;
 }
 
-void Logger::append(const LogEntry& c)
+void Logger::append(const Entry& c)
 {
     _entries.emplace_back(c);
 }
 
-bmcl::Option<const LogEntry*> Logger::get_from_idx(Index idx, Index* n_etys) const
+bmcl::Option<const Entry*> Logger::get_from_idx(Index idx, Index* n_etys) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -64,7 +64,7 @@ bmcl::Option<const LogEntry*> Logger::get_from_idx(Index idx, Index* n_etys) con
     return &_entries[i];
 }
 
-bmcl::Option<const LogEntry&> Logger::get_at_idx(Index idx) const
+bmcl::Option<const Entry&> Logger::get_at_idx(Index idx) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
@@ -77,33 +77,33 @@ bmcl::Option<const LogEntry&> Logger::get_at_idx(Index idx) const
     return _entries[i];
 }
 
-bmcl::Option<LogEntry> Logger::pop_back()
+bmcl::Option<Entry> Logger::pop_back()
 {
     if (_entries.empty())
         return bmcl::None;
-    LogEntry ety = _entries.back();
+    Entry ety = _entries.back();
     _entries.pop_back();
     return ety;
 }
 
-bmcl::Option<LogEntry> Logger::pop_front()
+bmcl::Option<Entry> Logger::pop_front()
 {
     if (_entries.empty())
         return bmcl::None;
-    LogEntry elem = _entries.front();
+    Entry elem = _entries.front();
     _entries.erase(_entries.begin());
     _base++;
     return elem;
 }
 
-bmcl::Option<const LogEntry&> Logger::back() const
+bmcl::Option<const Entry&> Logger::back() const
 {
     if (_entries.empty())
         return bmcl::None;
     return _entries.back();
 }
 
-bmcl::Option<const LogEntry&> Logger::front() const
+bmcl::Option<const Entry&> Logger::front() const
 {
     if (_entries.empty())
         return bmcl::None;
@@ -118,7 +118,7 @@ void LogCommitter::commit_till(Index idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety, bool needVoteChecks)
+bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteChecks)
 {
     /* Only one voting cfg change at a time */
     if (needVoteChecks && ety.is_voting_cfg_change() && voting_change_is_in_progress())
@@ -138,17 +138,17 @@ bmcl::Option<Error> LogCommitter::entry_append(const LogEntry& ety, bool needVot
     return bmcl::None;
 }
 
-bmcl::Result<LogEntry, Error> LogCommitter::entry_apply_one()
+bmcl::Result<Entry, Error> LogCommitter::entry_apply_one()
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
         return Error::NothingToApply;
 
     Index log_idx = _last_applied_idx + 1;
 
-    bmcl::Option<const LogEntry&> etyo = get_at_idx(log_idx);
+    bmcl::Option<const Entry&> etyo = get_at_idx(log_idx);
     if (etyo.isNone())
         return Error::NothingToApply;
-    const LogEntry& ety = etyo.unwrap();
+    const Entry& ety = etyo.unwrap();
 
     _last_applied_idx = log_idx;
     assert(_saver);
@@ -178,7 +178,7 @@ bmcl::Option<TermId> LogCommitter::get_last_log_term() const
     return ety->term;
 }
 
-bmcl::Option<LogEntry> LogCommitter::entry_pop_back()
+bmcl::Option<Entry> LogCommitter::entry_pop_back()
 {
     Index idx = get_current_idx();
     if (empty() || idx <= get_commit_idx())
@@ -206,7 +206,7 @@ void LogCommitter::entry_pop_front()
 
 EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const
 {
-    bmcl::Option<const LogEntry&> ety = get_at_idx(r.idx);
+    bmcl::Option<const Entry&> ety = get_at_idx(r.idx);
     if (ety.isNone())
         return EntryState::NotCommitted;
 

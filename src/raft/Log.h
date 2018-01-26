@@ -17,21 +17,21 @@ public:
     Index count() const;
     bool empty() const;
 
-    bmcl::Option<const LogEntry*> get_from_idx(Index idx, Index* n_etys) const;
-    bmcl::Option<const LogEntry&> get_at_idx(Index idx) const;
-    bmcl::Option<const LogEntry&> back() const;
-    bmcl::Option<const LogEntry&> front() const;
+    bmcl::Option<const Entry*> get_from_idx(Index idx, Index* n_etys) const;
+    bmcl::Option<const Entry&> get_at_idx(Index idx) const;
+    bmcl::Option<const Entry&> back() const;
+    bmcl::Option<const Entry&> front() const;
     Index get_current_idx() const;
     Index get_front_idx() const;
 
 protected:
-    void append(const LogEntry& c);
-    bmcl::Option<LogEntry> pop_front();
-    bmcl::Option<LogEntry> pop_back();
+    void append(const Entry& c);
+    bmcl::Option<Entry> pop_front();
+    bmcl::Option<Entry> pop_back();
 
 private:
     Index _base;
-    std::vector<LogEntry> _entries;
+    std::vector<Entry> _entries;
 };
 
 class LogCommitter : public Logger
@@ -56,9 +56,9 @@ public:
     inline void commit_all() { set_commit_idx(get_current_idx()); }
     void set_commit_idx(Index idx);
 
-    bmcl::Option<Error> entry_append(const LogEntry& ety, bool needVoteChecks = false);
-    bmcl::Result<LogEntry, Error> entry_apply_one();
-    bmcl::Option<LogEntry> entry_pop_back();
+    bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks = false);
+    bmcl::Result<Entry, Error> entry_apply_one();
+    bmcl::Option<Entry> entry_pop_back();
     void entry_pop_front();
 
 private:
