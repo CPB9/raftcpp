@@ -8,7 +8,7 @@ bmcl::Option<Error> Sender::request_vote(const NodeId& node, const MsgVoteReq& m
     return _ex->request_vote_req(_r, node, msg);
 }
 
-bmcl::Option<Error> Sender::append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) 
+bmcl::Option<Error> Sender::append_entries(const NodeId& node, const MsgAppendEntriesReq& msg)
 {
     return _ex->append_entries_req(_r, node, msg);
 }
@@ -79,11 +79,6 @@ bmcl::Option<raft::Error> Exchanger::append_entries_rep(const raft::NodeId& from
     return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_APPENDENTRIES_RESPONSE);
 }
 
-bmcl::Option<raft::Error> Exchanger::entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAddEntryRep& msg)
-{
-    return __append_msg(from, to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
-}
-
 bmcl::Option<msg_t> Exchanger::poll_msg_data(const raft::Server& from)
 {
     return poll_msg_data(from.nodes().get_my_id());
@@ -143,21 +138,6 @@ void Exchanger::poll_msgs(raft::NodeId from)
         case raft_message_type_e::RAFT_MSG_REQUESTVOTE_RESPONSE:
             EXPECT_EQ(sizeof(MsgVoteRep), m.data.size());
             s.raft->accept_rep(m.sender, *(MsgVoteRep*)m.data.data());
-            break;
-        case raft_message_type_e::RAFT_MSG_ENTRY:
-        {
-            EXPECT_EQ(sizeof(MsgAddEntryReq), m.data.size());
-            auto r = s.raft->accept_entry(*(MsgAddEntryReq*)m.data.data());
-            EXPECT_TRUE(r.isOk());
-            MsgAddEntryRep response = r.unwrap();
-            __append_msg(me, m.sender, (MsgAddEntryReq *)&response, sizeof(response), raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE);
-        }
-        break;
-
-        case raft_message_type_e::RAFT_MSG_ENTRY_RESPONSE:
-#if 0
-            raft_recv_entry_response(me->raft, m->sender, m->data);
-#endif
             break;
         }
     }

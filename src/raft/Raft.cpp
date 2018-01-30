@@ -505,6 +505,21 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
     return bmcl::None;
 }
 
+bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId node)
+{
+    return accept_entry(Entry(_me.current_term, id, EntryType::AddNonVotingNode, node));
+}
+
+bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId node)
+{
+    return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, node));
+}
+
+bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryData& data)
+{
+    return accept_entry(Entry(_me.current_term, id, data));
+}
+
 bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e)
 {
     if (!is_leader())

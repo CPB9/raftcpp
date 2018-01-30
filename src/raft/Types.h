@@ -74,6 +74,18 @@ enum class NodeStatus
     Disconnecting,
 };
 
+inline const char* to_string(NodeStatus s)
+{
+    switch (s)
+    {
+    case raft::NodeStatus::Disconnected: return "disconnected";
+    case raft::NodeStatus::Connected: return "connected";
+    case raft::NodeStatus::Connecting: return "connecting";
+    case raft::NodeStatus::Disconnecting: return "disconnecting";
+    }
+    return "unknown";
+}
+
 /** Message sent from client to server.
  * The client sends this message to a server with the intention of having it
  * applied to the FSM. */

@@ -83,12 +83,15 @@ public:
     MsgVoteRep accept_req(NodeId nodeid, const MsgVoteReq& vr);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgVoteRep& r);
 
-    bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
+    bmcl::Result<MsgAddEntryRep, Error> add_entry(EntryId id, const EntryData& data);
+    bmcl::Result<MsgAddEntryRep, Error> add_node(EntryId id, NodeId node);
+    bmcl::Result<MsgAddEntryRep, Error> remove_node(EntryId id, NodeId node);
 
     bmcl::Option<Error> send_appendentries(NodeId node);
     bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);
 
 private:
+    bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
     void set_current_term(TermId term);
     void vote_for_nodeid(NodeId nodeid);
     void become_follower();

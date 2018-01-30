@@ -11,8 +11,6 @@ enum class raft_message_type_e
     RAFT_MSG_REQUESTVOTE_RESPONSE,
     RAFT_MSG_APPENDENTRIES,
     RAFT_MSG_APPENDENTRIES_RESPONSE,
-    RAFT_MSG_ENTRY,
-    RAFT_MSG_ENTRY_RESPONSE,
 };
 
 struct msg_t
@@ -79,7 +77,6 @@ public:
     bmcl::Option<raft::Error> request_vote_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgVoteRep& msg);
     bmcl::Option<raft::Error> append_entries_req(const raft::Server* raft, const raft::NodeId& node, const MsgAppendEntriesReq& msg);
     bmcl::Option<raft::Error> append_entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg);
-    bmcl::Option<raft::Error> entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAddEntryRep& msg);
 
 private:
 

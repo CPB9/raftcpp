@@ -157,7 +157,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
     EXPECT_GT(r.get_current_term(), 2);
 
     EXPECT_EQ(0, r.log().get_current_idx());
-    r.accept_entry(raft::MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_EQ(1, r.log().get_current_idx());
     EXPECT_EQ(r.get_current_term(), r.log().back()->term);
 }
@@ -170,13 +170,13 @@ TEST(TestLog, append_entry_is_retrievable)
     prepare_follower(r);
     prepare_leader(r);
 
-    Entry ety(1, 100, raft::EntryData("aaa", 4));
-    r.accept_entry(ety);
+    raft::EntryData etyData("aaa", 4);
+    r.add_entry(100, etyData);
 
     bmcl::Option<const Entry&> kept = r.log().get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
     EXPECT_FALSE(kept.unwrap().data.data.empty());
-    EXPECT_EQ(ety.data.data, kept.unwrap().data.data);
+    EXPECT_EQ(etyData.data, kept.unwrap().data.data);
     EXPECT_EQ(kept.unwrap().term, r.get_current_term());
 }
 
@@ -318,7 +318,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
     EXPECT_EQ(0, r.log().get_commit_idx());
 
     /* receive entry */
-    auto cr = r.accept_entry(Entry(1, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
     EXPECT_EQ(1, r.log().get_commit_idx());
@@ -333,15 +333,13 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     EXPECT_TRUE(r.is_leader());
     EXPECT_EQ(0, r.log().get_commit_idx());
 
-    /* entry message */
-    MsgAddEntryReq ety(0, 1, EntryType::AddNode, raft::NodeId(1), raft::EntryData("aaa", 4));
+    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
 
     /* receive entry */
-    EXPECT_TRUE(r.accept_entry(ety).isOk());
+    //EXPECT_TRUE(r.add_node(1, raft::NodeId(2)).isOk());
     EXPECT_EQ(1, r.log().count());
 
-    ety.id = 2;
-    auto cr = r.accept_entry(ety);
+    auto cr = r.add_node(2, raft::NodeId(3));
     EXPECT_TRUE(cr.isErr());
     EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
     EXPECT_EQ(1, r.log().get_commit_idx());
@@ -1422,7 +1420,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
     EXPECT_EQ(0, r.log().count());
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
 
@@ -1436,11 +1434,8 @@ void TestRaft_non_leader_recv_entry_msg_fails()
     r.nodes().add_node(raft::NodeId(2), true);
     prepare_follower(r);
 
-    /* entry message */
-    MsgAddEntryReq ety(0, 1, raft::EntryData("aaa", 4));
-
     /* receive entry */
-    auto cr = r.accept_entry(ety);
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isErr());
     EXPECT_EQ(raft::Error::NotLeader, cr.unwrapErr());
 }
@@ -1605,7 +1600,7 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
     prepare_leader(r);
     EXPECT_EQ(0, r.log().count());
 
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(1, r.log().count());
 }
@@ -1961,7 +1956,7 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
     r.raft_periodic(std::chrono::milliseconds(900));
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 }
@@ -1974,7 +1969,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
     prepare_leader(r);
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(EntryState::NotCommitted, r.log().entry_get_state(cr.unwrap()));
 
@@ -1990,7 +1985,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     prepare_leader(r);
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("aaa", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
     EXPECT_EQ(EntryState::NotCommitted, r.log().entry_get_state(cr.unwrap()));
     EXPECT_EQ(1, cr.unwrap().term);
@@ -2029,7 +2024,7 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
 
     /* receive entry */
-    auto cr = r.accept_entry(MsgAddEntryReq(0, 1, raft::EntryData("bbb", 4)));
+    auto cr = r.add_entry(1, raft::EntryData("bbb", 4));
     EXPECT_TRUE(cr.isOk());
 
     /* check if the slow node got sent this appendentries */
