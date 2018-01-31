@@ -11,6 +11,13 @@ Nodes::Nodes(NodeId id, bool isVoting) : _me(id)
     r.set_voting(isVoting);
 }
 
+Nodes::Nodes(NodeId id, bmcl::ArrayView<NodeId> nodes): _me(id)
+{
+    add_node(id, true);
+    for (const auto& i : nodes)
+        add_node(i, true);
+}
+
 void Nodes::reset_all_votes()
 {
     for (auto& i : _nodes)

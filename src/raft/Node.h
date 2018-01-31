@@ -10,6 +10,7 @@
  */
 #pragma once
 #include <bitset>
+#include <bmcl/ArrayView.h>
 #include "Types.h"
 
 namespace raft
@@ -67,6 +68,7 @@ class Nodes
 public:
     using Items = std::vector<Node>;
     Nodes(NodeId id, bool isVoting);
+    Nodes(NodeId id, bmcl::ArrayView<NodeId> nodes);
     inline std::size_t count() const { return _nodes.size(); }
     inline const Items& items() const { return _nodes; }
     inline NodeId get_my_id() const { return _me; }
@@ -86,7 +88,7 @@ public:
     bool is_committed(Index idx) const;
 private:
     NodeId _me;
-    Items _nodes;
+    Items  _nodes;
 };
 
 

@@ -38,7 +38,7 @@ static void prepare_leader(raft::Server& r)
     prepare_candidate(r);
     for (const auto& i : r.nodes().items())
     {
-        r.nodes().get_node(i.get_id())->vote_for_me(true);
+        r.accept_rep(i.get_id(), raft::MsgVoteRep(r.get_current_term(), raft::ReqVoteState::Granted));
     }
 
     raft::NodeId last_voter;
@@ -66,10 +66,8 @@ ISaver* generic_funcs() { return &__Saver; };
 
 TEST(TestNode, get_my_node)
 {
-    raft::Nodes ns(raft::NodeId(1), true);
-    ns.add_node(raft::NodeId(2), true);
+    raft::Nodes ns(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2) });
     EXPECT_EQ(raft::NodeId(1), ns.get_my_id());
-    EXPECT_NE(raft::NodeId(2), ns.get_my_id());
     EXPECT_TRUE(ns.is_me(raft::NodeId(1)));
     EXPECT_FALSE(ns.is_me(raft::NodeId(2)));
 }
@@ -91,9 +89,7 @@ TEST(TestServer, currentterm_defaults_to_0)
 
 TEST(TestServer, voting_results_in_voting)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
+    raft::Server r(NodeId(1), {NodeId(1), NodeId(2), NodeId(3)}, &__Sender, &__Saver);
 
     prepare_follower(r);
     r.accept_req(raft::NodeId(2), raft::MsgVoteReq(r.get_current_term() + 1, 0, 0));
@@ -106,8 +102,8 @@ TEST(TestServer, voting_results_in_voting)
 
 TEST(TestServer, become_candidate_increments_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), {NodeId(1), NodeId(2)}, &__Sender, &__Saver);
+
     raft::TermId term = r.get_current_term();
     prepare_candidate(r);
     EXPECT_EQ(term + 1, r.get_current_term());
@@ -115,8 +111,7 @@ TEST(TestServer, become_candidate_increments_term)
 
 TEST(TestServer, set_state)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_EQ(State::Leader, r.get_state());
 }
@@ -149,8 +144,7 @@ TEST(TestLog, entry_append_increases_logidx)
 
 TEST(TestServer, append_entry_means_entry_gets_current_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
     prepare_follower(r);
     prepare_leader(r);
@@ -164,8 +158,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
 
 TEST(TestLog, append_entry_is_retrievable)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     prepare_follower(r);
     prepare_leader(r);
@@ -212,9 +205,7 @@ TEST(TestLog, entry_is_retrieveable_using_idx)
  * to state machine (§5.3) */
 TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /* need at least one entry */
@@ -252,8 +243,7 @@ TEST(TestServer, periodic_elapses_election_timeout)
 
 TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_more_than_1_nodes)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
@@ -277,8 +267,9 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_vo
 TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting_nodes)
 {
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), false);
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
+
+    r.add_node(1, raft::NodeId(2));
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.raft_periodic(std::chrono::milliseconds(1001));
@@ -292,7 +283,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_n
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.timer().get_election_timeout() + std::chrono::milliseconds(1));
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -301,10 +292,9 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2), false);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.timer().get_election_timeout() + std::chrono::milliseconds(1));
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -327,22 +317,23 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), false);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
-    r.raft_periodic(r.timer().get_election_timeout());
-    EXPECT_TRUE(r.is_leader());
+    prepare_leader(r);
     EXPECT_EQ(0, r.log().get_commit_idx());
 
+    r.add_node(99, raft::NodeId(2));
     r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
-
-    /* receive entry */
-    //EXPECT_TRUE(r.add_node(1, raft::NodeId(2)).isOk());
-    EXPECT_EQ(1, r.log().count());
+    EXPECT_TRUE(r.log().voting_change_is_in_progress());
+    EXPECT_EQ(2, r.log().count());
 
     auto cr = r.add_node(2, raft::NodeId(3));
+    r.accept_rep(raft::NodeId(3), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
+
     EXPECT_TRUE(cr.isErr());
-    EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
-    EXPECT_EQ(1, r.log().get_commit_idx());
+    if (cr.isErr())
+    {
+        EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
+        EXPECT_EQ(1, r.log().get_commit_idx());
+    }
 }
 
 /* If term > currentTerm, set currentTerm to term (step down if candidate or
@@ -367,8 +358,7 @@ TEST(TestServer, votes_are_majority_is_true)
 
 TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_granted)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
@@ -379,8 +369,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_not_g
 
 TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_is_not_equal)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(2, raft::ReqVoteState::Granted));
@@ -389,8 +378,7 @@ TEST(TestServer, recv_requestvote_response_dont_increase_votes_for_me_when_term_
 
 TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     EXPECT_EQ(0, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
     prepare_candidate(r);
@@ -403,8 +391,7 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
 
 TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     for (const auto& i : r.nodes().items())
         r.nodes().get_node(i.get_id())->vote_for_me(false);
@@ -417,8 +404,7 @@ TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
 /* Reply false if term < currentTerm (§5.1) */
 TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /* term is less than current term */
@@ -428,8 +414,7 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
 
 TEST(TestServer, leader_recv_requestvote_does_not_step_down)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
 
     /* term is less than current term */
@@ -440,8 +425,7 @@ TEST(TestServer, leader_recv_requestvote_does_not_step_down)
 /* Reply true if term >= currentTerm (§5.1) */
 TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_current_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /* term is less than current term */
@@ -451,8 +435,7 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
 
 TEST(TestServer, recv_requestvote_reset_timeout)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
@@ -465,8 +448,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
 
 TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_current_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_candidate(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -479,8 +461,7 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
 
 TEST(TestServer, recv_requestvote_depends_on_candidate_id)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_candidate(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -495,9 +476,7 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
  * least as up-to-date as local log, grant vote (§5.2, §5.4) */
 TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_candidate)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
 
     /* vote for self */
     prepare_candidate(r);
@@ -520,17 +499,14 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
 
 TEST(TestFollower, becomes_follower_is_follower)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
     EXPECT_TRUE(r.is_follower());
 }
 
 TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
 
     prepare_candidate(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
@@ -545,8 +521,7 @@ TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
 /* 5.1 */
 TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     /* no leader known at this point */
     EXPECT_FALSE(r.get_current_leader().isSome());
 
@@ -568,8 +543,7 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
 
 TEST(TestFollower, recv_appendentries_from_unknown_node_fails)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     auto aer = r.accept_req(raft::NodeId(3), MsgAppendEntriesReq(1));
     EXPECT_FALSE(aer.isOk());
 }
@@ -577,8 +551,7 @@ TEST(TestFollower, recv_appendentries_from_unknown_node_fails)
 /* TODO: check if test case is needed */
 TEST(TestFollower, recv_appendentries_updates_currentterm_if_term_gt_currentterm)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /*  older currentterm */
@@ -603,8 +576,7 @@ TEST(TestFollower, recv_appendentries_updates_currentterm_if_term_gt_currentterm
 
 TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /*  log size s */
@@ -618,8 +590,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
 
 TEST(TestFollower, recv_appendentries_increases_log)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /*  log size s */
@@ -646,8 +617,7 @@ TEST(TestFollower, recv_appendentries_increases_log)
 /*  5.3 */
 TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log_idx_which_matches_prev_log_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     /* term is different from appendentries */
     prepare_follower(r);
@@ -695,8 +665,7 @@ static void __create_mock_entries_for_conflict_tests(raft::LogCommitter* lc, std
 /* 5.3 */
 TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entries_via_prev_log_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     std::vector<uint8_t> strs[] = { {1, 1, 1}, {2, 2, 2}, {3, 3, 3} };
@@ -730,8 +699,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 
 TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entries_via_prev_log_idx_at_idx_0)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     std::vector<uint8_t> strs[] = { { 1, 1, 1 },{ 2, 2, 2 },{ 3, 3, 3 } };
@@ -759,8 +727,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
 
 TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than_prev_log_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     std::vector<uint8_t> strs[] = { { 1, 1, 1 },{ 2, 2, 2 },{ 3, 3, 3 } };
@@ -785,8 +752,7 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
 
 TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     MsgAppendEntriesReq ae(r.get_current_term(), 0, 1, 0);
@@ -803,8 +769,7 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
 
 TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     MsgAppendEntriesReq ae(r.get_current_term(), 0, 1, 0);
     /* include 1 entry */
@@ -838,8 +803,7 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
  *  min(leaderCommit, last log idx) */
 TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     MsgAppendEntriesReq ae(1, 0, 1, 0);
     /* include entries */
@@ -868,8 +832,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
 
 TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     MsgAppendEntriesReq ae(1, 0, 1, 0);
     /* include entries */
@@ -895,8 +858,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
 
 TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     r.log().entry_append(Entry(r.get_current_term(), 1, raft::EntryData("aaa", 4)));
@@ -921,8 +883,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
 
 TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     /*  1 second election timeout */
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
@@ -937,8 +898,7 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
 /* Candidate 5.2 */
 TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /*  request vote */
@@ -965,8 +925,7 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
 TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     MsgAppendEntriesReq ae(1, 0, 1, 0);
     /* include entries */
@@ -1007,8 +966,7 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
 
 TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     MsgAppendEntriesReq ae(1, 0, 1, 0);
     /* include entries */
@@ -1060,8 +1018,7 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
 
 TEST(TestCandidate, becomes_candidate_is_candidate)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_candidate(r);
     EXPECT_TRUE(r.is_candidate());
 }
@@ -1069,8 +1026,7 @@ TEST(TestCandidate, becomes_candidate_is_candidate)
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_increments_current_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     EXPECT_EQ(0, r.get_current_term());
     prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
@@ -1079,8 +1035,7 @@ TEST(TestFollower, becoming_candidate_increments_current_term)
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_votes_for_self)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     EXPECT_FALSE(r.get_voted_for().isSome());
     prepare_candidate(r);
     EXPECT_EQ(r.nodes().get_my_id(), r.get_voted_for());
@@ -1090,8 +1045,7 @@ TEST(TestFollower, becoming_candidate_votes_for_self)
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_resets_election_timeout)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
@@ -1106,8 +1060,7 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
 
 TEST(TestFollower, recv_appendentries_resets_election_timeout)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     r.raft_periodic(std::chrono::milliseconds(900));
@@ -1120,15 +1073,12 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 /* Candidate 5.2 */
 TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    raft::Server r2(raft::NodeId(2), true, &__Sender, &__Saver);
-    raft::Server r3(raft::NodeId(3), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    raft::Server r2(raft::NodeId(2), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    raft::Server r3(raft::NodeId(3), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
     sender.add(&r2);
     sender.add(&r3);
-
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
 
     /* set term so we can check it gets included in the outbound message */
     prepare_follower(r);
@@ -1158,8 +1108,7 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
 /* Candidate 5.2 */
 TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* server wants to be leader, so becomes candidate */
@@ -1181,11 +1130,7 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 /* Candidate 5.2 */
 TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-    r.nodes().add_node(raft::NodeId(4), true);
-    r.nodes().add_node(raft::NodeId(5), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3), NodeId(4), NodeId(5) }, &__Sender, &__Saver);
     EXPECT_EQ(5, r.nodes().count());
 
     /* vote for self */
@@ -1208,8 +1153,7 @@ TEST(TestCandidate, receives_majority_of_votes_becomes_leader)
 /* Candidate 5.2 */
 TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_candidate(r);
 
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(0, 0, 0));
@@ -1221,15 +1165,13 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
 /* Candidate 5.2 */
 TEST(TestCandidate, requestvote_includes_logidx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    raft::Server r2(raft::NodeId(2), true, &__Sender, &__Saver);
-    raft::Server r3(raft::NodeId(3), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    raft::Server r2(raft::NodeId(2), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    raft::Server r3(raft::NodeId(3), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
     sender.add(&r2);
     sender.add(&r3);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
     prepare_follower(r);
 
     raft::TermId term = r.get_current_term();
@@ -1252,10 +1194,9 @@ TEST(TestCandidate, requestvote_includes_logidx)
 
 TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_is_less_than_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_candidate(r);
+
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
     raft::TermId term = r.get_current_term();
@@ -1269,10 +1210,9 @@ TEST(TestCandidate, recv_requestvote_response_becomes_follower_if_current_term_i
 /* Candidate 5.2 */
 TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_candidate(r);
+
     EXPECT_FALSE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
     EXPECT_EQ(1, r.get_current_term());
@@ -1290,10 +1230,9 @@ TEST(TestCandidate, recv_appendentries_frm_leader_results_in_follower)
 /* Candidate 5.2 */
 TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_candidate(r);
+
     EXPECT_FALSE(r.is_follower());
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
@@ -1318,9 +1257,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
 
 TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_follower(r);
     EXPECT_TRUE(r.is_follower());
 
@@ -1345,16 +1282,14 @@ TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
 
 TEST(TestLeader, becomes_leader_is_leader)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), false);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_TRUE(r.is_leader());
 }
 
 TEST(TestLeader, becomes_leader_does_not_clear_voted_for)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 }
@@ -1368,10 +1303,7 @@ TEST(TestLeader, becomes_leader_when_alone_sets_voted_for)
 
 TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx_plus_1)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3)}, &__Sender, &__Saver);
     prepare_leader(r);
 
     int i;
@@ -1386,37 +1318,40 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
 /* 5.2 */
 TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
 
     /* receive appendentries messages for both nodes */
     bmcl::Option<msg_t> msg;
-    MsgAppendEntriesReq* ae;
 
+    r.raft_periodic(r.timer().get_request_timeout());
     msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
-    ae = msg->cast_to_appendentries().unwrapOr(nullptr);
-    EXPECT_NE(nullptr, ae);
+    if (msg.isSome())
+    {
+        MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
+        EXPECT_NE(nullptr, ae);
+    }
 
+    r.raft_periodic(r.timer().get_request_timeout());
     msg = sender.poll_msg_data(r);
-    EXPECT_TRUE(msg.isSome());
-    ae = msg->cast_to_appendentries().unwrapOr(nullptr);
-    EXPECT_NE(nullptr, ae);
+    if (msg.isSome())
+    {
+        EXPECT_TRUE(msg.isSome());
+        MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
+        EXPECT_NE(nullptr, ae);
+    }
 }
 
 /* 5.2
  * Note: commit means it's been appended to the log, not applied to the FSM */
 TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
     EXPECT_EQ(0, r.log().count());
 
     /* receive entry */
@@ -1430,8 +1365,7 @@ TEST(TestLeader, responds_to_entry_msg_when_entry_is_committed)
 
 void TestRaft_non_leader_recv_entry_msg_fails()
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
 
     /* receive entry */
@@ -1443,11 +1377,10 @@ void TestRaft_non_leader_recv_entry_msg_fails()
 /* 5.3 */
 TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
     sender.clear();
 
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
@@ -1465,11 +1398,11 @@ TEST(TestLeader, sends_appendentries_with_NextIdx_when_PrevIdx_gt_NextIdx)
 
 TEST(TestLeader, sends_appendentries_with_leader_commit)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
+    prepare_leader(r);
+
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    prepare_leader(r);
     for (std::size_t i = 0; i < 10; i++)
         r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
     r.log().set_commit_idx(10);
@@ -1488,12 +1421,13 @@ TEST(TestLeader, sends_appendentries_with_leader_commit)
 
 TEST(TestLeader, sends_appendentries_with_prevLogIdx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    bmcl::Option<raft::Node&> n = r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
     sender.clear();
+
+    bmcl::Option<raft::Node&> n = r.nodes().get_node(raft::NodeId(2));
 
     /* receive appendentries messages */
     r.send_appendentries(n->get_id());
@@ -1537,12 +1471,13 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
 
 TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    bmcl::Option<raft::Node&> n = r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
     sender.clear();
+
+    bmcl::Option<raft::Node&> n = r.nodes().get_node(raft::NodeId(2));
 
     /* receive appendentries messages */
     r.send_appendentries(n->get_id());
@@ -1572,11 +1507,10 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
 /* 5.3 */
 TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistency)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
     sender.clear();
 
     /* receive appendentries messages */
@@ -1595,8 +1529,7 @@ TEST(TestLeader, retries_appendentries_with_decremented_NextIdx_log_inconsistenc
  * set commitidx = N (§5.2, §5.4).  */
 TEST(TestLeader, append_entry_to_log_increases_idxno)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_EQ(0, r.log().count());
 
@@ -1607,15 +1540,11 @@ TEST(TestLeader, append_entry_to_log_increases_idxno)
 
 TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_have_entry_and_atleast_one_newer_entry)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3), NodeId(4), NodeId(5) }, &__Sender, &__Saver);
+    prepare_leader(r);
+
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-    r.nodes().add_node(raft::NodeId(4), true);
-    r.nodes().add_node(raft::NodeId(5), true);
-
-    prepare_leader(r);
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
@@ -1657,15 +1586,16 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
 
 TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_nodes_majority)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2), raft::NodeId(3) }, &__Sender, &__Saver);
+    prepare_leader(r);
+
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-    r.nodes().add_node(raft::NodeId(4), false);
-    r.nodes().add_node(raft::NodeId(5), false);
+    r.add_node(1, raft::NodeId(4));
+    EXPECT_FALSE(r.nodes().get_node(raft::NodeId(4))->is_voting());
+    r.add_node(2, raft::NodeId(5));
+    EXPECT_FALSE(r.nodes().get_node(raft::NodeId(5))->is_voting());
 
-    prepare_leader(r);
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
@@ -1686,13 +1616,11 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
 
 TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    prepare_leader(r);
+
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-
-    prepare_leader(r);
     /* the last applied idx will became 1, and then 2 */
 
     /* append entries - we need two */
@@ -1715,13 +1643,8 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
 
 TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_of_old_terms_with_majority)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3), NodeId(4), NodeId(5) }, &__Sender, &__Saver);
     Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-    r.nodes().add_node(raft::NodeId(4), true);
-    r.nodes().add_node(raft::NodeId(5), true);
 
     prepare_follower(r);
     prepare_leader(r);
@@ -1777,10 +1700,11 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
 
 TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-    bmcl::Option<raft::Node&> node = r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
+    Exchanger sender(&r);
+
+    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
 
     /* append entries */
     r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
@@ -1835,10 +1759,11 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
 TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-    bmcl::Option<raft::Node&> node = r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
+
+    Exchanger sender(&r);
+    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
 
     /* append entries */
     r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
@@ -1907,11 +1832,9 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
 TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
     prepare_leader(r);
     sender.clear();
     /* the last applied idx will became 1, and then 2 */
@@ -1937,10 +1860,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
 
 TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     prepare_leader(r);
 
     /* receive mock success responses */
@@ -1963,9 +1883,7 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
 
 TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_leader(r);
 
     /* receive entry */
@@ -1979,9 +1897,7 @@ TEST(TestLeader, recv_entry_is_committed_returns_0_if_not_committed)
 
 TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
 
     /* receive entry */
@@ -2010,11 +1926,10 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
 
 TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
     sender.clear();
 
     /* make the node slow */
@@ -2036,12 +1951,10 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
 
 TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to_0)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
 
     /* append entries */
     r.log().entry_append(MsgAddEntryReq(1, 1, raft::EntryData("aaa", 4)));
@@ -2061,12 +1974,10 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
 
 TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Exchanger sender(&r);
-
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
+
+    Exchanger sender(&r);
 
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
@@ -2079,10 +1990,9 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 
 TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
     prepare_follower(r);
     prepare_leader(r);
     EXPECT_GT(r.get_current_term(), 1);
@@ -2098,8 +2008,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
 
 TEST(TestLeader, recv_appendentries_response_steps_down_if_term_is_newer)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     prepare_follower(r);
     prepare_leader(r);
@@ -2116,9 +2025,7 @@ TEST(TestLeader, recv_appendentries_response_steps_down_if_term_is_newer)
 
 TEST(TestLeader, recv_appendentries_steps_down_if_newer)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
 
     /* check that node 1 considers itself the leader */
@@ -2136,9 +2043,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
 
 TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), true);
-
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
 
     auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 5, 5, 0));
@@ -2148,11 +2053,9 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
 
 TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
     r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
@@ -2196,11 +2099,9 @@ void T_estRaft_leader_sends_appendentries_when_receive_entry_msg()
 
 TEST(TestLeader, recv_requestvote_responds_without_granting)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
     r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
@@ -2216,10 +2117,8 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
 
 TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
 {
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
-    r.nodes().add_node(raft::NodeId(2), true);
-    r.nodes().add_node(raft::NodeId(3), true);
     r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 

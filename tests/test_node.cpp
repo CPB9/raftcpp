@@ -16,19 +16,23 @@ TEST(TestNode, node_set_nextIdx)
     EXPECT_EQ(3, p.get_next_idx());
 }
 
+
+TEST(TestNode, my_id_is_always_in_list)
+{
+    raft::Nodes nodes(raft::NodeId(1), { NodeId(2), NodeId(3) });
+    EXPECT_EQ(3, nodes.count());
+    EXPECT_TRUE(nodes.get_node(raft::NodeId(1)).isSome());
+}
+
 TEST(TestNode, cfg_sets_num_nodes)
 {
-    raft::Nodes nodes(raft::NodeId(1), true);
-    nodes.add_node(raft::NodeId(2), true);
-
+    raft::Nodes nodes(raft::NodeId(1), { NodeId(1), NodeId(2)});
     EXPECT_EQ(2, nodes.count());
 }
 
 TEST(TestNode, cant_get_node_we_dont_have)
 {
-    raft::Nodes nodes(raft::NodeId(1), true);
-    nodes.add_node(raft::NodeId(2), true);
-
+    raft::Nodes nodes(raft::NodeId(1), { NodeId(1), NodeId(2) });
     EXPECT_FALSE(nodes.get_node(raft::NodeId(0)).isSome());
     EXPECT_TRUE(nodes.get_node(raft::NodeId(1)).isSome());
     EXPECT_TRUE(nodes.get_node(raft::NodeId(2)).isSome());
@@ -70,9 +74,7 @@ TEST(TestNode, add_non_voting_node_with_already_existing_id_doesnt_change_voting
 
 TEST(TestNode, add_non_voting_node_with_already_existing_voting_doesnt_change_voting)
 {
-    raft::Nodes nodes(raft::NodeId(1), true);
-    nodes.add_node(raft::NodeId(2), true);
-    nodes.add_node(raft::NodeId(3), true);
+    raft::Nodes nodes(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2), raft::NodeId(3) });
 
     EXPECT_TRUE(nodes.add_node(raft::NodeId(2), true).is_voting());
     EXPECT_TRUE(nodes.add_node(raft::NodeId(3), true).is_voting());
@@ -80,9 +82,7 @@ TEST(TestNode, add_non_voting_node_with_already_existing_voting_doesnt_change_vo
 
 TEST(TestNode, remove_node)
 {
-    raft::Nodes nodes(raft::NodeId(1), true);
-    bmcl::Option<raft::Node&> n1 = nodes.add_node(raft::NodeId(2), true);
-    bmcl::Option<raft::Node&> n2 = nodes.add_node(raft::NodeId(3), true);
+    raft::Nodes nodes(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2), raft::NodeId(3) });
 
     nodes.remove_node(raft::NodeId(2));
     EXPECT_FALSE(nodes.get_node(raft::NodeId(2)).isSome());

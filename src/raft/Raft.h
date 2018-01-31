@@ -13,6 +13,7 @@
 #include <functional>
 #include <bmcl/Option.h>
 #include <bmcl/Result.h>
+#include <bmcl/ArrayView.h>
 #include "Types.h"
 #include "Log.h"
 #include "Node.h"
@@ -55,7 +56,10 @@ class Server
 
     friend class Logger;
 public:
-    explicit Server(NodeId id, bool is_voting, ISender* sender = nullptr, ISaver* saver = nullptr);
+    explicit Server(NodeId id, bool isnewCluster, ISender* sender = nullptr, ISaver* saver = nullptr); //create new or join existing cluster ()
+    explicit Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
+    explicit Server(NodeId id, std::initializer_list<NodeId> members, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
+
     inline void set_sender(ISender* sender) {_sender = sender; }
     inline void set_saver(ISaver* saver) { _saver = saver; }
     inline const ISaver* get_saver() const { return _saver; }

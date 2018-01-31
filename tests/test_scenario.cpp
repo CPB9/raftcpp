@@ -13,15 +13,11 @@ TEST(TestScenario, leader_appears)
     Saver saver;
 
     const std::size_t Count = 3;
+    std::vector<raft::NodeId> set = {NodeId(1), NodeId(2), NodeId(3)};
     for (std::size_t i = 0; i < Count; ++i)
     {
-        r.emplace_back(std::make_shared<raft::Server>(raft::NodeId(i), true, nullptr, &saver));
+        r.emplace_back(std::make_shared<raft::Server>(raft::NodeId(i), set, nullptr, &saver));
         raft::Server& rx = *r.back();
-
-        for(std::size_t j = 1; j < Count; ++j)
-        {
-            rx.nodes().add_node(raft::NodeId((i + j) % Count), true);
-        }
         rx.timer().set_timeout(std::chrono::milliseconds(100), 5);
         sender.add(&rx);
     }

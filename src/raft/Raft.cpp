@@ -56,11 +56,20 @@ void Server::__log(const char *fmt, ...) const
     _saver->log(buf);
 }
 
-Server::Server(NodeId id, bool is_voting, ISender* sender, ISaver* saver)
-    : _nodes(id, is_voting), _log(saver), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _nodes(id, isNewCluster), _log(saver), _sender(sender), _saver(saver)
 {
     _me.current_term = TermId(0);
     become_follower();
+}
+
+Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISaver* saver) : _nodes(id, members), _log(saver), _sender(sender), _saver(saver)
+{
+    _me.current_term = TermId(0);
+    become_follower();
+}
+
+Server::Server(NodeId id, std::initializer_list<NodeId> members, ISender* sender, ISaver* saver) : Server(id, bmcl::ArrayView<NodeId>(members), sender, saver)
+{
 }
 
 void Server::become_leader()
