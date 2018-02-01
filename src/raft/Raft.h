@@ -80,7 +80,7 @@ public:
     Timer& timer() { return _timer; }
     const Timer& timer() const { return _timer; }
 
-    bmcl::Option<Error> raft_periodic(std::chrono::milliseconds msec_elapsed);
+    bmcl::Option<Error> tick(std::chrono::milliseconds elapsed);
 
     bmcl::Result<MsgAppendEntriesRep, Error> accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r);

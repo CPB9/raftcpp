@@ -22,7 +22,7 @@ static void prepare_follower(raft::Server& r)
 static void prepare_candidate(raft::Server& r)
 {
     EXPECT_GT(r.nodes().count(), 1);
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
     EXPECT_TRUE(r.is_candidate());
 }
 
@@ -30,7 +30,7 @@ static void prepare_leader(raft::Server& r)
 {
     if (r.nodes().get_num_voting_nodes() == 1)
     {
-        r.raft_periodic(r.timer().get_max_election_timeout());
+        r.tick(r.timer().get_max_election_timeout());
         EXPECT_TRUE(r.is_leader());
         return;
     }
@@ -175,7 +175,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
     r.log().set_commit_idx(1);
 
     /* let time lapse */
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.log().get_last_applied_idx());
 }
 
@@ -196,10 +196,10 @@ TEST(TestServer, periodic_elapses_election_timeout)
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.raft_periodic(std::chrono::milliseconds(0));
+    r.tick(std::chrono::milliseconds(0));
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.raft_periodic(std::chrono::milliseconds(100));
+    r.tick(std::chrono::milliseconds(100));
     EXPECT_EQ(100, r.timer().get_timeout_elapsed().count());
 }
 
@@ -208,7 +208,7 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     EXPECT_FALSE(r.is_leader());
 }
@@ -218,7 +218,7 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_vo
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     EXPECT_FALSE(r.is_leader());
     EXPECT_EQ(0, r.get_current_term());
@@ -231,7 +231,7 @@ TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting
     r.add_node(1, raft::NodeId(2));
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     EXPECT_EQ(0, r.get_current_term());
 }
@@ -241,7 +241,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_n
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -252,7 +252,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
     r.nodes().add_node(raft::NodeId(2), false);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -262,7 +262,7 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2), false);
 
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
     raft::Index ci = r.log().get_commit_idx();
     raft::Index count = r.log().count();
 
@@ -399,7 +399,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     prepare_follower(r);
 
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
-    r.raft_periodic(std::chrono::milliseconds(900));
+    r.tick(std::chrono::milliseconds(900));
 
     MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
     EXPECT_EQ(raft::ReqVoteState::Granted, rvr.vote_granted);
@@ -846,7 +846,7 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
     /*  max election timeout have passed */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
 
     /* is a candidate now */
     EXPECT_TRUE(r.is_candidate());
@@ -1007,7 +1007,7 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.raft_periodic(std::chrono::milliseconds(900));
+    r.tick(std::chrono::milliseconds(900));
     EXPECT_EQ(900, r.timer().get_timeout_elapsed().count());
 
     prepare_candidate(r);
@@ -1020,7 +1020,7 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
-    r.raft_periodic(std::chrono::milliseconds(900));
+    r.tick(std::chrono::milliseconds(900));
 
     auto aer = r.accept_req(raft::NodeId(1), MsgAppendEntriesReq(1));
     EXPECT_TRUE(aer.isOk());
@@ -1072,7 +1072,7 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     EXPECT_EQ(1, r.get_current_term());
 
     /* clock over (i.e. max election timeout + 1) to overcome possible negative timeout, causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout());
+    r.tick(r.timer().get_max_election_timeout());
     EXPECT_EQ(2, r.get_current_term());
 
     /*  receiving this vote gives the server majority */
@@ -1229,9 +1229,9 @@ TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
     EXPECT_EQ(3, r.log().count());
     EXPECT_EQ(3, r.log().get_commit_idx());
 
-    r.raft_periodic(std::chrono::milliseconds(1));
-    r.raft_periodic(std::chrono::milliseconds(1));
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_FALSE(r.log().has_not_applied());
     EXPECT_EQ(5, r.nodes().count());
 }
@@ -1282,7 +1282,7 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
     /* receive appendentries messages for both nodes */
     bmcl::Option<msg_t> msg;
 
-    r.raft_periodic(r.timer().get_request_timeout());
+    r.tick(r.timer().get_request_timeout());
     msg = sender.poll_msg_data(r);
     EXPECT_TRUE(msg.isSome());
     if (msg.isSome())
@@ -1291,7 +1291,7 @@ TEST(TestLeader, when_it_becomes_a_leader_sends_empty_appendentries)
         EXPECT_NE(nullptr, ae);
     }
 
-    r.raft_periodic(r.timer().get_request_timeout());
+    r.tick(r.timer().get_request_timeout());
     msg = sender.poll_msg_data(r);
     if (msg.isSome())
     {
@@ -1520,7 +1520,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1, 1));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(1, r.log().get_commit_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.log().get_last_applied_idx());
 
     /* SECOND entry log application */
@@ -1536,7 +1536,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2, 2));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(2, r.log().get_commit_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(2, r.log().get_last_applied_idx());
 }
 
@@ -1566,7 +1566,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
     EXPECT_EQ(1, r.log().get_commit_idx());
     /* leader will now have majority followers who have appended this log */
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.log().get_last_applied_idx());
 }
 
@@ -1621,7 +1621,7 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     EXPECT_EQ(0, r.log().get_commit_idx());
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1, 1));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.log().get_last_applied_idx());
 
     /* SECOND entry log application */
@@ -1634,7 +1634,7 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     EXPECT_EQ(0, r.log().get_commit_idx());
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2, 2));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.log().get_last_applied_idx());
 
     /* THIRD entry log application */
@@ -1646,11 +1646,11 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     EXPECT_EQ(0, r.log().get_commit_idx());
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(r.get_current_term(), true, 3, 3));
     EXPECT_EQ(3, r.log().get_commit_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.log().get_last_applied_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(2, r.log().get_last_applied_idx());
-    r.raft_periodic(std::chrono::milliseconds(1));
+    r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(3, r.log().get_last_applied_idx());
 }
 
@@ -1829,7 +1829,7 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     prepare_leader(r);
 
-    r.raft_periodic(std::chrono::milliseconds(900));
+    r.tick(std::chrono::milliseconds(900));
 
     /* receive entry */
     auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
@@ -2039,7 +2039,7 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     }
 
     /* force request timeout */
-    r.raft_periodic(3*r.timer().get_request_timeout());
+    r.tick(3*r.timer().get_request_timeout());
     {
         msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());

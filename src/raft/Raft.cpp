@@ -63,7 +63,7 @@ Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _
     if (isNewCluster)
     {
         _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
-        raft_periodic(std::chrono::milliseconds(0));
+        tick(std::chrono::milliseconds(0));
         assert(is_leader());
     }
 }
@@ -126,9 +126,9 @@ void Server::become_follower()
     __log("randomize election timeout to %d", _timer.get_election_timeout_rand());
 }
 
-bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_last_period)
+bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_period)
 {
-    _timer.add_elapsed(msec_since_last_period);
+    _timer.add_elapsed(elapsed_since_last_period);
 
     /* Only one voting node means it's safe for us to become the leader */
     if (1 == _nodes.get_num_voting_nodes())

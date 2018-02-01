@@ -43,7 +43,7 @@ one_more_time:
                 goto one_more_time;
 
         for (std::size_t j = 0; j < 3; j++)
-            r[j]->raft_periodic(std::chrono::milliseconds(100));
+            r[j]->tick(std::chrono::milliseconds(100));
     }
 
     int leaders = 0;
