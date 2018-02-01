@@ -41,6 +41,53 @@ TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
     EXPECT_FALSE(l.get_at_idx(2).isSome());
 }
 
+TEST(TestLog, append_entry_user_can_set_data_buf)
+{
+    raft::LogCommitter l(nullptr);
+
+    Entry ety(1, 100, raft::EntryData("aaa", 4));
+    l.entry_append(ety);
+    bmcl::Option<const Entry&> kept = l.get_at_idx(1);
+    EXPECT_TRUE(kept.isSome());
+    EXPECT_EQ(ety.data.data, kept.unwrap().data.data);
+}
+
+
+TEST(TestLog, entry_append_increases_logidx)
+{
+    raft::LogCommitter lc(nullptr);
+    EXPECT_EQ(0, lc.get_current_idx());
+    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
+    EXPECT_EQ(1, lc.get_current_idx());
+}
+
+TEST(TestLog, entry_is_retrieveable_using_idx)
+{
+    std::vector<uint8_t> str = { 1, 1, 1, 1 };
+    std::vector<uint8_t> str2 = { 2, 2, 2 };
+
+    raft::LogCommitter lc(nullptr);
+
+    lc.entry_append(Entry(1, 1, raft::EntryData(str)));
+
+    /* different ID so we can be successful */
+    lc.entry_append(Entry(1, 2, raft::EntryData(str2)));
+
+    bmcl::Option<const Entry&> ety_appended = lc.get_at_idx(2);
+    EXPECT_TRUE(ety_appended.isSome());
+    EXPECT_EQ(ety_appended.unwrap().data.data, str2);
+}
+
+
+TEST(TestLog, idx_starts_at_1)
+{
+    raft::LogCommitter lc(nullptr);
+    EXPECT_EQ(0, lc.get_current_idx());
+
+    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
+    EXPECT_EQ(1, lc.get_current_idx());
+}
+
 class TestSaver : public Saver
 {
 public:

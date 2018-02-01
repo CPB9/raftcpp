@@ -60,6 +60,12 @@ Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _
 {
     _me.current_term = TermId(0);
     become_follower();
+    if (isNewCluster)
+    {
+        _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
+        raft_periodic(std::chrono::milliseconds(0));
+        assert(is_leader());
+    }
 }
 
 Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISaver* saver) : _nodes(id, members), _log(saver), _sender(sender), _saver(saver)
@@ -132,6 +138,8 @@ bmcl::Option<Error> Server::raft_periodic(std::chrono::milliseconds msec_since_l
         {
             vote_for_nodeid(node.get_id());
             become_leader();
+            if (_nodes.count() == 1)
+                _log.commit_all();
         }
     }
 

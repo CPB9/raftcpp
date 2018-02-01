@@ -37,12 +37,7 @@ private:
 class LogCommitter : public Logger
 {
 public:
-    LogCommitter(ISaver* saver) : _saver(saver)
-    {
-        _commit_idx = 0;
-        _last_applied_idx = 0;
-    }
-
+    LogCommitter(ISaver* saver) : _saver(saver), _commit_idx(0), _last_applied_idx(0) {}
     inline Index get_commit_idx() const { return _commit_idx; }
     inline Index get_last_applied_idx() const { return _last_applied_idx; }
     inline bool has_not_applied() const { return _last_applied_idx < get_commit_idx(); }

@@ -72,15 +72,6 @@ TEST(TestNode, get_my_node)
     EXPECT_FALSE(ns.is_me(raft::NodeId(2)));
 }
 
-TEST(TestLog, idx_starts_at_1)
-{
-    raft::LogCommitter lc(&__Saver);
-    EXPECT_EQ(0, lc.get_current_idx());
-
-    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
-    EXPECT_EQ(1, lc.get_current_idx());
-}
-
 TEST(TestServer, currentterm_defaults_to_0)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
@@ -116,9 +107,15 @@ TEST(TestServer, set_state)
     EXPECT_EQ(State::Leader, r.get_state());
 }
 
-TEST(TestServer, starts_as_follower)
+TEST(TestServer, the_only_node_starts_as_leader)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
+    EXPECT_EQ(State::Leader, r.get_state());
+}
+
+TEST(TestServer, if_not_the_only_starts_as_follower)
+{
+    raft::Server r(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2) }, &__Sender, &__Saver);
     EXPECT_EQ(State::Follower, r.get_state());
 }
 
@@ -132,14 +129,6 @@ TEST(TestServer, starts_with_request_timeout_of_200ms)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     EXPECT_EQ(std::chrono::milliseconds(200), r.timer().get_request_timeout());
-}
-
-TEST(TestLog, entry_append_increases_logidx)
-{
-    raft::LogCommitter lc(&__Saver);
-    EXPECT_EQ(0, lc.get_current_idx());
-    lc.entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
-    EXPECT_EQ(1, lc.get_current_idx());
 }
 
 TEST(TestServer, append_entry_means_entry_gets_current_term)
@@ -156,7 +145,7 @@ TEST(TestServer, append_entry_means_entry_gets_current_term)
     EXPECT_EQ(r.get_current_term(), r.log().back()->term);
 }
 
-TEST(TestLog, append_entry_is_retrievable)
+TEST(TestServer, append_entry_is_retrievable)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
@@ -171,33 +160,6 @@ TEST(TestLog, append_entry_is_retrievable)
     EXPECT_FALSE(kept.unwrap().data.data.empty());
     EXPECT_EQ(etyData.data, kept.unwrap().data.data);
     EXPECT_EQ(kept.unwrap().term, r.get_current_term());
-}
-
-TEST(TestLog, append_entry_user_can_set_data_buf)
-{
-    raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    Entry ety(1, 100, raft::EntryData("aaa", 4));
-    r.log().entry_append(ety);
-    bmcl::Option<const Entry&> kept = r.log().get_at_idx(1);
-    EXPECT_TRUE(kept.isSome());
-    EXPECT_EQ(ety.data.data, kept.unwrap().data.data);
-}
-
-TEST(TestLog, entry_is_retrieveable_using_idx)
-{
-    std::vector<uint8_t> str = {1, 1, 1, 1};
-    std::vector<uint8_t> str2 = {2, 2, 2};
-
-    raft::LogCommitter lc(&__Saver);
-
-    lc.entry_append(Entry(1, 1, raft::EntryData(str)));
-
-    /* different ID so we can be successful */
-    lc.entry_append(Entry(1, 2, raft::EntryData(str2)));
-
-    bmcl::Option<const Entry&> ety_appended = lc.get_at_idx(2);
-    EXPECT_TRUE(ety_appended.isSome());
-    EXPECT_EQ(ety_appended.unwrap().data.data, str2);
 }
 
 
@@ -244,10 +206,9 @@ TEST(TestServer, periodic_elapses_election_timeout)
 TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_more_than_1_nodes)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     EXPECT_FALSE(r.is_leader());
 }
@@ -255,10 +216,9 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_there_is_are_
 TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_voting_node)
 {
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     EXPECT_FALSE(r.is_leader());
     EXPECT_EQ(0, r.get_current_term());
@@ -267,12 +227,11 @@ TEST(TestServer, election_timeout_does_not_promote_us_to_leader_if_we_are_not_vo
 TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting_nodes)
 {
     raft::Server r(raft::NodeId(1), false, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     r.add_node(1, raft::NodeId(2));
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(std::chrono::milliseconds(1001));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     EXPECT_EQ(0, r.get_current_term());
 }
@@ -280,10 +239,9 @@ TEST(TestServer, election_timeout_does_not_start_election_if_there_are_no_voting
 TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_node)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_election_timeout() + std::chrono::milliseconds(1));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -294,7 +252,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_v
     r.nodes().add_node(raft::NodeId(2), false);
 
     /* clock over (ie. 1000 + 1), causing new election */
-    r.raft_periodic(r.timer().get_election_timeout() + std::chrono::milliseconds(1));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     EXPECT_TRUE(r.is_leader());
 }
@@ -303,27 +261,29 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     r.nodes().add_node(raft::NodeId(2), false);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
-    r.raft_periodic(r.timer().get_election_timeout());
-    EXPECT_EQ(0, r.log().get_commit_idx());
+
+    r.raft_periodic(r.timer().get_max_election_timeout());
+    raft::Index ci = r.log().get_commit_idx();
+    raft::Index count = r.log().count();
 
     /* receive entry */
     auto cr = r.add_entry(1, raft::EntryData("aaa", 4));
     EXPECT_TRUE(cr.isOk());
-    EXPECT_EQ(1, r.log().count());
-    EXPECT_EQ(1, r.log().get_commit_idx());
+    EXPECT_EQ(count + 1, r.log().count());
+    EXPECT_EQ(ci + 1, r.log().get_commit_idx());
 }
 
 TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
 {
     raft::Server r(raft::NodeId(1), true, &__Sender, &__Saver);
     prepare_leader(r);
-    EXPECT_EQ(0, r.log().get_commit_idx());
+    raft::Index ci = r.log().get_commit_idx();
+    raft::Index count = r.log().count();
 
     r.add_node(99, raft::NodeId(2));
     r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
     EXPECT_TRUE(r.log().voting_change_is_in_progress());
-    EXPECT_EQ(2, r.log().count());
+    EXPECT_EQ(count + 2, r.log().count());
 
     auto cr = r.add_node(2, raft::NodeId(3));
     r.accept_rep(raft::NodeId(3), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
@@ -332,7 +292,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     if (cr.isErr())
     {
         EXPECT_EQ(raft::Error::OneVotingChangeOnly, cr.unwrapErr());
-        EXPECT_EQ(1, r.log().get_commit_idx());
+        EXPECT_EQ(ci + 1, r.log().get_commit_idx());
     }
 }
 
@@ -885,11 +845,8 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
-    /*  1 second election timeout */
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
-
     /*  max election timeout have passed */
-    r.raft_periodic(r.timer().get_max_election_timeout() + std::chrono::milliseconds(1));
+    r.raft_periodic(r.timer().get_max_election_timeout());
 
     /* is a candidate now */
     EXPECT_TRUE(r.is_candidate());
@@ -1109,14 +1066,13 @@ TEST(TestFollower, becoming_candidate_requests_votes_from_other_servers)
 TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
 
     /* server wants to be leader, so becomes candidate */
     prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
 
     /* clock over (i.e. max election timeout + 1) to overcome possible negative timeout, causing new election */
-    r.raft_periodic(r.timer().get_max_election_timeout() + std::chrono::milliseconds(1));
+    r.raft_periodic(r.timer().get_max_election_timeout());
     EXPECT_EQ(2, r.get_current_term());
 
     /*  receiving this vote gives the server majority */
@@ -1273,9 +1229,9 @@ TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
     EXPECT_EQ(3, r.log().count());
     EXPECT_EQ(3, r.log().get_commit_idx());
 
-    r.raft_periodic(std::chrono::milliseconds(0));
-    r.raft_periodic(std::chrono::milliseconds(0));
-    r.raft_periodic(std::chrono::milliseconds(0));
+    r.raft_periodic(std::chrono::milliseconds(1));
+    r.raft_periodic(std::chrono::milliseconds(1));
+    r.raft_periodic(std::chrono::milliseconds(1));
     EXPECT_FALSE(r.log().has_not_applied());
     EXPECT_EQ(5, r.nodes().count());
 }
@@ -2102,9 +2058,6 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
-    EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
-
     prepare_candidate(r);
 
     r.accept_rep(raft::NodeId(2), MsgVoteRep(1, raft::ReqVoteState::Granted));
@@ -2119,8 +2072,6 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     Exchanger sender(&r);
-    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
-    EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     prepare_candidate(r);
 
