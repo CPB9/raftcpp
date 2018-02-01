@@ -72,6 +72,15 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISav
 {
     _me.current_term = TermId(0);
     become_follower();
+    if (_nodes.count() == 1)
+    {
+        _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
+        tick(std::chrono::milliseconds(0));
+        assert(is_leader());
+    }
+    else
+    {
+    }
 }
 
 Server::Server(NodeId id, std::initializer_list<NodeId> members, ISender* sender, ISaver* saver) : Server(id, bmcl::ArrayView<NodeId>(members), sender, saver)
