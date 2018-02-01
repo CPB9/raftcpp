@@ -16,14 +16,14 @@
 namespace raft
 {
 
-enum class EntryState
+enum class EntryState : uint8_t
 {
-    Invalidated = -1,
-    NotCommitted = 0,
-    Committed = 1,
+    Invalidated,
+    NotCommitted,
+    Committed,
 };
 
-enum class EntryType
+enum class EntryType : uint8_t
 {
     User,
     AddNonVotingNode,

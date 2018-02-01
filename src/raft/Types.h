@@ -30,11 +30,11 @@ enum class Error : uint8_t
     CantSend,
 };
 
-enum class ReqVoteState : int8_t
+enum class ReqVoteState : uint8_t
 {
-    Granted = 1,
-    NotGranted = 0,
-    UnknownNode = -1,
+    UnknownNode = 0,
+    NotGranted = 1,
+    Granted = 2,
 };
 
 inline const char* to_string(ReqVoteState vote)
@@ -48,7 +48,7 @@ inline const char* to_string(ReqVoteState vote)
     return "unknown";
 }
 
-enum class State
+enum class State : uint8_t
 {
     Follower,
     Candidate,
@@ -66,7 +66,7 @@ inline const char* to_string(State s)
     return "unknown";
 }
 
-enum class NodeStatus
+enum class NodeStatus : uint8_t
 {
     Disconnected,
     Connected,
