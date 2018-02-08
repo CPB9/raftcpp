@@ -440,7 +440,7 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
 
     /* vote for self */
     prepare_candidate(r);
-    EXPECT_TRUE(r.is_candidate());
+
     EXPECT_EQ(r.get_voted_for(), raft::NodeId(1));
     {
         MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1));
@@ -461,7 +461,6 @@ TEST(TestFollower, becomes_follower_is_follower)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_follower(r);
-    EXPECT_TRUE(r.is_follower());
 }
 
 TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
@@ -977,7 +976,6 @@ TEST(TestCandidate, becomes_candidate_is_candidate)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_candidate(r);
-    EXPECT_TRUE(r.is_candidate());
 }
 
 /* Candidate 5.2 */
@@ -1215,7 +1213,6 @@ TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_follower(r);
-    EXPECT_TRUE(r.is_follower());
 
     raft::TermId term = r.get_current_term();
     raft::Entry entries[3] =
@@ -1240,7 +1237,6 @@ TEST(TestLeader, becomes_leader_is_leader)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
-    EXPECT_TRUE(r.is_leader());
 }
 
 TEST(TestLeader, becomes_leader_does_not_clear_voted_for)
@@ -1983,10 +1979,6 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
-
-    /* check that node 1 considers itself the leader */
-    EXPECT_TRUE(r.is_leader());
-    EXPECT_EQ(raft::NodeId(1), r.get_current_leader());
 
     auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 6, 5, 0));
     EXPECT_TRUE(aer.isOk());
