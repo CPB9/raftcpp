@@ -59,8 +59,8 @@ struct EntryData
 struct Entry
 {
     Entry(TermId term, EntryId id, EntryData data = EntryData{}) : term(term), id(id), type(EntryType::User), data(data) {}
-    Entry(TermId term, EntryId id, EntryType type, NodeId node, EntryData data = EntryData{})
-        : term(term), id(id), type(type), node(node), data(data) {}
+    Entry(TermId term, EntryId id, EntryType type, NodeId node)
+        : term(term), id(id), type(type), node(node) {}
     TermId  term;               /**< the entry's term at the point it was created */
     EntryId id;                 /**< the entry's unique ID */
     EntryType type;               /**< type of entry */
