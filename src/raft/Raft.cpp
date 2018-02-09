@@ -106,6 +106,8 @@ void Server::become_leader()
 
 void Server::become_candidate()
 {
+    __log("election starting: %d %d, term: %d ci: %d", _timer.get_election_timeout_rand().count(), _timer.get_timeout_elapsed(), _me.current_term, _log.get_current_idx());
+
     set_current_term(get_current_term() + 1);
     _nodes.reset_all_votes();
     vote_for_nodeid(_nodes.get_my_id());
@@ -140,16 +142,12 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     _timer.add_elapsed(elapsed_since_last_period);
 
     /* Only one voting node means it's safe for us to become the leader */
-    if (1 == _nodes.get_num_voting_nodes())
+    if (_nodes.is_me_the_only_voting() && !is_leader())
     {
-        bmcl::Option<const Node&> node = _nodes.get_my_node();
-        if (node.isSome() && node->is_voting() && !is_leader())
-        {
-            vote_for_nodeid(node->get_id());
-            become_leader();
-            if (_nodes.count() == 1)
-                _log.commit_all();
-        }
+        vote_for_nodeid(_nodes.get_my_id());
+        become_leader();
+        if (_nodes.count() == 1)
+            _log.commit_all();
     }
 
     if (is_leader())
@@ -165,18 +163,8 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     }
     else if (_timer.is_time_to_elect())
     {
-        if (1 < _nodes.get_num_voting_nodes())
-        {
-            bmcl::Option<const Node&> node = _nodes.get_my_node();
-            if (node.isSome() && node->is_voting())
-            {
-                __log("election starting: %d %d, term: %d ci: %d",
-                    _timer.get_election_timeout_rand().count(), _timer.get_timeout_elapsed(), _me.current_term,
-                    _log.get_current_idx());
-
-                become_candidate();
-            }
-        }
+        if (_nodes.is_me_candidate_ready())
+            become_candidate();
     }
 
     auto r = _log.entry_apply_one();
@@ -271,12 +259,11 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     if (!node->is_voting() && !_log.voting_change_is_in_progress() && _log.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
     {
-        Entry ety(get_current_term(), EntryId(0), EntryType::AddNode, node->get_id()); //insert node->get_id() into ety
+        node->set_has_sufficient_logs();
+        Entry ety(get_current_term(), EntryId(0), EntryType::AddNode, node->get_id());
         auto e = entry_append(ety, false);
         if (e.isSome())
             return e;
-
-        node->set_has_sufficient_logs();
     }
 
     /* Update commit idx */
@@ -514,7 +501,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         if (_nodes.votes_has_majority(_me.voted_for))
             become_leader();
     }
-    break;
+        break;
 
     case ReqVoteState::NotGranted:
         break;

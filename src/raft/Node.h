@@ -81,6 +81,8 @@ public:
     bmcl::Option<const Node&> get_my_node() const;
     Node& add_node(NodeId id, bool is_voting);
     void remove_node(NodeId id);
+    bool is_me_the_only_voting() const;
+    bool is_me_candidate_ready() const;
     std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
     std::size_t get_num_voting_nodes() const;
     bool votes_has_majority(bmcl::Option<NodeId> voted_for) const;
