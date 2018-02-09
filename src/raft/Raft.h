@@ -80,7 +80,7 @@ public:
     Timer& timer() { return _timer; }
     const Timer& timer() const { return _timer; }
 
-    bmcl::Option<Error> tick(std::chrono::milliseconds elapsed);
+    bmcl::Option<Error> tick(std::chrono::milliseconds elapsed = std::chrono::milliseconds(0));
 
     bmcl::Result<MsgAppendEntriesRep, Error> accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r);
@@ -96,15 +96,14 @@ public:
 
 private:
     bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
-    void set_current_term(TermId term);
-    void vote_for_nodeid(NodeId nodeid);
+    bmcl::Option<Error> set_current_term(TermId term);
+    bmcl::Option<Error> vote_for_nodeid(NodeId nodeid);
     void become_follower();
     void become_candidate();
     void become_leader();
     void set_state(State state);
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
     bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
-    void entry_apply_node_add(const Entry& ety, NodeId id);
     void pop_log(const Entry& ety, Index idx);
     bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks);
     void __log(const char *fmt, ...) const;

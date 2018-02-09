@@ -1094,7 +1094,7 @@ TEST(TestFollower, remove_me)
     r.tick();
     EXPECT_TRUE(e.isOk());
     EXPECT_EQ(2, r.nodes().count());
-    EXPECT_FALSE(r.nodes().get_node(rem).isSome());
+    EXPECT_FALSE(r.nodes().get_my_node().isSome());
 }
 
 /* Candidate 5.2 */
@@ -2116,12 +2116,15 @@ TEST(TestLeader, remove_other_node)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
     prepare_leader(r);
+    Index log_count = r.log().count();
 
     TermId t = r.get_current_term();
 
     {
         auto e = r.remove_node(1, NodeId(2));
         EXPECT_TRUE(e.isOk());
+        EXPECT_EQ(log_count + 1, r.log().count());
+        EXPECT_EQ(EntryType::DemoteNode, r.log().back()->type);
     }
 
     {
@@ -2135,9 +2138,9 @@ TEST(TestLeader, remove_other_node)
     }
 
     r.tick();
-
-    EXPECT_EQ(2, r.nodes().count());
-    EXPECT_FALSE(r.nodes().get_node(NodeId(2)).isSome());
+    EXPECT_TRUE(r.nodes().get_node(NodeId(2)).isSome());
+    EXPECT_FALSE(r.nodes().get_node(NodeId(2))->is_voting());
+    EXPECT_EQ(3, r.nodes().count());
 }
 
 TEST(TestLeader, remove_me)

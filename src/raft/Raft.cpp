@@ -63,7 +63,7 @@ Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _
     if (isNewCluster)
     {
         _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
-        tick(std::chrono::milliseconds(0));
+        tick();
         assert(is_leader());
     }
 }
@@ -75,7 +75,7 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISav
     if (_nodes.count() == 1)
     {
         _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
-        tick(std::chrono::milliseconds(0));
+        tick();
         assert(is_leader());
     }
     else
@@ -142,10 +142,10 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     /* Only one voting node means it's safe for us to become the leader */
     if (1 == _nodes.get_num_voting_nodes())
     {
-        const Node& node = _nodes.get_my_node();
-        if (node.is_voting() && !is_leader())
+        bmcl::Option<const Node&> node = _nodes.get_my_node();
+        if (node.isSome() && node->is_voting() && !is_leader())
         {
-            vote_for_nodeid(node.get_id());
+            vote_for_nodeid(node->get_id());
             become_leader();
             if (_nodes.count() == 1)
                 _log.commit_all();
@@ -167,8 +167,8 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     {
         if (1 < _nodes.get_num_voting_nodes())
         {
-            const Node& node = _nodes.get_my_node();
-            if (node.is_voting())
+            bmcl::Option<const Node&> node = _nodes.get_my_node();
+            if (node.isSome() && node->is_voting())
             {
                 __log("election starting: %d %d, term: %d ci: %d",
                     _timer.get_election_timeout_rand().count(), _timer.get_timeout_elapsed(), _me.current_term,
@@ -183,12 +183,23 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     if (r.isOk())
     {
         const Entry& ety = r.unwrap();
-        if (EntryType::AddNode == ety.type)
+        if (r.unwrap().type != EntryType::User)
         {
             assert(ety.node.isSome());
             NodeId id = ety.node.unwrap();
-            entry_apply_node_add(ety, id);
+            switch (ety.type)
+            {
+            case EntryType::AddNode:
+            {
+                bmcl::Option<Node&> node = _nodes.get_node(id);
+                assert(node.isSome());
+                if (node.isSome())
+                    node->set_has_sufficient_logs();
+            }
+            break;
+            }
         }
+
         __log("applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.data.size());
         return bmcl::None;
     }
@@ -218,7 +229,9 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
        and convert to follower (§5.3) */
     if (_me.current_term < r.term)
     {
-        set_current_term(r.term);
+        bmcl::Option<Error> e = set_current_term(r.term);
+        if (e.isSome())
+            return e;
         become_follower();
         _me.current_leader.clear();
         return bmcl::None;
@@ -227,16 +240,17 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     if (_me.current_term > r.term)
         return bmcl::None;
 
-    /* Stale response -- ignore */
-    if (r.current_idx != 0 && r.current_idx <= node->get_match_idx())
-        return bmcl::None;
-
     if (!r.success)
     {
         /* If AppendEntries fails because of log inconsistency:
            decrement nextIndex and retry (§5.3) */
         Index next_idx = node->get_next_idx();
         assert(0 < next_idx);
+        /* Stale response -- ignore */
+        assert(node->get_match_idx() <= next_idx - 1);
+        if (node->get_match_idx() == next_idx - 1)
+            return bmcl::None;
+
         if (r.current_idx < next_idx - 1)
             node->set_next_idx(std::min(r.current_idx + 1, _log.get_current_idx()));
         else
@@ -247,16 +261,15 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
         return bmcl::None;
     }
 
+    if (r.current_idx <= node->get_match_idx())
+        return bmcl::None;
+
     assert(r.current_idx <= _log.get_current_idx());
 
     node->set_next_idx(r.current_idx + 1);
     node->set_match_idx(r.current_idx);
 
-    if (!node->is_voting() &&
-        !_log.voting_change_is_in_progress() &&
-        _log.get_current_idx() <= r.current_idx + 1 &&
-        false == node->has_sufficient_logs()
-        )
+    if (!node->is_voting() && !_log.voting_change_is_in_progress() && _log.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
     {
         Entry ety(get_current_term(), EntryId(0), EntryType::AddNode, node->get_id()); //insert node->get_id() into ety
         auto e = entry_append(ety, false);
@@ -289,11 +302,6 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
 bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae)
 {
-    MsgAppendEntriesRep r(_me.current_term, false, 0, 0);
-    bmcl::Option<Node&> node = _nodes.get_node(nodeid);
-    if (node.isNone())
-        return Error::NodeUnknown;
-
     if (0 < ae.n_entries)
         __log("recvd appendentries t:%d from %d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
@@ -304,8 +312,6 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
               ae.prev_log_term,
               ae.n_entries);
 
-    r.term = _me.current_term;
-
     if (is_candidate() && _me.current_term == ae.term)
     {
         become_follower();
@@ -313,18 +319,17 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     else if (ae.term > _me.current_term)
     {
         set_current_term(ae.term);
-        r.term = ae.term;
         become_follower();
     }
     else if (ae.term < _me.current_term)
     {
         /* 1. Reply false if term < currentTerm (§5.1) */
         __log("AE term %d of %d is less than current term %d", ae.term, nodeid, _me.current_term);
-        return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
+        return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx(), 0);
     }
 
     /* update current leader because ae->term is up to date */
-    _me.current_leader = node->get_id();
+    _me.current_leader = nodeid;
 
     _timer.reset_elapsed();
 
@@ -338,18 +343,18 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
             whose term matches prevLogTerm (§5.3) */
             __log("AE no log at prev_idx %d for ", ae.prev_log_idx, nodeid);
-            return MsgAppendEntriesRep(r.term, false, _log.get_current_idx(), 0);
+            return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx(), 0);
         }
     }
 
-    r.current_idx = ae.prev_log_idx;
+    Index node_current_idx = ae.prev_log_idx;
 
     Index i;
     for (i = 0; i < ae.n_entries; i++)
     {
         const Entry* ety = &ae.entries[i];
         Index ety_index = ae.prev_log_idx + 1 + i;
-        r.current_idx = ety_index;
+        node_current_idx = ety_index;
         bmcl::Option<const Entry&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
@@ -379,22 +384,19 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         {
             if (e.unwrap() == Error::Shutdown)
             {
-                r.success = false;
-                r.first_idx = 0;
+                //return MsgAppendEntriesRep(_me.current_term, false, node_current_idx, 0);
                 return Error::Shutdown;
             }
             break;
         }
-        r.current_idx = ae.prev_log_idx + 1 + i;
+        node_current_idx = ae.prev_log_idx + 1 + i;
     }
 
     /* 4. If leaderCommit > commitIndex, set commitIndex =
         min(leaderCommit, index of most recent entry) */
     _log.commit_till(ae.leader_commit);
 
-    r.success = true;
-    r.first_idx = ae.prev_log_idx + 1;
-    return r;
+    return MsgAppendEntriesRep(_me.current_term, true, node_current_idx, ae.prev_log_idx + 1);
 }
 
 static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
@@ -403,8 +405,8 @@ static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
      * if a server receives a RequestVote request within the minimum election
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
-
-    if (!me.nodes().get_my_node().is_voting())
+    bmcl::Option<const Node&> node = me.nodes().get_my_node();
+    if (node.isNone() || !node->is_voting())
         return false;
 
     if (vr.term < me.get_current_term())
@@ -444,45 +446,43 @@ MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState
 
 MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
 {
-    bmcl::Option<Node&> node = _nodes.get_node(nodeid);
-    if (node.isNone())
+    if (get_current_term() < vr.term)
+    {
+        bmcl::Option<Error> e = set_current_term(vr.term);
+        if (e.isSome())
+            return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
+        become_follower();
+        _me.current_leader.clear();
+    }
+
+    if (!__should_grant_vote(*this, vr))
     {
         /* It's possible the candidate node has been removed from the cluster but
         * hasn't received the appendentries that confirms the removal. Therefore
         * the node is partitioned and still thinks its part of the cluster. It
         * will eventually send a requestvote. This is error response tells the
         * node that it might be removed. */
-        return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
-    }
-
-    if (get_current_term() < vr.term)
-    {
-        set_current_term(vr.term);
-        become_follower();
-        _me.current_leader = node->get_id();
-    }
-
-    if (!__should_grant_vote(*this, vr))
+        if (_nodes.get_node(nodeid).isNone())
+            return prepare_requestvote_response_t(nodeid, ReqVoteState::UnknownNode);
         return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
+    }
 
     /* It shouldn't be possible for a leader or candidate to grant a vote
         * Both states would have voted for themselves */
     assert(!is_leader() && !is_candidate());
 
-    vote_for_nodeid(nodeid);
-
-    /* there must be in an election. */
     _me.current_leader.clear();
     _timer.reset_elapsed();
 
+    bmcl::Option<Error> e = vote_for_nodeid(nodeid);
+    if (e.isSome())
+        return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
     return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
 }
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
-    bmcl::Option<Node&> node = _nodes.get_node(nodeid);
-
-    __log("node %d responded to requestvote status: %s", nodeid, to_string(r.vote_granted));
+    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, to_string(r.vote_granted), _me.current_term, r.term);
 
     if (!is_candidate())
         return bmcl::None;
@@ -503,24 +503,23 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         return bmcl::None;
     }
 
-    __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, to_string(r.vote_granted), _me.current_term, r.term);
-
     switch (r.vote_granted)
     {
     case ReqVoteState::Granted:
+    {
+        bmcl::Option<Node&> node = _nodes.get_node(nodeid);
         if (node.isSome())
             node->vote_for_me(true);
 
         if (_nodes.votes_has_majority(_me.voted_for))
             become_leader();
-        break;
+    }
+    break;
 
     case ReqVoteState::NotGranted:
         break;
 
     case ReqVoteState::UnknownNode:
-        //if (/*_nodes.get_my_node().is_voting() &&*/ _me.connected == NodeStatus::Disconnecting)
-        //    return Error::Shutdown;
         break;
 
     default:
@@ -538,7 +537,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId node)
 
 bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId node)
 {
-    return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, node));
+    return accept_entry(Entry(_me.current_term, id, EntryType::DemoteNode, node));
 }
 
 bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryData& data)
@@ -580,16 +579,6 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
     }
 
     return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
-}
-
-void Server::entry_apply_node_add(const Entry& ety, NodeId id)
-{
-    bmcl::Option<Node&> node = _nodes.get_node(id);
-    assert(node.isSome());
-    if (node.isSome())
-    {
-        node->set_has_sufficient_logs();
-    }
 }
 
 void Server::pop_log(const Entry& ety, const Index idx)
@@ -762,20 +751,27 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
     return sender->append_entries(node.get_id(), ae);
 }
 
-void Server::vote_for_nodeid(NodeId nodeid)
+bmcl::Option<Error> Server::vote_for_nodeid(NodeId nodeid)
 {
+    bmcl::Option<Error> e = _saver->persist_vote(nodeid);
+    if (e.isSome())
+        return e;
     _me.voted_for = nodeid;
-    _saver->persist_vote(nodeid);
+    return bmcl::None;
 }
 
-void Server::set_current_term(TermId term)
+bmcl::Option<Error> Server::set_current_term(TermId term)
 {
-    if (_me.current_term < term)
-    {
-        _me.current_term = term;
-        _me.voted_for.clear();
-        _saver->persist_term(term);
-    }
+    if (_me.current_term >= term)
+        return bmcl::None;
+
+    bmcl::Option<Error> e = _saver->persist_term(term);
+    if (e.isSome())
+        return e;
+
+    _me.current_term = term;
+    _me.voted_for.clear();
+    return bmcl::None;
 }
 
 void Server::set_state(State state)

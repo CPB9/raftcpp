@@ -78,7 +78,7 @@ public:
     void set_all_need_pings(bool need);
     bmcl::Option<const Node&> get_node(NodeId id) const;
     bmcl::Option<Node&> get_node(NodeId id);
-    const Node& get_my_node() const;
+    bmcl::Option<const Node&> get_my_node() const;
     Node& add_node(NodeId id, bool is_voting);
     void remove_node(NodeId id);
     std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
