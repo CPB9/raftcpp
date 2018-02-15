@@ -2121,14 +2121,12 @@ TEST(TestLeader, remove_other_node)
         auto e = r.remove_node(1, NodeId(2));
         EXPECT_TRUE(e.isOk());
         EXPECT_EQ(log_count + 1, r.log().count());
-        EXPECT_EQ(EntryType::RemoveNode, r.log().back()->type);
-        //r.nodes().votes_has_majority()
+        EXPECT_EQ(EntryType::DemoteNode, r.log().back()->type);
     }
 
     {
         auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1, 1));
-        EXPECT_TRUE(e.isSome());
-        EXPECT_EQ(Error::NodeUnknown, e.unwrap());
+        EXPECT_FALSE(e.isSome());
     }
 
     {
@@ -2137,8 +2135,10 @@ TEST(TestLeader, remove_other_node)
     }
 
     r.tick();
-    EXPECT_FALSE(r.nodes().get_node(NodeId(2)).isSome());
-    EXPECT_EQ(2, r.nodes().count());
+
+    EXPECT_EQ(3, r.nodes().count());
+    EXPECT_TRUE(r.nodes().get_node(NodeId(2)).isSome());
+    EXPECT_FALSE(r.nodes().get_node(NodeId(2))->is_voting());
 }
 
 TEST(TestLeader, remove_me)

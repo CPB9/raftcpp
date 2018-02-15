@@ -192,6 +192,7 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
                 if (node.isSome())
                     node->set_voting(false);
             }
+            break;
             case EntryType::AddNonVotingNode:
             {
                 _nodes.add_node(id, false);
@@ -536,14 +537,19 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
     return bmcl::None;
 }
 
-bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId node)
+bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId nodeid)
 {
-    return accept_entry(Entry(_me.current_term, id, EntryType::AddNonVotingNode, node));
+    return accept_entry(Entry(_me.current_term, id, EntryType::AddNonVotingNode, nodeid));
 }
 
-bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId node)
+bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId nodeid)
 {
-    return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, node));
+    bmcl::Option<const Node&> node = _nodes.get_node(nodeid);
+    if (node.isNone())
+        return Error::NodeUnknown;
+    if (!node->is_voting())
+        return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, nodeid));
+    return accept_entry(Entry(_me.current_term, id, EntryType::DemoteNode, nodeid));
 }
 
 bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryData& data)
