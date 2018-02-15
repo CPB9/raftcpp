@@ -48,10 +48,10 @@ class Server
 {
     struct server_private_t
     {
-        TermId                  current_term;   /**< the server's best guess of what the current term is starts at zero */
         bmcl::Option<NodeId>    voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
-        State                   state;          /**< follower/leader/candidate indicator */
         bmcl::Option<NodeId>    current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
+        TermId                  current_term;   /**< the server's best guess of what the current term is starts at zero */
+        State                   state;          /**< follower/leader/candidate indicator */
     };
 
     friend class Logger;
@@ -93,6 +93,8 @@ public:
 
     bmcl::Option<Error> send_appendentries(NodeId node);
     bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);
+
+    void sync_log_and_nodes();
 
 private:
     bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);

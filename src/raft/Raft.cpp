@@ -98,7 +98,7 @@ void Server::become_leader()
     {
         Node& n = _nodes.get_node(i.get_id()).unwrap();
         n.set_next_idx(_log.get_current_idx() + 1);
-        n.set_match_idx(0);
+        n.set_match_idx(!n.is_me() ? 0 : _log.get_current_idx());
         n.set_need_vote_req(false);
         send_appendentries(n, _sender);
     }
@@ -185,6 +185,25 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
                     node->set_has_sufficient_logs();
             }
             break;
+            case EntryType::DemoteNode:
+            {
+                bmcl::Option<Node&> node = _nodes.get_node(id);
+                assert(node.isSome());
+                if (node.isSome())
+                    node->set_voting(false);
+            }
+            case EntryType::AddNonVotingNode:
+            {
+                _nodes.add_node(id, false);
+            }
+            break;
+            case EntryType::RemoveNode:
+            {
+                _nodes.remove_node(id);
+            }
+            break;
+            default:
+                assert(0);
             }
         }
 
@@ -524,7 +543,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId node)
 
 bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId node)
 {
-    return accept_entry(Entry(_me.current_term, id, EntryType::DemoteNode, node));
+    return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, node));
 }
 
 bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryData& data)
@@ -551,7 +570,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e
 
     for (const Node& i: _nodes.items())
     {
-        if (_nodes.is_me(i.get_id()) || !i.is_voting())
+        if (i.is_me() || !i.is_voting())
             continue;
 
         /* Only send new entries.
@@ -614,6 +633,8 @@ bmcl::Option<Error> Server::entry_append(const Entry& ety, bool needVoteChecks)
     auto e = _log.entry_append(ety, needVoteChecks);
     if (e.isSome())
         return e;
+
+    sync_log_and_nodes();
 
     if (ety.node.isNone())
         return bmcl::None;
@@ -768,5 +789,19 @@ void Server::set_state(State state)
         _me.current_leader = _nodes.get_my_id();
     _me.state = state;
 }
+
+void Server::sync_log_and_nodes()
+{
+    if (!is_leader())
+        return;
+
+    bmcl::Option<Node&> me = _nodes.get_node(_nodes.get_my_id());
+    if (me.isNone())
+        return;
+
+    me->set_match_idx(_log.get_current_idx());
+    me->set_next_idx(_log.get_current_idx() + 1);
+}
+
 
 }

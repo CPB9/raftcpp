@@ -63,13 +63,13 @@ struct Entry
         : term(term), id(id), type(type), node(node) {}
     TermId  term;               /**< the entry's term at the point it was created */
     EntryId id;                 /**< the entry's unique ID */
-    EntryType type;               /**< type of entry */
+    EntryType type;             /**< type of entry */
     bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
     EntryData data;
 
     inline bool is_voting_cfg_change() const
     {
-        return EntryType::AddNode == type || EntryType::DemoteNode == type;
+        return EntryType::User != type;
     }
 };
 

@@ -33,6 +33,7 @@ static void prepare_leader(raft::Server& r)
     {
         r.tick(r.timer().get_max_election_timeout());
         EXPECT_TRUE(r.is_leader());
+        EXPECT_TRUE(r.get_current_leader().isSome());
         return;
     }
 
@@ -51,6 +52,7 @@ static void prepare_leader(raft::Server& r)
     r.accept_rep(last_voter, raft::MsgVoteRep(r.get_current_term(), raft::ReqVoteState::Granted));
 
     EXPECT_TRUE(r.is_leader());
+    EXPECT_TRUE(r.get_current_leader().isSome());
 }
 
 class DefualtSender : public ISender
@@ -284,7 +286,7 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     r.add_node(99, raft::NodeId(2));
     r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
     EXPECT_TRUE(r.log().voting_change_is_in_progress());
-    EXPECT_EQ(count + 2, r.log().count());
+    EXPECT_EQ(count + 1, r.log().count());
 
     auto cr = r.add_node(2, raft::NodeId(3));
     r.accept_rep(raft::NodeId(3), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
@@ -500,13 +502,6 @@ TEST(TestFollower, recv_appendentries_reply_false_if_term_less_than_currentterm)
     /* rejected appendentries doesn't change the current leader. */
     EXPECT_TRUE(r.get_current_leader().isSome());
     EXPECT_EQ(leader, r.get_current_leader().unwrap());
-}
-
-TEST(TestFollower, recv_appendentries_from_unknown_node_fails)
-{
-    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
-    auto aer = r.accept_req(raft::NodeId(3), MsgAppendEntriesReq(1));
-    EXPECT_FALSE(aer.isOk());
 }
 
 /* TODO: check if test case is needed */
@@ -1540,6 +1535,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     r.log().entry_append(Entry(1, 2, raft::EntryData("aaa", 4)));
     r.log().entry_append(Entry(1, 3, raft::EntryData("aaa", 4)));
+    r.sync_log_and_nodes();
 
     /* FIRST entry log application */
     /* send appendentries -
@@ -1582,8 +1578,8 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
 
     r.add_node(1, raft::NodeId(4));
     EXPECT_FALSE(r.nodes().get_node(raft::NodeId(4))->is_voting());
-    r.add_node(2, raft::NodeId(5));
-    EXPECT_FALSE(r.nodes().get_node(raft::NodeId(5))->is_voting());
+//     r.add_node(2, raft::NodeId(5));
+//     EXPECT_FALSE(r.nodes().get_node(raft::NodeId(5))->is_voting());
 
     /* the last applied idx will became 1, and then 2 */
 
@@ -1643,6 +1639,7 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.log().entry_append(Entry(1, 1, raft::EntryData("aaa", 4)));
     r.log().entry_append(Entry(1, 2, raft::EntryData("aaa", 4)));
     r.log().entry_append(Entry(2, 3, raft::EntryData("aaa", 4)));
+    r.sync_log_and_nodes();
 
     /* FIRST entry log application */
     /* send appendentries -
@@ -2124,12 +2121,14 @@ TEST(TestLeader, remove_other_node)
         auto e = r.remove_node(1, NodeId(2));
         EXPECT_TRUE(e.isOk());
         EXPECT_EQ(log_count + 1, r.log().count());
-        EXPECT_EQ(EntryType::DemoteNode, r.log().back()->type);
+        EXPECT_EQ(EntryType::RemoveNode, r.log().back()->type);
+        //r.nodes().votes_has_majority()
     }
 
     {
         auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1, 1));
-        EXPECT_FALSE(e.isSome());
+        EXPECT_TRUE(e.isSome());
+        EXPECT_EQ(Error::NodeUnknown, e.unwrap());
     }
 
     {
@@ -2138,25 +2137,32 @@ TEST(TestLeader, remove_other_node)
     }
 
     r.tick();
-    EXPECT_TRUE(r.nodes().get_node(NodeId(2)).isSome());
-    EXPECT_FALSE(r.nodes().get_node(NodeId(2))->is_voting());
-    EXPECT_EQ(3, r.nodes().count());
+    EXPECT_FALSE(r.nodes().get_node(NodeId(2)).isSome());
+    EXPECT_EQ(2, r.nodes().count());
 }
 
 TEST(TestLeader, remove_me)
 {
-    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_TRUE(r.get_current_leader().isSome());
 
     TermId t = r.get_current_term();
     NodeId leader = r.get_current_leader().unwrap();
-    NodeId rem = leader == NodeId(2) ? NodeId(3) : NodeId(2);
 
-    Entry ety(t, 0, EntryType::RemoveNode, r.nodes().get_my_id());
-    auto e = r.accept_req(leader, MsgAppendEntriesReq(t, 0, t - 1, 4, 1, &ety));
+    {
+        Entry ety(t, 0, EntryType::RemoveNode, r.nodes().get_my_id());
+        auto e = r.accept_req(leader, MsgAppendEntriesReq(t, 0, t - 1, 4, 1, &ety));
+        r.tick();
+        EXPECT_TRUE(e.isOk());
+        EXPECT_EQ(1, r.nodes().count());
+        EXPECT_FALSE(r.nodes().get_node(r.nodes().get_my_id()).isSome());
+    }
+
+    {
+        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1, 1));
+        EXPECT_FALSE(e.isSome());
+    }
+
     r.tick();
-    EXPECT_TRUE(e.isOk());
-    EXPECT_EQ(2, r.nodes().count());
-    EXPECT_FALSE(r.nodes().get_node(rem).isSome());
 }

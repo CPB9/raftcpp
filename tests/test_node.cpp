@@ -5,13 +5,13 @@ using namespace raft;
 
 TEST(TestNode, is_voting_by_default)
 {
-    raft::Node p((raft::NodeId)1);
+    raft::Node p(NodeId(1), true);
     EXPECT_TRUE(p.is_voting());
 }
 
 TEST(TestNode, node_set_nextIdx)
 {
-    raft::Node p((raft::NodeId)1);
+    raft::Node p(NodeId(1), true);
     p.set_next_idx(3);
     EXPECT_EQ(3, p.get_next_idx());
 }

@@ -25,15 +25,18 @@ class Node
         NeedVoteReq             = 2,
         NodeHasSufficientLog    = 3,
         NeedAppendEntriesReq    = 4,
+        IsMe                    = 5,
     };
 
 public:
-    inline explicit Node(NodeId id) : _next_idx(1),  _match_idx(0), _id(id), _flags(0)
+    inline explicit Node(NodeId id, bool is_me) : _next_idx(1),  _match_idx(0), _id(id), _flags(0)
     {
         _flags.set(NodeVoting, true);
+        _flags.set(IsMe, is_me);
     }
 
     inline NodeId get_id() const { return _id; }
+    inline bool is_me() const { return _flags.test(IsMe); }
 
     inline Index get_next_idx() const { return _next_idx; }
     inline void set_next_idx(Index nextIdx) {/* log index begins at 1 */ _next_idx = nextIdx < 1 ? 1 : nextIdx; }
@@ -57,9 +60,9 @@ public:
     inline bool need_append_endtries_req() const { return _flags.test(NeedAppendEntriesReq); }
 
 private:
+    NodeId          _id;
     Index           _next_idx;
     Index           _match_idx;
-    NodeId          _id;
     std::bitset<8>  _flags;
 };
 
