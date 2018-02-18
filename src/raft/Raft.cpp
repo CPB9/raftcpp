@@ -406,32 +406,32 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     return MsgAppendEntriesRep(_me.current_term, true, node_current_idx, ae.prev_log_idx + 1);
 }
 
-static bool __should_grant_vote(const Server& me, const MsgVoteReq& vr)
+bool Server::should_grant_vote(const MsgVoteReq& vr) const
 {
     /* TODO: 4.2.3 Raft Dissertation:
      * if a server receives a RequestVote request within the minimum election
      * timeout of hearing from a current leader, it does not update its term or
      * grant its vote */
-    bmcl::Option<const Node&> node = me.nodes().get_my_node();
+    bmcl::Option<const Node&> node = _nodes.get_my_node();
     if (node.isNone() || !node->is_voting())
         return false;
 
-    if (vr.term < me.get_current_term())
+    if (vr.term < get_current_term())
         return false;
 
     /* TODO: if voted for is candiate return 1 (if below checks pass) */
-    if (me.is_already_voted())
+    if (is_already_voted())
         return false;
 
     /* Below we check if log is more up-to-date... */
 
-    Index current_idx = me.log().get_current_idx();
+    Index current_idx = _log.get_current_idx();
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (0 == current_idx)
         return true;
 
-    bmcl::Option<const Entry&> e = me.log().get_at_idx(current_idx);
+    bmcl::Option<const Entry&> e = _log.get_at_idx(current_idx);
     assert((current_idx != 0) == e.isSome());
     if (e.isNone())
         return true;
@@ -462,7 +462,7 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& vr)
         _me.current_leader.clear();
     }
 
-    if (!__should_grant_vote(*this, vr))
+    if (!should_grant_vote(vr))
     {
         /* It's possible the candidate node has been removed from the cluster but
         * hasn't received the appendentries that confirms the removal. Therefore

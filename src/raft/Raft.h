@@ -110,6 +110,7 @@ private:
     bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks);
     void __log(const char *fmt, ...) const;
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
+    bool should_grant_vote(const MsgVoteReq& vr) const;
 
     Timer _timer;
     Nodes _nodes;
