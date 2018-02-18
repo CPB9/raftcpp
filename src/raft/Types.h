@@ -27,26 +27,18 @@ enum class Error : uint8_t
     NothingToSend,
     CantSendToMyself,
     NotCandidate,
-    CantSend,
 };
+
+const char* to_string(Error e);
 
 enum class ReqVoteState : uint8_t
 {
-    UnknownNode = 0,
-    NotGranted = 1,
-    Granted = 2,
+    UnknownNode,
+    NotGranted,
+    Granted,
 };
 
-inline const char* to_string(ReqVoteState vote)
-{
-    switch (vote)
-    {
-    case ReqVoteState::Granted: return "granted";
-    case ReqVoteState::NotGranted: return "not granted";
-    case ReqVoteState::UnknownNode: return "unknown node";
-    }
-    return "unknown";
-}
+const char* to_string(ReqVoteState vote);
 
 enum class State : uint8_t
 {
@@ -55,16 +47,7 @@ enum class State : uint8_t
     Leader
 } ;
 
-inline const char* to_string(State s)
-{
-    switch (s)
-    {
-    case State::Follower: return "follower";
-    case State::Candidate: return "candidate";
-    case State::Leader: return "leader";
-    }
-    return "unknown";
-}
+const char* to_string(State s);
 
 /** Message sent from client to server.
  * The client sends this message to a server with the intention of having it
@@ -156,8 +139,7 @@ public:
     virtual ~ISaver();
 
     /** Callback for finite state machine application
-    * Return 0 on success.
-    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    * Return Shutdown if you want the server to shutdown. */
     virtual bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for persisting vote data
@@ -170,24 +152,18 @@ public:
 
     /** Callback for adding an entry to the log
     * For safety reasons this callback MUST flush the change to disk.
-    * Return 0 on success.
-    * Return RAFT_ERR_SHUTDOWN if you want the server to shutdown. */
+    * Return Shutdown if you want the server to shutdown. */
     virtual bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the oldest entry from the log
-    * For safety reasons this callback MUST flush the change to disk.
-    * @note If memory was malloc'd in log_offer then this should be the right
-    *  time to free the memory. */
+    * For safety reasons this callback MUST flush the change to disk. */
     virtual void pop_front(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the youngest entry from the log
-    * For safety reasons this callback MUST flush the change to disk.
-    * @note If memory was malloc'd in log_offer then this should be the right
-    *  time to free the memory. */
+    * For safety reasons this callback MUST flush the change to disk. */
     virtual void pop_back(const Entry& entry, Index entry_idx) = 0;
 
-    /** Callback for catching debugging log messages
-    * This callback is optional */
+    /** Callback for catching debugging log messages */
     virtual void log(const char *buf) = 0;
 };
 
