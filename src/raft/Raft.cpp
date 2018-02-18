@@ -43,7 +43,7 @@ void Timer::randomize_election_timeout()
     /* [election_timeout, 2 * election_timeout) */
     std::random_device rd; // obtain a random number from hardware
     std::mt19937 eng(rd()); // seed the generator
-    std::uniform_int_distribution<> distr(election_timeout.count(), 2*election_timeout.count()); // define the range
+    std::uniform_int_distribution<std::size_t> distr(election_timeout.count(), 2*election_timeout.count()); // define the range
     election_timeout_rand = std::chrono::milliseconds(distr(eng));
 }
 
