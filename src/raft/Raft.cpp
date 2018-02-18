@@ -557,7 +557,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryDat
     return accept_entry(Entry(_me.current_term, id, data));
 }
 
-bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const MsgAddEntryReq& e)
+bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& e)
 {
     if (!is_leader())
         return Error::NotLeader;

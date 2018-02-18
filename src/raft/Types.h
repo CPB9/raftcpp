@@ -49,11 +49,6 @@ enum class State : uint8_t
 
 const char* to_string(State s);
 
-/** Message sent from client to server.
- * The client sends this message to a server with the intention of having it
- * applied to the FSM. */
-using MsgAddEntryReq = Entry;
-
 /** Entry message response.
  * Indicates to client if entry was committed or not. */
 struct MsgAddEntryRep
@@ -94,14 +89,14 @@ struct MsgVoteRep
 struct MsgAppendEntriesReq
 {
     MsgAppendEntriesReq(TermId term) : term(term), prev_log_idx(0), prev_log_term(TermId(0)), leader_commit(0), n_entries(0), entries(nullptr) {}
-    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index n_entries = 0, const MsgAddEntryReq* entries = nullptr)
+    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index n_entries = 0, const Entry* entries = nullptr)
         : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), n_entries(n_entries), entries(entries) {}
     TermId  term;           /**< currentTerm, to force other leader/candidate to step down */
     Index   prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     TermId  prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
     Index   leader_commit;  /**< the index of the entry that has been appended to the majority of the cluster. Entries up to this index will be applied to the FSM */
     Index   n_entries;      /**< number of entries within this message */
-    const MsgAddEntryReq* entries; /**< array of entries within this message */
+    const Entry* entries;   /**< array of entries within this message */
 };
 
 /** Appendentries response message.

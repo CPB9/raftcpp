@@ -97,7 +97,7 @@ public:
     void sync_log_and_nodes();
 
 private:
-    bmcl::Result<MsgAddEntryRep, Error> accept_entry(const MsgAddEntryReq& ety);
+    bmcl::Result<MsgAddEntryRep, Error> accept_entry(const Entry& ety);
     bmcl::Option<Error> set_current_term(TermId term);
     bmcl::Option<Error> vote_for_nodeid(NodeId nodeid);
     void become_follower();
