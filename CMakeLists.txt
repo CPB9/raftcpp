@@ -37,6 +37,8 @@ bmcl_add_library(raftcpp STATIC
     src/raft/Node.cpp
     src/raft/Types.h
     src/raft/Types.cpp
+    src/raft/Timer.h
+    src/raft/Timer.cpp
 )
 
 target_include_directories(raftcpp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
