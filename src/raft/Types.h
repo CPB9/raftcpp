@@ -28,6 +28,7 @@ enum class Error : uint8_t
     NothingToApply,
     NothingToSend,
     CantSendToMyself,
+    CantSend,
 };
 
 const char* to_string(Error e);
