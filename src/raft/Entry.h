@@ -30,7 +30,6 @@ enum class EntryType : uint8_t
     AddNode,
     DemoteNode,
     RemoveNode,
-    ChangeCfg
 };
 
 inline const char* to_string(EntryType t)
@@ -42,7 +41,6 @@ inline const char* to_string(EntryType t)
     case EntryType::AddNode: return "AddNode";
     case EntryType::DemoteNode: return "DemoteNode";
     case EntryType::RemoveNode: return "RemoveNode";
-    case EntryType::ChangeCfg: return "ChangeCfg";
     }
     return "unknown";
 }

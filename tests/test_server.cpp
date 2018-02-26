@@ -24,6 +24,16 @@ static void prepare_candidate(raft::Server& r)
 {
     EXPECT_GT(r.nodes().count(), 1);
     r.tick(r.timer().get_max_election_timeout());
+    if (r.is_candidate())
+        return;
+
+    EXPECT_TRUE(r.is_precandidate());
+    for (auto& i : r.nodes().items())
+    {
+        r.accept_rep(i.get_id(), MsgVoteRep(r.get_current_term(), ReqVoteState::Granted));
+        if (r.is_candidate())
+            return;
+    }
     EXPECT_TRUE(r.is_candidate());
 }
 
@@ -86,11 +96,11 @@ TEST(TestServer, voting_results_in_voting)
     raft::Server r(NodeId(1), {NodeId(1), NodeId(2), NodeId(3)}, &__Sender, &__Saver);
 
     prepare_follower(r);
-    r.accept_req(raft::NodeId(2), raft::MsgVoteReq(r.get_current_term() + 1, 0, 0));
+    r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 0, 0, false));
     EXPECT_EQ(raft::NodeId(2), r.get_voted_for());
 
     prepare_follower(r);
-    r.accept_req(raft::NodeId(3), raft::MsgVoteReq(r.get_current_term() + 1, 0, 0));
+    r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term() + 1, 0, 0, false));
     EXPECT_EQ(raft::NodeId(3), r.get_voted_for());
 }
 
@@ -371,7 +381,7 @@ TEST(TestServer, recv_requestvote_reply_false_if_term_less_than_current_term)
     prepare_follower(r);
 
     /* term is less than current term */
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() - 1, 0, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() - 1, 0, 0, false));
     EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
 }
 
@@ -381,7 +391,7 @@ TEST(TestServer, leader_recv_requestvote_does_not_step_down)
     prepare_leader(r);
 
     /* term is less than current term */
-    r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() - 1, 0, 0));
+    r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() - 1, 0, 0, false));
     EXPECT_EQ(raft::NodeId(1), r.get_current_leader());
 }
 
@@ -392,7 +402,7 @@ TEST(TestServer, recv_requestvote_reply_true_if_term_greater_than_or_equal_to_cu
     prepare_follower(r);
 
     /* term is less than current term */
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0, false));
     EXPECT_EQ(raft::ReqVoteState::Granted, rvr.vote_granted);
 }
 
@@ -404,7 +414,7 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     r.timer().set_timeout(std::chrono::milliseconds(200), 5);
     r.tick(std::chrono::milliseconds(900));
 
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0, false));
     EXPECT_EQ(raft::ReqVoteState::Granted, rvr.vote_granted);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 }
@@ -416,7 +426,7 @@ TEST(TestServer, recv_requestvote_candidate_step_down_if_term_is_higher_than_cur
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
     /* current term is less than term */
-    r.accept_req(raft::NodeId(2), MsgVoteReq(2, 1, 0));
+    r.accept_req(raft::NodeId(2), MsgVoteReq(2, 1, 0, false));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(raft::NodeId(2), r.get_voted_for());
@@ -429,7 +439,7 @@ TEST(TestServer, recv_requestvote_depends_on_candidate_id)
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
     /* current term is less than term */
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0, false));
     EXPECT_TRUE(r.is_follower());
     EXPECT_EQ(2, r.get_current_term());
     EXPECT_EQ(raft::NodeId(2), r.get_voted_for());
@@ -446,16 +456,16 @@ TEST(TestServer, recv_requestvote_dont_grant_vote_if_we_didnt_vote_for_this_cand
 
     EXPECT_EQ(r.get_voted_for(), raft::NodeId(1));
     {
-        MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1));
+        MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1, false));
         EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
     }
 
     /* vote for ID 2 */
     prepare_follower(r);
-    r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 1));
+    r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 1, false));
     EXPECT_EQ(r.get_voted_for(), raft::NodeId(2));
     {
-        MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1));
+        MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(r.get_current_term(), 1, 1, false));
         EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
     }
 }
@@ -837,7 +847,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
     EXPECT_EQ(2, aer.unwrap().current_idx);
 }
 
-TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
+TEST(TestFollower, becomes_precandidate_when_election_timeout_occurs)
 {
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &__Sender, &__Saver);
 
@@ -845,7 +855,7 @@ TEST(TestFollower, becomes_candidate_when_election_timeout_occurs)
     r.tick(r.timer().get_max_election_timeout());
 
     /* is a candidate now */
-    EXPECT_TRUE(r.is_candidate());
+    EXPECT_TRUE(r.is_precandidate());
 }
 
 /* Candidate 5.2 */
@@ -864,14 +874,14 @@ TEST(TestFollower, dont_grant_vote_if_candidate_has_a_less_complete_log)
 
     /* vote not granted */
     {
-        MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(term, 1, 1));
+        MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(term, 1, 1, false));
         EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
     }
 
     /* approve vote, because last_log_term is higher */
     prepare_follower(r);
     {
-        MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term(), 1, r.get_current_term() + 1));
+        MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term(), 1, r.get_current_term() + 1, false));
         EXPECT_EQ(raft::ReqVoteState::Granted, rvr.vote_granted);
     }
 }
@@ -1100,10 +1110,12 @@ TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
     /* server wants to be leader, so becomes candidate */
     prepare_candidate(r);
     EXPECT_EQ(1, r.get_current_term());
+    EXPECT_TRUE(r.is_candidate());
 
-    /* clock over (i.e. max election timeout + 1) to overcome possible negative timeout, causing new election */
+    /* clock over to overcome possible negative timeout, causing new pre vote phase without term change*/
     r.tick(r.timer().get_max_election_timeout());
-    EXPECT_EQ(2, r.get_current_term());
+    EXPECT_TRUE(r.is_precandidate());
+    EXPECT_EQ(1, r.get_current_term());
 
     /*  receiving this vote gives the server majority */
 //    msg_requestvote_response_t vr = {0};
@@ -1142,7 +1154,7 @@ TEST(TestCandidate, will_not_respond_to_voterequest_if_it_has_already_voted)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2)}, &__Sender, &__Saver);
     prepare_candidate(r);
 
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(0, 0, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(0, 0, 0, false));
 
     /* we've vote already, so won't respond with a vote granted... */
     EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
@@ -2090,7 +2102,7 @@ TEST(TestLeader, recv_requestvote_responds_without_granting)
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
-    MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(1, 0, 0));
+    MsgVoteRep rvr = r.accept_req(raft::NodeId(3), MsgVoteReq(1, 0, 0, false));
     EXPECT_EQ(raft::ReqVoteState::NotGranted, rvr.vote_granted);
 }
 
@@ -2105,7 +2117,7 @@ TEST(TestLeader, recv_requestvote_responds_with_granting_if_term_is_higher)
     EXPECT_TRUE(r.is_leader());
 
     /* receive request vote from node 3 */
-    r.accept_req(raft::NodeId(3), MsgVoteReq(2, 0, 0));
+    r.accept_req(raft::NodeId(3), MsgVoteReq(2, 0, 0, false));
     EXPECT_TRUE(r.is_follower());
 }
 

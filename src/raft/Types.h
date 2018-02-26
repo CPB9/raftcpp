@@ -45,6 +45,7 @@ const char* to_string(ReqVoteState vote);
 enum class State : uint8_t
 {
     Follower,
+    PreCandidate,
     Candidate,
     Leader
 } ;
@@ -66,13 +67,14 @@ struct MsgAddEntryRep
  * This message could force a leader/candidate to become a follower. */
 struct MsgVoteReq
 {
-    MsgVoteReq(TermId term, Index last_log_idx, TermId last_log_term)
-        :term(term), last_log_idx(last_log_idx), last_log_term(last_log_term)
+    MsgVoteReq(TermId term, Index last_log_idx, TermId last_log_term, bool isPre)
+        :term(term), last_log_idx(last_log_idx), last_log_term(last_log_term), isPre(isPre)
     {
     }
     TermId term;               /**< currentTerm, to force other leader/candidate to step down */
     Index  last_log_idx;       /**< index of candidate's last log entry */
     TermId last_log_term;      /**< term of candidate's last log entry */
+    bool   isPre;              /**< true for prevote phase */
 };
 
 /** Vote request response message.

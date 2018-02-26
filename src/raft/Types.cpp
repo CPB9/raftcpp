@@ -16,6 +16,7 @@ const char* to_string(State s)
     switch (s)
     {
     case State::Follower: return "follower";
+    case State::PreCandidate: return "precandidate";
     case State::Candidate: return "candidate";
     case State::Leader: return "leader";
     }

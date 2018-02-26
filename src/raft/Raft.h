@@ -50,6 +50,7 @@ public:
     inline bool is_follower() const { return get_state() == State::Follower; }
     inline bool is_leader() const { return get_state() == State::Leader; }
     inline bool is_candidate() const { return get_state() == State::Candidate; }
+    inline bool is_precandidate() const { return get_state() == State::PreCandidate; }
     inline State get_state() const { return _me.state; }
 
     const Nodes& nodes() const { return _nodes; }
@@ -81,6 +82,7 @@ private:
     bmcl::Option<Error> vote_for_nodeid(NodeId nodeid);
     void become_follower();
     void become_candidate();
+    void become_precandidate();
     void become_leader();
     void set_state(State state);
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
