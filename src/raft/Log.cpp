@@ -121,7 +121,9 @@ void LogCommitter::commit_till(Index idx)
 bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteChecks)
 {
     /* Only one voting cfg change at a time */
-    if (needVoteChecks && ety.is_voting_cfg_change() && voting_change_is_in_progress())
+    bool voting_change = ety.isInternal() && ety.getInternalData()->is_voting_cfg_change();
+
+    if (needVoteChecks && voting_change && voting_change_is_in_progress())
         return Error::OneVotingChangeOnly;
 
     if (_saver)
@@ -132,7 +134,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteCh
     }
 
     append(ety);
-    if (ety.is_voting_cfg_change())
+    if (voting_change)
         _voting_cfg_change_log_idx = get_current_idx();
 
     return bmcl::None;
@@ -175,7 +177,7 @@ bmcl::Option<TermId> LogCommitter::get_last_log_term() const
     const auto& ety = back();
     if (ety.isNone())
         return bmcl::None;
-    return ety->term;
+    return ety->term();
 }
 
 bmcl::Option<Entry> LogCommitter::entry_pop_back()
@@ -211,7 +213,7 @@ EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const
         return EntryState::NotCommitted;
 
     /* entry from another leader has invalidated this entry message */
-    if (r.term != ety.unwrap().term)
+    if (r.term != ety.unwrap().term())
         return EntryState::Invalidated;
     return is_committed(r.idx) ? EntryState::Committed : EntryState::NotCommitted;
 }

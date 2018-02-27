@@ -38,7 +38,7 @@ Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _
     become_follower();
     if (isNewCluster)
     {
-        _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
+        _log.entry_append(Entry::add_node(_me.current_term, 0, _nodes.get_my_id()));
         tick();
         assert(is_leader());
     }
@@ -50,7 +50,7 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISav
     become_follower();
     if (_nodes.count() == 1)
     {
-        _log.entry_append(Entry(_me.current_term, 0, EntryType::AddNode, _nodes.get_my_id()));
+        _log.entry_append(Entry::add_node(_me.current_term, 0, _nodes.get_my_id()));
         tick();
         assert(is_leader());
     }
@@ -164,33 +164,33 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
     if (r.isOk())
     {
         const Entry& ety = r.unwrap();
-        if (r.unwrap().type != EntryType::User)
+        if (r.unwrap().isInternal())
         {
-            assert(ety.node.isSome());
-            NodeId id = ety.node.unwrap();
+            const InternalData& cmd = ety.getInternalData().unwrap();
+            NodeId id = cmd.node;
             bmcl::Option<Node&> node = _nodes.get_node(id);
-            switch (ety.type)
+            switch (cmd.type)
             {
-            case EntryType::AddNode:
+            case InternalData::AddNode:
             {
                 assert(node.isSome());
                 if (node.isSome())
                     node->set_has_sufficient_logs();
             }
             break;
-            case EntryType::DemoteNode:
+            case InternalData::DemoteNode:
             {
                 assert(node.isSome());
                 if (node.isSome())
                     node->set_voting(false);
             }
             break;
-            case EntryType::AddNonVotingNode:
+            case InternalData::AddNonVotingNode:
             {
                 _nodes.add_node(id, false);
             }
             break;
-            case EntryType::RemoveNode:
+            case InternalData::RemoveNode:
             {
                 _nodes.remove_node(id);
             }
@@ -200,7 +200,7 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
             }
         }
 
-        __log("applied log: %d, id: %d size: %d", _log.get_last_applied_idx(), ety.id, ety.data.data.size());
+        __log("applied log: %d, id: %d", _log.get_last_applied_idx(), ety.id());
         return bmcl::None;
     }
 
@@ -271,7 +271,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     if (!node->is_voting() && !_log.voting_change_is_in_progress() && _log.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
     {
-        Entry ety(get_current_term(), EntryId(0), EntryType::AddNode, node->get_id());
+        Entry ety(get_current_term(), EntryId(0), InternalData(InternalData::AddNode, node->get_id()));
         auto e = entry_append(ety, false);
         if (e.isSome())
             return e;
@@ -284,7 +284,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     {
         bmcl::Option<const Entry&> ety = _log.get_at_idx(point);
         assert(ety.isSome());
-        if (!_log.is_committed(point) && ety.unwrap().term == _me.current_term && _nodes.is_committed(point))
+        if (!_log.is_committed(point) && ety.unwrap().term() == _me.current_term && _nodes.is_committed(point))
         {
             _log.set_commit_idx(point);
         }
@@ -358,7 +358,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         bmcl::Option<const Entry&> existing_ety = _log.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
-        if (existing_ety.unwrap().term != ety->term && !_log.is_committed(ety_index))
+        if (existing_ety.unwrap().term() != ety->term() && !_log.is_committed(ety_index))
         {
             /* 3. If an existing entry conflicts with a new one (same index
             but different terms), delete the existing entry and all that
@@ -429,10 +429,10 @@ bool Server::should_grant_vote(const MsgVoteReq& vr) const
     if (e.isNone())
         return true;
 
-    if (e.unwrap().term < vr.last_log_term)
+    if (e.unwrap().term() < vr.last_log_term)
         return true;
 
-    if (vr.last_log_term == e.unwrap().term && current_idx <= vr.last_log_idx)
+    if (vr.last_log_term == e.unwrap().term() && current_idx <= vr.last_log_idx)
         return true;
 
     return false;
@@ -537,7 +537,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 
 bmcl::Result<MsgAddEntryRep, Error> Server::add_node(EntryId id, NodeId nodeid)
 {
-    return accept_entry(Entry(_me.current_term, id, EntryType::AddNonVotingNode, nodeid));
+    return accept_entry(Entry::add_nonvoting_node(_me.current_term, id, nodeid));
 }
 
 bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId nodeid)
@@ -546,24 +546,22 @@ bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId nodei
     if (node.isNone())
         return Error::NodeUnknown;
     if (!node->is_voting())
-        return accept_entry(Entry(_me.current_term, id, EntryType::RemoveNode, nodeid));
-    return accept_entry(Entry(_me.current_term, id, EntryType::DemoteNode, nodeid));
+        return accept_entry(Entry::remove_node(_me.current_term, id, nodeid));
+    return accept_entry(Entry::demote_node(_me.current_term, id, nodeid));
 }
 
-bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const EntryData& data)
+bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const UserData& data)
 {
     return accept_entry(Entry(_me.current_term, id, data));
 }
 
-bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& e)
+bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
 {
     if (!is_leader())
         return Error::NotLeader;
 
-    __log("received entry from %d t:%d id: %d idx: %d", _nodes.get_my_id(), _me.current_term, e.id, _log.get_current_idx() + 1);
-
-    Entry ety = e;
-    ety.term = _me.current_term;
+    __log("received entry from %d t:%d id: %d idx: %d", _nodes.get_my_id(), _me.current_term, ety.id(), _log.get_current_idx() + 1);
+    assert(ety.term() == _me.current_term);
     auto r = entry_append(ety, true);
     if (r.isSome())
         return r.unwrap();
@@ -588,38 +586,39 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& e)
         }
     }
 
-    return MsgAddEntryRep(_me.current_term, e.id, _log.get_current_idx());
+    return MsgAddEntryRep(_me.current_term, ety.id(), _log.get_current_idx());
 }
 
 void Server::pop_log(const Entry& ety, const Index idx)
 {
-    if (ety.node.isNone())
+    if (ety.isUser())
         return;
 
-    NodeId id = ety.node.unwrap();
+    const InternalData& cmd = ety.getInternalData().unwrap();
+    NodeId id = cmd.node;
 
-    switch (ety.type)
+    switch (cmd.type)
     {
-    case EntryType::DemoteNode:
+    case InternalData::DemoteNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(true);
     }
     break;
 
-    case EntryType::RemoveNode:
+    case InternalData::RemoveNode:
     {
         const Node& node = _nodes.add_node(id, false);
     }
     break;
 
-    case EntryType::AddNonVotingNode:
+    case InternalData::AddNonVotingNode:
     {
         _nodes.remove_node(id);
     }
     break;
 
-    case EntryType::AddNode:
+    case InternalData::AddNode:
     {
         bmcl::Option<Node&> node = _nodes.get_node(id);
         node->set_voting(false);
@@ -640,15 +639,16 @@ bmcl::Option<Error> Server::entry_append(const Entry& ety, bool needVoteChecks)
 
     sync_log_and_nodes();
 
-    if (ety.node.isNone())
+    if (ety.isUser())
         return bmcl::None;
 
-    NodeId id = ety.node.unwrap();
+    const InternalData& cmd = ety.getInternalData().unwrap();
+    NodeId id = cmd.node;
     bmcl::Option<Node&> node = _nodes.get_node(id);
 
-    switch (ety.type)
+    switch (cmd.type)
     {
-    case EntryType::AddNonVotingNode:
+    case InternalData::AddNonVotingNode:
         if (!_nodes.is_me(id) && node.isNone())
         {
             const Node& n = _nodes.add_node(id, false);
@@ -656,17 +656,17 @@ bmcl::Option<Error> Server::entry_append(const Entry& ety, bool needVoteChecks)
         }
     break;
 
-    case EntryType::AddNode:
+    case InternalData::AddNode:
         node = _nodes.add_node(id, true);
         assert(node.isSome());
         assert(node->is_voting());
     break;
 
-    case EntryType::DemoteNode:
+    case InternalData::DemoteNode:
         node->set_voting(false);
     break;
 
-    case EntryType::RemoveNode:
+    case InternalData::RemoveNode:
         if (node.isSome())
             _nodes.remove_node(node->get_id());
     break;
@@ -752,7 +752,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
         bmcl::Option<const Entry&> prev_ety = _log.get_at_idx(next_idx - 1);
         ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
-            ae.prev_log_term = prev_ety.unwrap().term;
+            ae.prev_log_term = prev_ety.unwrap().term();
     }
 
     __log("sending appendentries to node %d: ci:%d comi:%d t:%d lc:%d pli:%d plt:%d",

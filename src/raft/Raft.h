@@ -67,7 +67,7 @@ public:
     MsgVoteRep accept_req(NodeId nodeid, const MsgVoteReq& vr);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgVoteRep& r);
 
-    bmcl::Result<MsgAddEntryRep, Error> add_entry(EntryId id, const EntryData& data);
+    bmcl::Result<MsgAddEntryRep, Error> add_entry(EntryId id, const UserData& data);
     bmcl::Result<MsgAddEntryRep, Error> add_node(EntryId id, NodeId node);
     bmcl::Result<MsgAddEntryRep, Error> remove_node(EntryId id, NodeId node);
 

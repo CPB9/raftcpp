@@ -11,64 +11,63 @@
 #pragma once
 #include <vector>
 #include <bmcl/Option.h>
+#include <bmcl/Either.h>
 #include "Ids.h"
 
 namespace raft
 {
 
-enum class EntryState : uint8_t
+struct UserData
 {
-    Invalidated,
-    NotCommitted,
-    Committed,
-};
-
-enum class EntryType : uint8_t
-{
-    User,
-    AddNonVotingNode,
-    AddNode,
-    DemoteNode,
-    RemoveNode,
-};
-
-inline const char* to_string(EntryType t)
-{
-    switch (t)
-    {
-    case EntryType::User: return "User";
-    case EntryType::AddNonVotingNode: return "AddNonVotingNode";
-    case EntryType::AddNode: return "AddNode";
-    case EntryType::DemoteNode: return "DemoteNode";
-    case EntryType::RemoveNode: return "RemoveNode";
-    }
-    return "unknown";
-}
-
-struct EntryData
-{
-    EntryData() {}
-    EntryData(const std::vector<uint8_t>& data) : data(data) {}
-    EntryData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len){ }
+    UserData() {}
+    UserData(const std::vector<uint8_t>& data) : data(data) {}
+    UserData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len){ }
     std::vector<uint8_t> data;
 };
 
-/** Entry that is stored in the server's entry log. */
-struct Entry
+struct InternalData
 {
-    Entry(TermId term, EntryId id, EntryData data = EntryData{}) : term(term), id(id), type(EntryType::User), data(data) {}
-    Entry(TermId term, EntryId id, EntryType type, NodeId node)
-        : term(term), id(id), type(type), node(node) {}
-    TermId  term;               /**< the entry's term at the point it was created */
-    EntryId id;                 /**< the entry's unique ID */
-    EntryType type;             /**< type of entry */
-    bmcl::Option<NodeId> node;  /**< node id if this id cfg change entry */
-    EntryData data;
-
-    inline bool is_voting_cfg_change() const
+    enum Type
     {
-        return EntryType::User != type;
-    }
+        AddNonVotingNode,
+        AddNode,
+        DemoteNode,
+        RemoveNode,
+        ChangeCfg,
+        ChangeCfgFinish,
+    };
+
+    InternalData(Type type, NodeId node) : type(type), node(node){}
+    Type type;
+    NodeId node;
+
+    //inline bool is_voting_cfg_change() const { return type != AddNonVotingNode && type != type != AddNonVotingNode; }
+    inline bool is_voting_cfg_change() const { return true; }
+    inline bool is_cfg_change() const { return true; }
+};
+
+/** Entry that is stored in the server's entry log. */
+class Entry
+{
+private:
+    TermId _term;               /**< the entry's term at the point it was created */
+    EntryId _id;                 /**< the entry's unique ID */
+    bmcl::Either<InternalData, UserData> _data;
+public:
+    Entry(TermId term, EntryId id, UserData data) : _term(term), _id(id), _data(data) {}
+    Entry(TermId term, EntryId id, InternalData data) : _term(term), _id(id), _data(data) {}
+    bool isInternal() const { return _data.isFirst(); }
+    bool isUser() const { return _data.isSecond(); }
+    bmcl::Option<const InternalData&> getInternalData() const { return _data.unwrapFirst(); }
+    bmcl::Option<const UserData&> getUserData() const { return _data.unwrapSecond(); }
+    TermId  term() const { return _term; }
+    EntryId id() const { return _id; }
+
+    static Entry add_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::AddNode, node)); }
+    static Entry remove_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::RemoveNode, node)); }
+    static Entry demote_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::DemoteNode, node)); }
+    static Entry add_nonvoting_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::AddNonVotingNode, node)); }
+    static Entry user_empty(TermId term, EntryId id) { return Entry(term, id, UserData()); }
 };
 
 }

@@ -34,6 +34,13 @@ private:
     std::vector<Entry> _entries;
 };
 
+enum class EntryState : uint8_t
+{
+    Invalidated,
+    NotCommitted,
+    Committed,
+};
+
 class LogCommitter : public Logger
 {
 public:
