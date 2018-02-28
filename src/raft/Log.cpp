@@ -37,12 +37,7 @@ Index Logger::get_current_idx() const
     return count() + _base;
 }
 
-Index Logger::get_front_idx() const
-{
-    return _base + 1;
-}
-
-void Logger::append(const Entry& c)
+void Logger::push_back(const Entry& c)
 {
     _entries.emplace_back(c);
 }
@@ -51,15 +46,14 @@ bmcl::Option<const Entry*> Logger::get_from_idx(Index idx, Index* n_etys) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
-    idx -= 1;
 
-    if (idx < _base || idx >= _base + _entries.size())
+    if (idx <= _base || idx > get_current_idx())
     {
         *n_etys = 0;
         return bmcl::None;
     }
 
-    Index i = idx - _base;
+    Index i = idx - _base - 1;
     *n_etys = _entries.size() - i;
     return &_entries[i];
 }
@@ -68,12 +62,11 @@ bmcl::Option<const Entry&> Logger::get_at_idx(Index idx) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
-    idx -= 1;
 
-    if (idx < _base || idx >= _base + _entries.size())
+    if (idx <= _base || idx > get_current_idx())
         return bmcl::None;
 
-    Index i = idx - _base;
+    Index i = idx - _base - 1;
     return _entries[i];
 }
 
@@ -86,28 +79,11 @@ bmcl::Option<Entry> Logger::pop_back()
     return ety;
 }
 
-bmcl::Option<Entry> Logger::pop_front()
-{
-    if (_entries.empty())
-        return bmcl::None;
-    Entry elem = _entries.front();
-    _entries.erase(_entries.begin());
-    _base++;
-    return elem;
-}
-
 bmcl::Option<const Entry&> Logger::back() const
 {
     if (_entries.empty())
         return bmcl::None;
     return _entries.back();
-}
-
-bmcl::Option<const Entry&> Logger::front() const
-{
-    if (_entries.empty())
-        return bmcl::None;
-    return _entries.front();
 }
 
 void LogCommitter::commit_till(Index idx)
@@ -133,7 +109,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteCh
             return e;
     }
 
-    append(ety);
+    push_back(ety);
     if (voting_change)
         _voting_cfg_change_log_idx = get_current_idx();
 
@@ -194,16 +170,6 @@ bmcl::Option<Entry> LogCommitter::entry_pop_back()
         return bmcl::None;
     _saver->pop_back(ety.unwrap(), idx);
     return ety;
-}
-
-void LogCommitter::entry_pop_front()
-{
-    auto ety = pop_front();
-    if (ety.isNone())
-        return;
-    if (_saver)
-        _saver->pop_front(ety.unwrap(), get_front_idx());
-    pop_front();
 }
 
 EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const

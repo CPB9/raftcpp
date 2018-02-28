@@ -295,12 +295,12 @@ TEST(TestServer, recv_entry_fails_if_there_is_already_a_voting_change)
     raft::Index count = r.log().count();
 
     r.add_node(99, raft::NodeId(2));
-    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
+    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx()));
     EXPECT_TRUE(r.log().voting_change_is_in_progress());
     EXPECT_EQ(count + 1, r.log().count());
 
     auto cr = r.add_node(2, raft::NodeId(3));
-    r.accept_rep(raft::NodeId(3), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx(), 0));
+    r.accept_rep(raft::NodeId(3), raft::MsgAppendEntriesRep(r.get_current_term(), true, r.log().get_current_idx()));
 
     EXPECT_TRUE(cr.isErr());
     if (cr.isErr())
@@ -1563,9 +1563,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.send_appendentries(raft::NodeId(3));
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(1, r.log().get_commit_idx());
     r.tick(std::chrono::milliseconds(1));
@@ -1579,9 +1579,9 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_when_majority_h
     r.send_appendentries(raft::NodeId(3));
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2, 2));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2));
     EXPECT_EQ(1, r.log().get_commit_idx());
-    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2, 2));
+    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2));
     /* leader will now have majority followers who have appended this log */
     EXPECT_EQ(2, r.log().get_commit_idx());
     r.tick(std::chrono::milliseconds(1));
@@ -1611,7 +1611,7 @@ TEST(TestLeader, recv_appendentries_response_increase_commit_idx_using_voting_no
     r.send_appendentries(raft::NodeId(2));
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(1, r.log().get_commit_idx());
     /* leader will now have majority followers who have appended this log */
     r.tick(std::chrono::milliseconds(1));
@@ -1633,15 +1633,15 @@ TEST(TestLeader, recv_appendentries_response_duplicate_does_not_decrement_match_
     r.log().entry_append(Entry(1, 3, raft::UserData("aaa", 4)));
 
     /* receive msg 1 */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(1, r.nodes().get_node(raft::NodeId(2))->get_match_idx());
 
     /* receive msg 2 */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2, 2));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2));
     EXPECT_EQ(2, r.nodes().get_node(raft::NodeId(2))->get_match_idx());
 
     /* receive msg 1 - because of duplication ie. unreliable network */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(2, r.nodes().get_node(raft::NodeId(2))->get_match_idx());
 }
 
@@ -1666,9 +1666,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::NodeId(2));
     r.send_appendentries(raft::NodeId(3));
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1, 1));
+    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 1));
     EXPECT_EQ(0, r.log().get_commit_idx());
     r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.log().get_last_applied_idx());
@@ -1679,9 +1679,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::NodeId(2));
     r.send_appendentries(raft::NodeId(3));
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2, 2));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 2));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2, 2));
+    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(1, true, 2));
     EXPECT_EQ(0, r.log().get_commit_idx());
     r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(0, r.log().get_last_applied_idx());
@@ -1691,9 +1691,9 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     r.send_appendentries(raft::NodeId(3));
     /* receive mock success responses
      * let's say that the nodes have majority within leader's current term */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term(), true, 3, 3));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term(), true, 3));
     EXPECT_EQ(0, r.log().get_commit_idx());
-    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(r.get_current_term(), true, 3, 3));
+    r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(r.get_current_term(), true, 3));
     EXPECT_EQ(3, r.log().get_commit_idx());
     r.tick(std::chrono::milliseconds(1));
     EXPECT_EQ(1, r.log().get_last_applied_idx());
@@ -1745,7 +1745,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1));
     EXPECT_EQ(2, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -1803,7 +1803,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
     EXPECT_EQ(4, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -1818,7 +1818,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4, 0));
+    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
     EXPECT_EQ(3, node->get_next_idx());
 
     /* see if new appendentries have appropriate values */
@@ -1857,7 +1857,7 @@ TEST(TestLeader, recv_appendentries_response_retry_only_if_leader)
     prepare_follower(r);
 
     /* receive mock success responses */
-    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(term, true, 1, 1));
+    bmcl::Option<raft::Error> e = r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(term, true, 1));
     EXPECT_TRUE(e.isSome());
     EXPECT_EQ(raft::Error::NotLeader, e.unwrap());
     EXPECT_FALSE(sender.poll_msg_data(r).isSome());
@@ -1869,7 +1869,7 @@ TEST(TestLeader, recv_appendentries_response_from_unknown_node_fails)
     prepare_leader(r);
 
     /* receive mock success responses */
-    EXPECT_TRUE(r.accept_rep(raft::NodeId(4), MsgAppendEntriesRep(r.get_current_term(), true, 0, 0)).isSome());
+    EXPECT_TRUE(r.accept_rep(raft::NodeId(4), MsgAppendEntriesRep(r.get_current_term(), true, 0)).isSome());
 }
 
 TEST(TestLeader, recv_entry_resets_election_timeout)
@@ -1971,9 +1971,9 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     /* receive mock success response */
     bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
-    r.accept_rep(p->get_id(), MsgAppendEntriesRep(1, false, 0, 0));
+    r.accept_rep(p->get_id(), MsgAppendEntriesRep(1, false, 0));
     EXPECT_EQ(1, p->get_next_idx());
-    r.accept_rep(p->get_id(), MsgAppendEntriesRep(1, false, 0, 0));
+    r.accept_rep(p->get_id(), MsgAppendEntriesRep(1, false, 0));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -1989,7 +1989,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
     EXPECT_EQ(1, p->get_next_idx());
 
     /* receive mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 0, 0));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(1, true, 0));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2007,7 +2007,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     EXPECT_EQ(1, p->get_next_idx());
 
     /* receive OLD mock success responses */
-    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term() - 1, true, 1, 1));
+    r.accept_rep(raft::NodeId(2), MsgAppendEntriesRep(r.get_current_term() - 1, true, 1));
     EXPECT_EQ(1, p->get_next_idx());
 }
 
@@ -2023,7 +2023,7 @@ TEST(TestLeader, recv_appendentries_response_steps_down_if_term_is_newer)
     EXPECT_EQ(1, n2->get_next_idx());
 
     /* receive NEW mock failed responses */
-    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term() + 1, false, 2, 0));
+    r.accept_rep(raft::NodeId(2), raft::MsgAppendEntriesRep(r.get_current_term() + 1, false, 2));
     EXPECT_TRUE(r.is_follower());
     EXPECT_FALSE(r.get_current_leader().isSome());
 }
@@ -2146,12 +2146,12 @@ TEST(TestLeader, remove_other_node)
     }
 
     {
-        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1, 1));
+        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1));
         EXPECT_FALSE(e.isSome());
     }
 
     {
-        auto e = r.accept_rep(NodeId(3), MsgAppendEntriesRep(t, true, 1, 1));
+        auto e = r.accept_rep(NodeId(3), MsgAppendEntriesRep(t, true, 1));
         EXPECT_FALSE(e.isSome());
     }
 
@@ -2181,7 +2181,7 @@ TEST(TestLeader, remove_me)
     }
 
     {
-        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1, 1));
+        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1));
         EXPECT_FALSE(e.isSome());
     }
 

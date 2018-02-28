@@ -108,8 +108,8 @@ struct MsgAppendEntriesReq
  * This message could force a leader/candidate to become a follower. */
 struct MsgAppendEntriesRep
 {
-    MsgAppendEntriesRep(TermId term, bool success, Index current_idx, Index first_idx)
-        : term(term), success(success), current_idx(current_idx), first_idx(first_idx) {}
+    MsgAppendEntriesRep(TermId term, bool success, Index current_idx)
+        : term(term), success(success), current_idx(current_idx) {}
     TermId term;           /**< currentTerm, to force other leader/candidate to step down */
     bool success;               /**< true if follower contained entry matching prevLogidx and prevLogTerm */
 
@@ -117,7 +117,6 @@ struct MsgAppendEntriesRep
     /* Having the following fields allows us to do less book keeping in regards to full fledged RPC */
 
     Index current_idx;    /**< This is the highest log IDX we've received and appended to our log */
-    Index first_idx;      /**< The first idx that we received within the appendentries message */
 } ;
 
 class ISender
@@ -153,10 +152,6 @@ public:
     * For safety reasons this callback MUST flush the change to disk.
     * Return Shutdown if you want the server to shutdown. */
     virtual bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) = 0;
-
-    /** Callback for removing the oldest entry from the log
-    * For safety reasons this callback MUST flush the change to disk. */
-    virtual void pop_front(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for removing the youngest entry from the log
     * For safety reasons this callback MUST flush the change to disk. */

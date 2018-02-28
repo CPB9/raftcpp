@@ -212,12 +212,7 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r)
 {
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
-    __log("received appendentries response %s from %d ci:%d rci:%d 1stidx:%d",
-          r.success ? "SUCCESS" : "fail",
-          nodeid,
-          _log.get_current_idx(),
-          r.current_idx,
-          r.first_idx);
+    __log("received appendentries response %s from %d ci:%d rci:%d", r.success ? "SUCCESS" : "fail", nodeid, _log.get_current_idx(), r.current_idx);
 
     if (node.isNone())
         return Error::NodeUnknown;
@@ -271,8 +266,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     if (!node->is_voting() && !_log.voting_change_is_in_progress() && _log.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
     {
-        Entry ety(get_current_term(), EntryId(0), InternalData(InternalData::AddNode, node->get_id()));
-        auto e = entry_append(ety, false);
+        auto e = entry_append(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
         if (e.isSome())
             return e;
         node->set_has_sufficient_logs();
@@ -325,7 +319,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     {
         /* 1. Reply false if term < currentTerm (§5.1) */
         __log("AE term %d of %d is less than current term %d", ae.term, nodeid, _me.current_term);
-        return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx(), 0);
+        return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx());
     }
 
     /* update current leader because ae->term is up to date */
@@ -343,7 +337,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex
             whose term matches prevLogTerm (§5.3) */
             __log("AE no log at prev_idx %d for ", ae.prev_log_idx, nodeid);
-            return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx(), 0);
+            return MsgAppendEntriesRep(_me.current_term, false, _log.get_current_idx());
         }
     }
 
@@ -396,7 +390,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         min(leaderCommit, index of most recent entry) */
     _log.commit_till(ae.leader_commit);
 
-    return MsgAppendEntriesRep(_me.current_term, true, node_current_idx, ae.prev_log_idx + 1);
+    return MsgAppendEntriesRep(_me.current_term, true, node_current_idx);
 }
 
 bool Server::should_grant_vote(const MsgVoteReq& vr) const

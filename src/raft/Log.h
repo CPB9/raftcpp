@@ -20,13 +20,10 @@ public:
     bmcl::Option<const Entry*> get_from_idx(Index idx, Index* n_etys) const;
     bmcl::Option<const Entry&> get_at_idx(Index idx) const;
     bmcl::Option<const Entry&> back() const;
-    bmcl::Option<const Entry&> front() const;
     Index get_current_idx() const;
-    Index get_front_idx() const;
 
 protected:
-    void append(const Entry& c);
-    bmcl::Option<Entry> pop_front();
+    void push_back(const Entry& c);
     bmcl::Option<Entry> pop_back();
 
 private:
@@ -61,7 +58,6 @@ public:
     bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks = false);
     bmcl::Result<Entry, Error> entry_apply_one();
     bmcl::Option<Entry> entry_pop_back();
-    void entry_pop_front();
 
 private:
     ISaver* _saver;

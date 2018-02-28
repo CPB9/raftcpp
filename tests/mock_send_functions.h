@@ -58,7 +58,6 @@ class Saver : public raft::ISaver
     bmcl::Option<Error> persist_vote(NodeId node) override { return bmcl::None; }
     bmcl::Option<Error> persist_term(TermId node) override { return bmcl::None; }
     bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) override { return bmcl::None; }
-    void pop_front(const Entry& entry, Index entry_idx) override {}
     void pop_back(const Entry& entry, Index entry_idx) override {}
     void log(const char *buf) override {}
 };
