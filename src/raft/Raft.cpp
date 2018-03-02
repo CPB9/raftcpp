@@ -23,6 +23,20 @@
 namespace raft
 {
 
+
+const char* to_string(State s)
+{
+    switch (s)
+    {
+    case State::Follower: return "follower";
+    case State::PreCandidate: return "precandidate";
+    case State::Candidate: return "candidate";
+    case State::Leader: return "leader";
+    }
+    return "unknown";
+}
+
+
 void Server::__log(const char *fmt, ...) const
 {
     char buf[1024];
@@ -32,7 +46,7 @@ void Server::__log(const char *fmt, ...) const
     _saver->log(buf);
 }
 
-Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _nodes(id, isNewCluster), _log(saver), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, isNewCluster), _storage(storage), _log(storage), _sender(sender), _saver(saver)
 {
     _me.current_term = TermId(0);
     become_follower();
@@ -44,7 +58,7 @@ Server::Server(NodeId id, bool isNewCluster, ISender* sender, ISaver* saver) : _
     }
 }
 
-Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISaver* saver) : _nodes(id, members), _log(saver), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, members), _storage(storage), _log(storage), _sender(sender), _saver(saver)
 {
     _me.current_term = TermId(0);
     become_follower();
@@ -59,7 +73,7 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender, ISav
     }
 }
 
-Server::Server(NodeId id, std::initializer_list<NodeId> members, ISender* sender, ISaver* saver) : Server(id, bmcl::ArrayView<NodeId>(members), sender, saver)
+Server::Server(NodeId id, std::initializer_list<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : Server(id, bmcl::ArrayView<NodeId>(members), storage, sender, saver)
 {
 }
 
@@ -160,53 +174,53 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
             become_precandidate();
     }
 
-    auto r = _log.entry_apply_one();
-    if (r.isOk())
+    auto r = _log.entry_apply_one(_saver);
+    if (r.isErr())
     {
-        const Entry& ety = r.unwrap();
-        if (r.unwrap().isInternal())
-        {
-            const InternalData& cmd = ety.getInternalData().unwrap();
-            NodeId id = cmd.node;
-            bmcl::Option<Node&> node = _nodes.get_node(id);
-            switch (cmd.type)
-            {
-            case InternalData::AddNode:
-            {
-                assert(node.isSome());
-                if (node.isSome())
-                    node->set_has_sufficient_logs();
-            }
-            break;
-            case InternalData::DemoteNode:
-            {
-                assert(node.isSome());
-                if (node.isSome())
-                    node->set_voting(false);
-            }
-            break;
-            case InternalData::AddNonVotingNode:
-            {
-                _nodes.add_node(id, false);
-            }
-            break;
-            case InternalData::RemoveNode:
-            {
-                _nodes.remove_node(id);
-            }
-            break;
-            default:
-                assert(0);
-            }
-        }
-
-        __log("applied log: %d, id: %d", _log.get_last_applied_idx(), ety.id());
-        return bmcl::None;
+        if (r.unwrapErr() == Error::NothingToApply)
+            return bmcl::None;
+        return r.unwrapErr();
     }
 
-    if (r.unwrapErr() == Error::NothingToApply)
-        return bmcl::None;
-    return r.unwrapErr();
+    const Entry& ety = r.unwrap();
+    if (r.unwrap().isInternal())
+    {
+        const InternalData& cmd = ety.getInternalData().unwrap();
+        NodeId id = cmd.node;
+        bmcl::Option<Node&> node = _nodes.get_node(id);
+        switch (cmd.type)
+        {
+        case InternalData::AddNode:
+        {
+            assert(node.isSome());
+            if (node.isSome())
+                node->set_has_sufficient_logs();
+        }
+        break;
+        case InternalData::DemoteNode:
+        {
+            assert(node.isSome());
+            if (node.isSome())
+                node->set_voting(false);
+        }
+        break;
+        case InternalData::AddNonVotingNode:
+        {
+            _nodes.add_node(id, false);
+        }
+        break;
+        case InternalData::RemoveNode:
+        {
+            _nodes.remove_node(id);
+        }
+        break;
+        default:
+            assert(0);
+        }
+    }
+
+    __log("applied log: %d, id: %d", _log.get_last_applied_idx(), ety.id());
+    return bmcl::None;
 }
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r)
@@ -266,7 +280,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     if (!node->is_voting() && !_log.voting_change_is_in_progress() && _log.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
     {
-        auto e = entry_append(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
+        auto e = push_log(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
         if (e.isSome())
             return e;
         node->set_has_sufficient_logs();
@@ -364,7 +378,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
                 if (pop.isNone())
                     flag = false;
                 else
-                    pop_log(pop.unwrap(), _log.get_current_idx() + 1);
+                    pop_log(pop.unwrap());
             }
             break;
         }
@@ -373,7 +387,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     /* Pick up remainder in case of mismatch or missing entry */
     for (; i < ae.n_entries; i++)
     {
-        bmcl::Option<Error> e = entry_append(ae.entries[i], false);
+        bmcl::Option<Error> e = push_log(ae.entries[i], false);
         if (e.isSome())
         {
             if (e.unwrap() == Error::Shutdown)
@@ -556,7 +570,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
 
     __log("received entry from %d t:%d id: %d idx: %d", _nodes.get_my_id(), _me.current_term, ety.id(), _log.get_current_idx() + 1);
     assert(ety.term() == _me.current_term);
-    auto r = entry_append(ety, true);
+    auto r = push_log(ety, true);
     if (r.isSome())
         return r.unwrap();
 
@@ -583,7 +597,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
     return MsgAddEntryRep(_me.current_term, ety.id(), _log.get_current_idx());
 }
 
-void Server::pop_log(const Entry& ety, const Index idx)
+void Server::pop_log(const Entry& ety)
 {
     if (ety.isUser())
         return;
@@ -625,7 +639,7 @@ void Server::pop_log(const Entry& ety, const Index idx)
     }
 }
 
-bmcl::Option<Error> Server::entry_append(const Entry& ety, bool needVoteChecks)
+bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
 {
     auto e = _log.entry_append(ety, needVoteChecks);
     if (e.isSome())
@@ -763,7 +777,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
 
 bmcl::Option<Error> Server::vote_for_nodeid(NodeId nodeid)
 {
-    bmcl::Option<Error> e = _saver->persist_vote(nodeid);
+    bmcl::Option<Error> e = _storage->persist_term_vote(_me.current_term, nodeid);
     if (e.isSome())
         return e;
     _me.voted_for = nodeid;
@@ -772,10 +786,11 @@ bmcl::Option<Error> Server::vote_for_nodeid(NodeId nodeid)
 
 bmcl::Option<Error> Server::set_current_term(TermId term)
 {
+    assert(term > _me.current_term);
     if (_me.current_term >= term)
         return bmcl::None;
 
-    bmcl::Option<Error> e = _saver->persist_term(term);
+    bmcl::Option<Error> e = _storage->persist_term_vote(term, bmcl::None);
     if (e.isSome())
         return e;
 

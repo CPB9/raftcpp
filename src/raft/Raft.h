@@ -8,9 +8,7 @@
  */
 
 #pragma once
-#include <vector>
 #include <chrono>
-#include <functional>
 #include <bmcl/Option.h>
 #include <bmcl/Result.h>
 #include <bmcl/ArrayView.h>
@@ -22,6 +20,15 @@
 
 namespace raft
 {
+
+enum class State : uint8_t
+{
+    Follower,
+    PreCandidate,
+    Candidate,
+    Leader
+};
+const char* to_string(State s);
 
 class Server
 {
@@ -35,9 +42,9 @@ class Server
 
     friend class Logger;
 public:
-    explicit Server(NodeId id, bool isnewCluster, ISender* sender = nullptr, ISaver* saver = nullptr); //create new or join existing cluster ()
-    explicit Server(NodeId id, bmcl::ArrayView<NodeId> members, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
-    explicit Server(NodeId id, std::initializer_list<NodeId> members, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
+    explicit Server(NodeId id, bool isnewCluster, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new or join existing cluster ()
+    explicit Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
+    explicit Server(NodeId id, std::initializer_list<NodeId> members, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
 
     inline void set_sender(ISender* sender) {_sender = sender; }
     inline void set_saver(ISaver* saver) { _saver = saver; }
@@ -56,9 +63,9 @@ public:
     const Nodes& nodes() const { return _nodes; }
     Nodes& nodes() { return _nodes; }
     const LogCommitter& log() const { return _log; }
-    LogCommitter& log() { return _log; }
     Timer& timer() { return _timer; }
     const Timer& timer() const { return _timer; }
+    const IStorage* storage() const { return _storage; }
 
     bmcl::Option<Error> tick(std::chrono::milliseconds elapsed = std::chrono::milliseconds(0));
 
@@ -87,8 +94,8 @@ private:
     void set_state(State state);
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
     bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
-    void pop_log(const Entry& ety, Index idx);
-    bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks);
+    void pop_log(const Entry& ety);
+    bmcl::Option<Error> push_log(const Entry& ety, bool needVoteChecks);
     void __log(const char *fmt, ...) const;
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
     bool should_grant_vote(const MsgVoteReq& vr) const;
@@ -97,8 +104,9 @@ private:
     Nodes _nodes;
     LogCommitter _log;
     server_private_t _me;
-    ISender* _sender;
-    ISaver* _saver;
+    IStorage* _storage;
+    ISender*  _sender;
+    ISaver*   _saver;
 };
 
 }

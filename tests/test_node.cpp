@@ -16,6 +16,13 @@ TEST(TestNode, node_set_nextIdx)
     EXPECT_EQ(3, p.get_next_idx());
 }
 
+TEST(TestNode, get_my_node)
+{
+    raft::Nodes ns(raft::NodeId(1), { raft::NodeId(1), raft::NodeId(2) });
+    EXPECT_EQ(raft::NodeId(1), ns.get_my_id());
+    EXPECT_TRUE(ns.is_me(raft::NodeId(1)));
+    EXPECT_FALSE(ns.is_me(raft::NodeId(2)));
+}
 
 TEST(TestNode, my_id_is_always_in_list)
 {

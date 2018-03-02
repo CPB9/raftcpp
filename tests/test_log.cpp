@@ -5,188 +5,199 @@
 
 using namespace raft;
 
-TEST(TestLog, new_is_empty)
+TEST(TestMemStorage, new_is_empty)
 {
-    raft::LogCommitter l(nullptr);
-    EXPECT_EQ(0, l.count());
+    MemStorage s;
+    EXPECT_EQ(0, s.count());
 }
 
-TEST(TestLog, append_is_not_empty)
+TEST(TestMemStorage, append_is_not_empty)
 {
-    raft::LogCommitter l(nullptr);
-    l.entry_append(Entry(0, 1, UserData()));
-    EXPECT_EQ(1, l.count());
+    MemStorage s;
+    s.push_back(Entry(0, 1, UserData()));
+    EXPECT_EQ(1, s.count());
 }
 
-TEST(TestLog, get_at_idx)
+TEST(TestMemStorage, get_at_idx)
 {
-    raft::LogCommitter l(nullptr);
+    MemStorage s;
     Entry e1(0, 1, UserData()), e2(0, 2, UserData()), e3(0, 3, UserData());
 
-    l.entry_append(e1);
-    l.entry_append(e2);
-    l.entry_append(e3);
-    EXPECT_EQ(3, l.count());
+    s.push_back(e1);
+    s.push_back(e2);
+    s.push_back(e3);
+    EXPECT_EQ(3, s.count());
 
-    EXPECT_EQ(3, l.count());
-    EXPECT_TRUE(l.get_at_idx(2).isSome());
-    EXPECT_EQ(e2.id(), l.get_at_idx(2).unwrap().id());
+    EXPECT_EQ(3, s.count());
+    EXPECT_TRUE(s.get_at_idx(2).isSome());
+    EXPECT_EQ(e2.id(), s.get_at_idx(2).unwrap().id());
 }
 
-TEST(TestLog, get_at_idx_returns_null_where_out_of_bounds)
+TEST(TestMemStorage, get_at_idx_returns_null_where_out_of_bounds)
 {
-    raft::LogCommitter l(nullptr);
-
-    l.entry_append(Entry(0, 1, UserData()));
-    EXPECT_FALSE(l.get_at_idx(2).isSome());
+    MemStorage s;
+    s.push_back(Entry(0, 1, UserData()));
+    EXPECT_FALSE(s.get_at_idx(2).isSome());
 }
 
-TEST(TestLog, append_entry_user_can_set_data_buf)
+TEST(TestMemStorage, append_entry_user_can_set_data_buf)
 {
-    raft::LogCommitter l(nullptr);
+    MemStorage s;
 
     Entry ety(1, 100, UserData("aaa", 4));
-    l.entry_append(ety);
-    bmcl::Option<const Entry&> kept = l.get_at_idx(1);
+    s.push_back(ety);
+    bmcl::Option<const Entry&> kept = s.get_at_idx(1);
     EXPECT_TRUE(kept.isSome());
     EXPECT_TRUE(kept.unwrap().isUser());
     EXPECT_EQ(ety.getUserData()->data, kept.unwrap().getUserData()->data);
 }
 
 
-TEST(TestLog, entry_append_increases_logidx)
+TEST(TestMemStorage, entry_append_increases_logidx)
 {
-    LogCommitter lc(nullptr);
-    EXPECT_EQ(0, lc.get_current_idx());
-    lc.entry_append(Entry(1, 1, UserData("aaa", 4)));
-    EXPECT_EQ(1, lc.get_current_idx());
+    MemStorage s;
+    EXPECT_EQ(0, s.get_current_idx());
+    s.push_back(Entry(1, 1, UserData("aaa", 4)));
+    EXPECT_EQ(1, s.get_current_idx());
 }
 
-TEST(TestLog, entry_is_retrieveable_using_idx)
+TEST(TestMemStorage, entry_is_retrieveable_using_idx)
 {
     std::vector<uint8_t> str = { 1, 1, 1, 1 };
     std::vector<uint8_t> str2 = { 2, 2, 2 };
 
-    LogCommitter lc(nullptr);
+    MemStorage s;
 
-    lc.entry_append(Entry(1, 1, UserData(str)));
+    s.push_back(Entry(1, 1, UserData(str)));
 
     /* different ID so we can be successful */
-    lc.entry_append(Entry(1, 2, UserData(str2)));
+    s.push_back(Entry(1, 2, UserData(str2)));
 
-    bmcl::Option<const Entry&> ety_appended = lc.get_at_idx(2);
+    bmcl::Option<const Entry&> ety_appended = s.get_at_idx(2);
     EXPECT_TRUE(ety_appended.isSome());
     EXPECT_TRUE(ety_appended.unwrap().isUser());
     EXPECT_EQ(ety_appended.unwrap().getUserData()->data, str2);
 }
 
-
-TEST(TestLog, idx_starts_at_1)
+TEST(TestMemStorage, idx_starts_at_1)
 {
-    LogCommitter lc(nullptr);
-    EXPECT_EQ(0, lc.get_current_idx());
+    MemStorage s;
+    EXPECT_EQ(0, s.get_current_idx());
 
-    lc.entry_append(Entry(1, 1, UserData("aaa", 4)));
-    EXPECT_EQ(1, lc.get_current_idx());
+    s.push_back(Entry(1, 1, UserData("aaa", 4)));
+    EXPECT_EQ(1, s.get_current_idx());
 }
 
-class TestSaver : public Saver
+TEST(TestMemStorage, delete)
 {
-public:
-    std::deque<Entry> queue;
-    void pop_back(const Entry& entry, std::size_t entry_idx) override
-    {
-        queue.push_back(entry);
-    }
-};
-
-TEST(TestLog, delete)
-{
-    TestSaver saver;
-    raft::LogCommitter l(&saver);
+    MemStorage s;
     Entry e1(0, 1, UserData()), e2(0, 2, UserData()), e3(0, 3, UserData());
 
-    l.entry_append(e1);
-    l.entry_append(e2);
-    l.entry_append(e3);
-    EXPECT_EQ(3, l.count());
+    s.push_back(e1);
+    s.push_back(e2);
+    s.push_back(e3);
 
-    l.entry_pop_back();
+    EXPECT_EQ(3, s.count());
+    EXPECT_EQ(s.get_at_idx(1)->id(), e1.id());
+    EXPECT_EQ(s.get_at_idx(2)->id(), e2.id());
+    EXPECT_EQ(s.get_at_idx(3)->id(), e3.id());
+    EXPECT_FALSE(s.get_at_idx(4).isSome());
 
-    EXPECT_EQ(saver.queue.front().id(), e3.id());
 
-    EXPECT_EQ(2, l.count());
-    EXPECT_FALSE(l.get_at_idx(3).isSome());
-    l.entry_pop_back();
-    EXPECT_EQ(1, l.count());
-    EXPECT_FALSE(l.get_at_idx(2).isSome());
-    l.entry_pop_back();
-    EXPECT_EQ(0, l.count());
-    EXPECT_FALSE(l.get_at_idx(1).isSome());
+    s.pop_back();
+    EXPECT_EQ(2, s.count());
+    EXPECT_EQ(s.get_at_idx(1)->id(), e1.id());
+    EXPECT_EQ(s.get_at_idx(2)->id(), e2.id());
+    EXPECT_FALSE(s.get_at_idx(3).isSome());
+
+    s.pop_back();
+    EXPECT_EQ(1, s.count());
+    EXPECT_EQ(s.get_at_idx(1)->id(), e1.id());
+    EXPECT_FALSE(s.get_at_idx(2).isSome());
+
+    s.pop_back();
+    EXPECT_EQ(0, s.count());
+    EXPECT_FALSE(s.get_at_idx(1).isSome());
 }
 
-TEST(TestLog, delete_onwards)
+TEST(TestMemStorage, delete_onwards)
 {
-    TestSaver saver;
-    raft::LogCommitter l(&saver);
+    MemStorage s;
     Entry e1(0, 1, UserData()), e2(0, 2, UserData()), e3(0, 3, UserData());
 
-    l.entry_append(e1);
-    l.entry_append(e2);
-    l.entry_append(e3);
-    EXPECT_EQ(3, l.count());
+    s.push_back(e1);
+    s.push_back(e2);
+    s.push_back(e3);
+    EXPECT_EQ(3, s.count());
 
     /* even 3 gets deleted */
-    l.entry_pop_back();
-    l.entry_pop_back();
-    EXPECT_EQ(1, l.count());
-    EXPECT_TRUE(l.get_at_idx(1).isSome());
-    EXPECT_EQ(e1.id(), l.get_at_idx(1).unwrap().id());
-    EXPECT_FALSE(l.get_at_idx(2).isSome());
-    EXPECT_FALSE(l.get_at_idx(3).isSome());
+    s.pop_back();
+    s.pop_back();
+    EXPECT_EQ(1, s.count());
+    EXPECT_TRUE(s.get_at_idx(1).isSome());
+    EXPECT_EQ(e1.id(), s.get_at_idx(1).unwrap().id());
+    EXPECT_FALSE(s.get_at_idx(2).isSome());
+    EXPECT_FALSE(s.get_at_idx(3).isSome());
 }
 
-TEST(TestLog, peektail)
+TEST(TestMemStorage, peektail)
 {
-    raft::LogCommitter l(nullptr);
+    MemStorage s;
     Entry e1(0, 1, UserData()), e2(0, 2, UserData()), e3(0, 3, UserData());
 
-    l.entry_append(e1);
-    l.entry_append(e2);
-    l.entry_append(e3);
-    EXPECT_EQ(3, l.count());
-    EXPECT_TRUE(l.back().isSome());
-    EXPECT_EQ(e3.id(), l.back().unwrap().id());
+    s.push_back(e1);
+    s.push_back(e2);
+    s.push_back(e3);
+    EXPECT_EQ(3, s.count());
+    EXPECT_TRUE(s.back().isSome());
+    EXPECT_EQ(e3.id(), s.back().unwrap().id());
 }
 
-TEST(TestLog, cant_append_duplicates)
+TEST(TestMemStorage, cant_append_duplicates)
 {
-    raft::LogCommitter l(nullptr);
-    l.entry_append(raft::Entry(1, 1, UserData()));
-    EXPECT_EQ(1, l.count());
-    l.entry_append(raft::Entry(1, 1, UserData()));
-    EXPECT_EQ(1, l.count());
+    MemStorage s;
+    s.push_back(raft::Entry(1, 1, UserData()));
+    EXPECT_EQ(1, s.count());
+    s.push_back(raft::Entry(1, 1, UserData()));
+    EXPECT_EQ(1, s.count());
+}
+
+TEST(TestServer, apply_entry_increments_last_applied_idx)
+{
+    Saver saver;
+    MemStorage storage;
+    storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
+
+    LogCommitter lc(&storage);
+    lc.set_commit_idx(1);
+    lc.entry_apply_one(&saver);
+    EXPECT_EQ(1, lc.get_last_applied_idx());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_we_dont_have_entry_to_apply)
 {
-    raft::LogCommitter lc(nullptr);
-    lc.entry_apply_one();
+    Saver saver;
+    MemStorage storage;
+    LogCommitter lc(&storage);
+
+    lc.entry_apply_one(&saver);
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
 {
-    raft::LogCommitter lc(nullptr);
+    Saver saver;
+    MemStorage s;
+    LogCommitter lc(&s);
 
-    auto e = lc.entry_apply_one();
+    auto e = lc.entry_apply_one(&saver);
     EXPECT_EQ(e.unwrapErr(), Error::NothingToApply);
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 
-    lc.entry_append(Entry(1, 1, raft::UserData("aaa", 4)));
-    lc.entry_apply_one();
+    s.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
+    lc.entry_apply_one(&saver);
     /* Not allowed to be applied because we haven't confirmed a majority yet */
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());

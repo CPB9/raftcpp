@@ -8,7 +8,6 @@
  */
 
 #pragma once
-#include <vector>
 #include <bmcl/Option.h>
 #include "Ids.h"
 #include "Entry.h"
@@ -31,8 +30,6 @@ enum class Error : uint8_t
     CantSend,
 };
 
-const char* to_string(Error e);
-
 enum class ReqVoteState : uint8_t
 {
     UnknownNode,
@@ -40,17 +37,8 @@ enum class ReqVoteState : uint8_t
     Granted,
 };
 
+const char* to_string(Error e);
 const char* to_string(ReqVoteState vote);
-
-enum class State : uint8_t
-{
-    Follower,
-    PreCandidate,
-    Candidate,
-    Leader
-} ;
-
-const char* to_string(State s);
 
 /** Entry message response.
  * Indicates to client if entry was committed or not. */
@@ -139,23 +127,6 @@ public:
     /** Callback for finite state machine application
     * Return Shutdown if you want the server to shutdown. */
     virtual bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) = 0;
-
-    /** Callback for persisting vote data
-    * For safety reasons this callback MUST flush the change to disk. */
-    virtual bmcl::Option<Error> persist_vote(NodeId node) = 0;
-
-    /** Callback for persisting term data
-    * For safety reasons this callback MUST flush the change to disk. */
-    virtual bmcl::Option<Error> persist_term(TermId node) = 0;
-
-    /** Callback for adding an entry to the log
-    * For safety reasons this callback MUST flush the change to disk.
-    * Return Shutdown if you want the server to shutdown. */
-    virtual bmcl::Option<Error> push_back(const Entry& entry, Index entry_idx) = 0;
-
-    /** Callback for removing the youngest entry from the log
-    * For safety reasons this callback MUST flush the change to disk. */
-    virtual void pop_back(const Entry& entry, Index entry_idx) = 0;
 
     /** Callback for catching debugging log messages */
     virtual void log(const char *buf) = 0;

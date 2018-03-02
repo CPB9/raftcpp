@@ -1,90 +1,10 @@
-/**
- * Copyright (c) 2013, Willem-Hendrik Thiart
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
- *
- * @file
- * @brief ADT for managing Raft log entries (aka entries)
- * @author Willem Thiart himself@willemthiart.com
- */
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
 #include <assert.h>
 #include <algorithm>
-
 #include "Log.h"
 
 
 namespace raft
 {
-
-Logger::Logger(): _base(0) { }
-
-Index Logger::count() const
-{
-    return _entries.size();
-}
-
-bool Logger::empty() const
-{
-    return _entries.empty();
-}
-
-Index Logger::get_current_idx() const
-{
-    return count() + _base;
-}
-
-void Logger::push_back(const Entry& c)
-{
-    _entries.emplace_back(c);
-}
-
-bmcl::Option<const Entry*> Logger::get_from_idx(Index idx, Index* n_etys) const
-{
-    assert(idx > _base);
-    /* idx starts at 1 */
-
-    if (idx <= _base || idx > get_current_idx())
-    {
-        *n_etys = 0;
-        return bmcl::None;
-    }
-
-    Index i = idx - _base - 1;
-    *n_etys = _entries.size() - i;
-    return &_entries[i];
-}
-
-bmcl::Option<const Entry&> Logger::get_at_idx(Index idx) const
-{
-    assert(idx > _base);
-    /* idx starts at 1 */
-
-    if (idx <= _base || idx > get_current_idx())
-        return bmcl::None;
-
-    Index i = idx - _base - 1;
-    return _entries[i];
-}
-
-bmcl::Option<Entry> Logger::pop_back()
-{
-    if (_entries.empty())
-        return bmcl::None;
-    Entry ety = _entries.back();
-    _entries.pop_back();
-    return ety;
-}
-
-bmcl::Option<const Entry&> Logger::back() const
-{
-    if (_entries.empty())
-        return bmcl::None;
-    return _entries.back();
-}
 
 void LogCommitter::commit_till(Index idx)
 {
@@ -102,21 +22,17 @@ bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteCh
     if (needVoteChecks && voting_change && voting_change_is_in_progress())
         return Error::OneVotingChangeOnly;
 
-    if (_saver)
-    {
-        bmcl::Option<Error> e = _saver->push_back(ety, get_current_idx() + 1);
-        if (e.isSome())
-            return e;
-    }
+    bmcl::Option<Error> e = _storage->push_back(ety);
+    if (e.isSome())
+        return e;
 
-    push_back(ety);
     if (voting_change)
         _voting_cfg_change_log_idx = get_current_idx();
 
     return bmcl::None;
 }
 
-bmcl::Result<Entry, Error> LogCommitter::entry_apply_one()
+bmcl::Result<Entry, Error> LogCommitter::entry_apply_one(ISaver* saver)
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
         return Error::NothingToApply;
@@ -129,8 +45,8 @@ bmcl::Result<Entry, Error> LogCommitter::entry_apply_one()
     const Entry& ety = etyo.unwrap();
 
     _last_applied_idx = log_idx;
-    assert(_saver);
-    bmcl::Option<Error> e = _saver->apply_log(ety, _last_applied_idx);
+    assert(saver);
+    bmcl::Option<Error> e = saver->apply_log(ety, _last_applied_idx);
     if (e.isSome())
         return e.unwrap();
 
@@ -150,7 +66,7 @@ void LogCommitter::set_commit_idx(Index idx)
 
 bmcl::Option<TermId> LogCommitter::get_last_log_term() const
 {
-    const auto& ety = back();
+    const auto& ety = _storage->back();
     if (ety.isNone())
         return bmcl::None;
     return ety->term();
@@ -159,17 +75,13 @@ bmcl::Option<TermId> LogCommitter::get_last_log_term() const
 bmcl::Option<Entry> LogCommitter::entry_pop_back()
 {
     Index idx = get_current_idx();
-    if (empty() || idx <= get_commit_idx())
+    if (_storage->empty() || idx <= get_commit_idx())
         return bmcl::None;
 
     if (idx <= _voting_cfg_change_log_idx.unwrapOr(0))
         _voting_cfg_change_log_idx.clear();
 
-    auto ety = pop_back();
-    if (ety.isNone())
-        return bmcl::None;
-    _saver->pop_back(ety.unwrap(), idx);
-    return ety;
+    return _storage->pop_back();
 }
 
 EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const
