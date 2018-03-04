@@ -260,9 +260,7 @@ TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_n
 TEST(TestServer, election_timeout_does_promote_us_to_leader_if_there_is_only_1_voting_node)
 {
     MemStorage storage;
-    raft::Server r(NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
-    r.nodes().get_node(NodeId(2))->set_voting(false);
-    EXPECT_TRUE(r.is_follower());
+    raft::Server r(NodeId(1), { NodeId(1) }, &storage, &__Sender, &__Saver);
 
     /* clock over (ie. 1000 + 1), causing new election */
     r.tick(r.timer().get_max_election_timeout());
@@ -274,7 +272,6 @@ TEST(TestServer, recv_entry_auto_commits_if_we_are_the_only_node)
 {
     MemStorage storage;
     raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
-    r.nodes().add_node(raft::NodeId(2), false);
 
     r.tick(r.timer().get_max_election_timeout());
     raft::Index ci = r.committer().get_commit_idx();
@@ -370,14 +367,18 @@ TEST(TestServer, recv_requestvote_response_increase_votes_for_me)
 TEST(TestServer, recv_requestvote_response_must_be_candidate_to_receive)
 {
     MemStorage storage;
-    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &storage, &__Sender, &__Saver);
     prepare_leader(r);
-    for (const auto& i : r.nodes().items())
-        r.nodes().get_node(i.get_id())->vote_for_me(false);
-    EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
+    EXPECT_EQ(2, r.nodes().get_nvotes_for_me(r.get_voted_for()));
 
-    r.accept_rep(raft::NodeId(2), MsgVoteRep(1, raft::ReqVoteState::Granted));
-    EXPECT_EQ(1, r.nodes().get_nvotes_for_me(r.get_voted_for()));
+    for (const auto& i : r.nodes().items())
+    {
+        if(i.has_vote_for_me())
+            continue;
+
+        r.accept_rep(i.get_id(), MsgVoteRep(r.get_current_term(), raft::ReqVoteState::Granted));
+        EXPECT_EQ(2, r.nodes().get_nvotes_for_me(r.get_voted_for()));
+    }
 }
 
 /* Reply false if term < currentTerm (§5.1) */
@@ -1365,7 +1366,7 @@ TEST(TestLeader, when_becomes_leader_all_nodes_have_nextidx_equal_to_lastlog_idx
     int i;
     for (i = 2; i <= 3; i++)
     {
-        bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(i));
+        bmcl::Option<const raft::Node&> p = r.nodes().get_node(raft::NodeId(i));
         EXPECT_TRUE(p.isSome());
         EXPECT_EQ(r.committer().get_current_idx() + 1, p->get_next_idx());
     }
@@ -1778,7 +1779,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     prepare_follower(r);
     Exchanger sender(&r);
 
-    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
+    bmcl::Option<const Node&> n = r.nodes().get_node(raft::NodeId(2));
 
     /* append entries */
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
@@ -1790,7 +1791,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     /* become leader sets next_idx to current_idx */
     prepare_leader(r);
-    EXPECT_EQ(5, node->get_next_idx());
+    EXPECT_EQ(5, n->get_next_idx());
 
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
@@ -1802,7 +1803,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.send_appendentries(node->get_id());
+    r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1814,8 +1815,8 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1));
-    EXPECT_EQ(2, node->get_next_idx());
+    r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1));
+    EXPECT_EQ(2, n->get_next_idx());
 
     /* see if new appendentries have appropriate values */
     {
@@ -1838,7 +1839,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     prepare_follower(r);
 
     Exchanger sender(&r);
-    bmcl::Option<raft::Node&> node = r.nodes().get_node(raft::NodeId(2));
+    bmcl::Option<const Node&> n = r.nodes().get_node(raft::NodeId(2));
 
     /* append entries */
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
@@ -1850,7 +1851,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     /* become leader sets next_idx to current_idx */
     prepare_leader(r);
-    EXPECT_EQ(5, node->get_next_idx());
+    EXPECT_EQ(5, n->get_next_idx());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1861,7 +1862,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     /* FIRST entry log application */
     /* send appendentries -
      * server will be waiting for response */
-    r.send_appendentries(node->get_id());
+    r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         EXPECT_TRUE(msg.isSome());
@@ -1873,8 +1874,8 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
-    EXPECT_EQ(4, node->get_next_idx());
+    r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
+    EXPECT_EQ(4, n->get_next_idx());
 
     /* see if new appendentries have appropriate values */
     {
@@ -1888,8 +1889,8 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(node->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
-    EXPECT_EQ(3, node->get_next_idx());
+    r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
+    EXPECT_EQ(3, n->get_next_idx());
 
     /* see if new appendentries have appropriate values */
     {
@@ -2014,10 +2015,11 @@ TEST(TestLeader, recv_entry_does_not_send_new_appendentries_to_slow_nodes)
     prepare_leader(r);
 
     Exchanger sender(&r);
-    sender.clear();
 
     /* make the node slow */
-    r.nodes().get_node(raft::NodeId(2))->set_next_idx(1);
+    r.accept_rep(NodeId(2), MsgAppendEntriesRep(r.get_current_term(), true, 0));
+    EXPECT_EQ(1, r.nodes().get_node(NodeId(2))->get_next_idx());
+    sender.clear();
 
     /* append entries */
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
@@ -2049,7 +2051,7 @@ TEST(TestLeader, recv_appendentries_response_failure_does_not_set_node_nextid_to
     r.send_appendentries(raft::NodeId(2));
 
     /* receive mock success response */
-    bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
+    bmcl::Option<const Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
     r.accept_rep(p->get_id(), MsgAppendEntriesRep(1, false, 0));
     EXPECT_EQ(1, p->get_next_idx());
@@ -2065,7 +2067,7 @@ TEST(TestLeader, recv_appendentries_response_increment_idx_of_node)
 
     Exchanger sender(&r);
 
-    bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
+    bmcl::Option<const raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
     EXPECT_EQ(1, p->get_next_idx());
 
@@ -2084,7 +2086,7 @@ TEST(TestLeader, recv_appendentries_response_drop_message_if_term_is_old)
     prepare_leader(r);
     EXPECT_GT(r.get_current_term(), 1);
 
-    bmcl::Option<raft::Node&> p = r.nodes().get_node(raft::NodeId(2));
+    bmcl::Option<const Node&> p = r.nodes().get_node(raft::NodeId(2));
     EXPECT_TRUE(p.isSome());
     EXPECT_EQ(1, p->get_next_idx());
 

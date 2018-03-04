@@ -49,7 +49,7 @@ TEST(TestNode, cant_get_node_we_dont_have)
 TEST(TestNode, add_node_makes_non_voting_node_voting)
 {
     raft::Nodes nodes(raft::NodeId(9), false);
-    bmcl::Option<raft::Node&> n1 = nodes.get_node(raft::NodeId(9));
+    bmcl::Option<const raft::Node&> n1 = nodes.get_node(raft::NodeId(9));
 
     EXPECT_TRUE(n1.isSome());
     EXPECT_FALSE(n1->is_voting());
