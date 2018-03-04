@@ -1,12 +1,12 @@
 #include <assert.h>
 #include <algorithm>
-#include "Log.h"
+#include "Committer.h"
 
 
 namespace raft
 {
 
-void LogCommitter::commit_till(Index idx)
+void Committer::commit_till(Index idx)
 {
     if (is_committed(idx))
         return;
@@ -14,7 +14,7 @@ void LogCommitter::commit_till(Index idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteChecks)
+bmcl::Option<Error> Committer::entry_append(const Entry& ety, bool needVoteChecks)
 {
     /* Only one voting cfg change at a time */
     bool voting_change = ety.isInternal() && ety.getInternalData()->is_voting_cfg_change();
@@ -32,7 +32,7 @@ bmcl::Option<Error> LogCommitter::entry_append(const Entry& ety, bool needVoteCh
     return bmcl::None;
 }
 
-bmcl::Result<Entry, Error> LogCommitter::entry_apply_one(ISaver* saver)
+bmcl::Result<Entry, Error> Committer::entry_apply_one(ISaver* saver)
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
         return Error::NothingToApply;
@@ -57,14 +57,14 @@ bmcl::Result<Entry, Error> LogCommitter::entry_apply_one(ISaver* saver)
     return ety;
 }
 
-void LogCommitter::set_commit_idx(Index idx)
+void Committer::set_commit_idx(Index idx)
 {
     assert(get_commit_idx() <= idx);
     assert(idx <= get_current_idx());
     _commit_idx = idx;
 }
 
-bmcl::Option<TermId> LogCommitter::get_last_log_term() const
+bmcl::Option<TermId> Committer::get_last_log_term() const
 {
     const auto& ety = _storage->back();
     if (ety.isNone())
@@ -72,7 +72,7 @@ bmcl::Option<TermId> LogCommitter::get_last_log_term() const
     return ety->term();
 }
 
-bmcl::Option<Entry> LogCommitter::entry_pop_back()
+bmcl::Option<Entry> Committer::entry_pop_back()
 {
     Index idx = get_current_idx();
     if (_storage->empty() || idx <= get_commit_idx())
@@ -84,7 +84,7 @@ bmcl::Option<Entry> LogCommitter::entry_pop_back()
     return _storage->pop_back();
 }
 
-EntryState LogCommitter::entry_get_state(const MsgAddEntryRep& r) const
+EntryState Committer::entry_get_state(const MsgAddEntryRep& r) const
 {
     bmcl::Option<const Entry&> ety = get_at_idx(r.idx);
     if (ety.isNone())

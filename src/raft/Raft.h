@@ -13,7 +13,7 @@
 #include <bmcl/Result.h>
 #include <bmcl/ArrayView.h>
 #include "Types.h"
-#include "Log.h"
+#include "Committer.h"
 #include "Node.h"
 #include "Timer.h"
 
@@ -32,14 +32,6 @@ const char* to_string(State s);
 
 class Server
 {
-    struct server_private_t
-    {
-        bmcl::Option<NodeId>    voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
-        bmcl::Option<NodeId>    current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
-        TermId                  current_term;   /**< the server's best guess of what the current term is starts at zero */
-        State                   state;          /**< follower/leader/candidate indicator */
-    };
-
     friend class Logger;
 public:
     explicit Server(NodeId id, bool isnewCluster, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new or join existing cluster ()
@@ -50,19 +42,20 @@ public:
     inline void set_saver(ISaver* saver) { _saver = saver; }
     inline const ISaver* get_saver() const { return _saver; }
 
-    inline bmcl::Option<NodeId> get_current_leader() const { return _me.current_leader; }
-    inline TermId get_current_term() const { return _me.current_term; }
-    inline bmcl::Option<NodeId> get_voted_for() const { return _me.voted_for; }
-    inline bool is_already_voted() const { return _me.voted_for.isSome(); }
+    inline bmcl::Option<NodeId> get_current_leader() const { return _current_leader; }
+    inline TermId get_current_term() const { return _current_term; }
+    inline bmcl::Option<NodeId> get_voted_for() const { return _voted_for; }
+    inline bool is_already_voted() const { return _voted_for.isSome(); }
     inline bool is_follower() const { return get_state() == State::Follower; }
     inline bool is_leader() const { return get_state() == State::Leader; }
     inline bool is_candidate() const { return get_state() == State::Candidate; }
     inline bool is_precandidate() const { return get_state() == State::PreCandidate; }
-    inline State get_state() const { return _me.state; }
+    inline State get_state() const { return _state; }
+    inline bool shutdown() const { return false; }
 
     const Nodes& nodes() const { return _nodes; }
     Nodes& nodes() { return _nodes; }
-    const LogCommitter& log() const { return _log; }
+    const Committer& committer() const { return _committer; }
     Timer& timer() { return _timer; }
     const Timer& timer() const { return _timer; }
     const IStorage* storage() const { return _storage; }
@@ -100,10 +93,14 @@ private:
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
     bool should_grant_vote(const MsgVoteReq& vr) const;
 
-    Timer _timer;
-    Nodes _nodes;
-    LogCommitter _log;
-    server_private_t _me;
+    bmcl::Option<NodeId>    _voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
+    bmcl::Option<NodeId>    _current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
+    TermId                  _current_term;   /**< the server's best guess of what the current term is starts at zero */
+    State                   _state;          /**< follower/leader/candidate indicator */
+
+    Timer     _timer;
+    Nodes     _nodes;
+    Committer _committer;
     IStorage* _storage;
     ISender*  _sender;
     ISaver*   _saver;

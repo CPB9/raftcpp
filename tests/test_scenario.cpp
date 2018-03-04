@@ -1,7 +1,7 @@
 #include <memory>
 #include <gtest/gtest.h>
 #include "raft/Raft.h"
-#include "raft/Log.h"
+#include "raft/Committer.h"
 #include "mock_send_functions.h"
 
 using namespace raft;

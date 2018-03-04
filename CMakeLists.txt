@@ -31,8 +31,8 @@ bmcl_add_library(raftcpp STATIC
     src/raft/Entry.h
     src/raft/Raft.h
     src/raft/Raft.cpp
-    src/raft/Log.h
-    src/raft/Log.cpp
+    src/raft/Committer.h
+    src/raft/Committer.cpp
     src/raft/Node.h
     src/raft/Node.cpp
     src/raft/Storage.h

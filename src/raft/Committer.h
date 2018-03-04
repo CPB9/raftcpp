@@ -14,10 +14,10 @@ enum class EntryState : uint8_t
     Committed,
 };
 
-class LogCommitter
+class Committer
 {
 public:
-    explicit LogCommitter(IStorage* storage) : _storage(storage), _commit_idx(0), _last_applied_idx(0) {}
+    explicit Committer(IStorage* storage) : _storage(storage), _commit_idx(0), _last_applied_idx(0) {}
     const IStorage* storage() const { return _storage; }
     inline Index get_commit_idx() const { return _commit_idx; }
     inline Index get_last_applied_idx() const { return _last_applied_idx; }
@@ -41,9 +41,9 @@ public:
     bmcl::Option<Entry> entry_pop_back();
 
 private:
-    IStorage* _storage;
-    Index _commit_idx;                                 /**< idx of highest log entry known to be committed */
-    Index _last_applied_idx;                           /**< idx of highest log entry applied to state machine */
+    IStorage*   _storage;
+    Index       _commit_idx;                           /**< idx of highest log entry known to be committed */
+    Index       _last_applied_idx;                     /**< idx of highest log entry applied to state machine */
     bmcl::Option<Index> _voting_cfg_change_log_idx;    /**< the log which has a voting cfg change */
 };
 

@@ -1,6 +1,6 @@
 #include <deque>
 #include <gtest/gtest.h>
-#include "raft/Log.h"
+#include "raft/Committer.h"
 #include "mock_send_functions.h"
 
 using namespace raft;
@@ -168,7 +168,7 @@ TEST(TestServer, apply_entry_increments_last_applied_idx)
     MemStorage storage;
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
 
-    LogCommitter lc(&storage);
+    Committer lc(&storage);
     lc.set_commit_idx(1);
     lc.entry_apply_one(&saver);
     EXPECT_EQ(1, lc.get_last_applied_idx());
@@ -178,7 +178,7 @@ TEST(TestLogCommitter, wont_apply_entry_if_we_dont_have_entry_to_apply)
 {
     Saver saver;
     MemStorage storage;
-    LogCommitter lc(&storage);
+    Committer lc(&storage);
 
     lc.entry_apply_one(&saver);
     EXPECT_EQ(0, lc.get_last_applied_idx());
@@ -189,7 +189,7 @@ TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
 {
     Saver saver;
     MemStorage s;
-    LogCommitter lc(&s);
+    Committer lc(&s);
 
     auto e = lc.entry_apply_one(&saver);
     EXPECT_EQ(e.unwrapErr(), Error::NothingToApply);
