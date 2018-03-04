@@ -1155,6 +1155,7 @@ TEST(TestFollower, remove_me)
     EXPECT_TRUE(e.isOk());
     EXPECT_EQ(2, r.nodes().count());
     EXPECT_FALSE(r.nodes().get_my_node().isSome());
+    EXPECT_TRUE(r.is_shutdown());
 }
 
 /* Candidate 5.2 */
@@ -2261,12 +2262,13 @@ TEST(TestLeader, remove_other_node)
         EXPECT_EQ(log_count + 1, storage.count());
         const Entry& last = storage.back().unwrap();
         EXPECT_TRUE(last.isInternal());
-        EXPECT_EQ(InternalData::DemoteNode, last.getInternalData()->type);
+        EXPECT_EQ(InternalData::RemoveNode, last.getInternalData()->type);
     }
 
     {
         auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1));
-        EXPECT_FALSE(e.isSome());
+        EXPECT_TRUE(e.isSome());
+        EXPECT_EQ(Error::NodeUnknown, e.unwrap());
     }
 
     {
@@ -2276,27 +2278,25 @@ TEST(TestLeader, remove_other_node)
 
     r.tick();
 
-    EXPECT_EQ(3, r.nodes().count());
-    EXPECT_TRUE(r.nodes().get_node(NodeId(2)).isSome());
-    EXPECT_FALSE(r.nodes().get_node(NodeId(2))->is_voting());
+    EXPECT_EQ(2, r.nodes().count());
+    EXPECT_FALSE(r.nodes().get_node(NodeId(2)).isSome());
 }
 
 TEST(TestLeader, remove_me)
 {
     MemStorage storage;
-    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &storage, &__Sender, &__Saver);
     prepare_leader(r);
     EXPECT_TRUE(r.get_current_leader().isSome());
 
     TermId t = r.get_current_term();
-    NodeId leader = r.get_current_leader().unwrap();
 
     {
-        Entry ety = Entry::remove_node (t, 0, r.nodes().get_my_id());
-        auto e = r.accept_req(leader, MsgAppendEntriesReq(t, 0, t - 1, 4, 1, &ety));
+        auto e = r.remove_node(1, r.nodes().get_my_id());
+        EXPECT_FALSE(e.isErr());
         r.tick();
-        EXPECT_TRUE(e.isOk());
-        EXPECT_EQ(1, r.nodes().count());
+        EXPECT_FALSE(r.is_shutdown());
+        EXPECT_EQ(2, r.nodes().count());
         EXPECT_FALSE(r.nodes().get_node(r.nodes().get_my_id()).isSome());
     }
 
@@ -2305,5 +2305,11 @@ TEST(TestLeader, remove_me)
         EXPECT_FALSE(e.isSome());
     }
 
+        {
+        auto e = r.accept_rep(NodeId(3), MsgAppendEntriesRep(t, true, 1));
+        EXPECT_FALSE(e.isSome());
+    }
+
     r.tick();
+    EXPECT_TRUE(r.is_shutdown());
 }

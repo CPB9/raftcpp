@@ -33,8 +33,6 @@ struct InternalData
         AddNode,
         DemoteNode,
         RemoveNode,
-        ChangeCfg,
-        ChangeCfgFinish,
     };
 
     InternalData(Type type, NodeId node) : type(type), node(node){}

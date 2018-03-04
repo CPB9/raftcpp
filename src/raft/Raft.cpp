@@ -83,6 +83,7 @@ void Server::become_leader()
 
     set_state(State::Leader);
     _timer.reset_elapsed();
+    _current_leader = _nodes.get_my_id();
 
     for (const Node& i: _nodes.items())
     {
@@ -215,6 +216,8 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
         case InternalData::RemoveNode:
         {
             _nodes.remove_node(id);
+            if (_nodes.is_me(id))
+                set_state(State::Shutdown);
         }
         break;
         default:
@@ -330,6 +333,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
 
     if (_current_term == ae.term)
     {
+        assert(!is_leader());
         if (is_candidate() || is_precandidate())
             become_follower();
     }
@@ -401,6 +405,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         {
             if (e.unwrap() == Error::Shutdown)
             {
+                set_state(State::Shutdown);
                 //return MsgAppendEntriesRep(current_term, false, node_current_idx, 0);
                 return Error::Shutdown;
             }
@@ -548,6 +553,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
         break;
 
     case ReqVoteState::UnknownNode:
+        set_state(State::Shutdown);
         break;
 
     default:
@@ -568,9 +574,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::remove_node(EntryId id, NodeId nodei
     bmcl::Option<const Node&> node = _nodes.get_node(nodeid);
     if (node.isNone())
         return Error::NodeUnknown;
-    if (!node->is_voting())
-        return accept_entry(Entry::remove_node(_current_term, id, nodeid));
-    return accept_entry(Entry::demote_node(_current_term, id, nodeid));
+    return accept_entry(Entry::remove_node(_current_term, id, nodeid));
 }
 
 bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const UserData& data)
