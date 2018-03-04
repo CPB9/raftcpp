@@ -26,7 +26,8 @@ enum class State : uint8_t
     Follower,
     PreCandidate,
     Candidate,
-    Leader
+    Leader,
+    Shutdown,
 };
 const char* to_string(State s);
 
@@ -46,12 +47,13 @@ public:
     inline TermId get_current_term() const { return _current_term; }
     inline bmcl::Option<NodeId> get_voted_for() const { return _voted_for; }
     inline bool is_already_voted() const { return _voted_for.isSome(); }
+
     inline bool is_follower() const { return get_state() == State::Follower; }
     inline bool is_leader() const { return get_state() == State::Leader; }
     inline bool is_candidate() const { return get_state() == State::Candidate; }
     inline bool is_precandidate() const { return get_state() == State::PreCandidate; }
+    inline bool is_shutdown() const { return get_state() == State::Shutdown; }
     inline State get_state() const { return _state; }
-    inline bool shutdown() const { return false; }
 
     const Nodes& nodes() const { return _nodes; }
     const Committer& committer() const { return _committer; }
@@ -63,7 +65,7 @@ public:
 
     bmcl::Result<MsgAppendEntriesRep, Error> accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r);
-    MsgVoteRep accept_req(NodeId nodeid, const MsgVoteReq& vr);
+    bmcl::Result<MsgVoteRep, Error> accept_req(NodeId nodeid, const MsgVoteReq& vr);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgVoteRep& r);
 
     bmcl::Result<MsgAddEntryRep, Error> add_entry(EntryId id, const UserData& data);

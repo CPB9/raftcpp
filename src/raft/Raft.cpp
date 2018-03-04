@@ -146,6 +146,9 @@ void Server::become_follower()
 
 bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_period)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     _timer.add_elapsed(elapsed_since_last_period);
 
     /* Only one voting node means it's safe for us to become the leader */
@@ -225,6 +228,9 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     bmcl::Option<Node&> node = _nodes.get_node(nodeid);
     __log("received appendentries response %s from %d ci:%d rci:%d", r.success ? "SUCCESS" : "fail", nodeid, _committer.get_current_idx(), r.current_idx);
 
@@ -309,6 +315,9 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
 bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     if (0 < ae.n_entries)
         __log("recvd appendentries t:%d from %d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
@@ -452,8 +461,11 @@ MsgVoteRep Server::prepare_requestvote_response_t(NodeId candidate, ReqVoteState
     return MsgVoteRep(get_current_term(), vote);
 }
 
-MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& r)
+bmcl::Result<MsgVoteRep, Error> Server::accept_req(NodeId nodeid, const MsgVoteReq& r)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     if (!r.isPre && get_current_term() < r.term)
     {
         bmcl::Option<Error> e = set_current_term(r.term);
@@ -493,6 +505,9 @@ MsgVoteRep Server::accept_req(NodeId nodeid, const MsgVoteReq& r)
 
 bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgVoteRep& r)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     __log("node %d responded to requestvote status:%s ct:%d rt:%d", nodeid, to_string(r.vote_granted), _current_term, r.term);
 
     if (!is_candidate() && !is_precandidate())
@@ -565,6 +580,9 @@ bmcl::Result<MsgAddEntryRep, Error> Server::add_entry(EntryId id, const UserData
 
 bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
 {
+    if (is_shutdown())
+        return Error::Shutdown;
+
     if (!is_leader())
         return Error::NotLeader;
 
