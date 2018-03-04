@@ -32,6 +32,7 @@ const char* to_string(State s)
     case State::PreCandidate: return "precandidate";
     case State::Candidate: return "candidate";
     case State::Leader: return "leader";
+    case State::Shutdown: return "shutdown";
     }
     return "unknown";
 }
