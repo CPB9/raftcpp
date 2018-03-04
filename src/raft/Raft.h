@@ -54,7 +54,6 @@ public:
     inline bool shutdown() const { return false; }
 
     const Nodes& nodes() const { return _nodes; }
-    Nodes& nodes() { return _nodes; }
     const Committer& committer() const { return _committer; }
     Timer& timer() { return _timer; }
     const Timer& timer() const { return _timer; }
