@@ -436,7 +436,7 @@ bool Server::should_grant_vote(const MsgVoteReq& vr) const
         return false;
 
     /* TODO: if voted for is candiate return 1 (if below checks pass) */
-    if (is_already_voted())
+    if (!vr.isPre && is_already_voted())
         return false;
 
     /* Below we check if log is more up-to-date... */
@@ -493,12 +493,12 @@ bmcl::Result<MsgVoteRep, Error> Server::accept_req(NodeId nodeid, const MsgVoteR
         return prepare_requestvote_response_t(nodeid, ReqVoteState::NotGranted);
     }
 
-    /* It shouldn't be possible for a leader or candidate to grant a vote
-        * Both states would have voted for themselves */
-    assert(!is_leader() && !is_candidate());
-
     if (r.isPre)
         return prepare_requestvote_response_t(nodeid, ReqVoteState::Granted);
+
+    /* It shouldn't be possible for a leader or candidate to grant a vote
+        * Both states would have voted for themselves */
+    assert(is_follower() || is_precandidate());
 
     _current_leader.clear();
     _timer.reset_elapsed();
