@@ -77,7 +77,7 @@ Saver __Saver;
 TEST(TestServer, currentterm_defaults_to_0)
 {
     MemStorage storage;
-    raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
+    raft::Server r(NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
     EXPECT_EQ(0, r.get_current_term());
 }
 

@@ -49,25 +49,29 @@ void Server::__log(const char *fmt, ...) const
 
 Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, isNewCluster), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
 {
-    _current_term = TermId(0);
+    _current_term = _storage->term();
+    _voted_for = _storage->vote();
     become_follower();
     if (isNewCluster)
     {
-        _committer.entry_append(Entry::add_node(_current_term, 0, _nodes.get_my_id()));
+        become_candidate();
         tick();
         assert(is_leader());
+        add_node(0, _nodes.get_my_id());
     }
 }
 
 Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, members), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
 {
-    _current_term = TermId(0);
+    _current_term = _storage->term();
+    _voted_for = _storage->vote();
     become_follower();
     if (_nodes.count() == 1)
     {
-        _committer.entry_append(Entry::add_node(_current_term, 0, _nodes.get_my_id()));
+        become_candidate();
         tick();
         assert(is_leader());
+        add_node(0, _nodes.get_my_id());
     }
     else
     {
