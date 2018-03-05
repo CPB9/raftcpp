@@ -2290,31 +2290,45 @@ TEST(TestLeader, remove_other_node)
 TEST(TestLeader, remove_me)
 {
     MemStorage storage;
-    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &storage, &__Sender, &__Saver);
+    raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &storage, nullptr, &__Saver);
+    Exchanger sender(&r);
     prepare_leader(r);
     EXPECT_TRUE(r.get_current_leader().isSome());
 
     TermId t = r.get_current_term();
 
     {
+        sender.clear();
         auto e = r.remove_node(1, r.nodes().get_my_id());
         EXPECT_FALSE(e.isErr());
         r.tick();
         EXPECT_FALSE(r.is_shutdown());
         EXPECT_EQ(2, r.nodes().count());
         EXPECT_FALSE(r.nodes().get_node(r.nodes().get_my_id()).isSome());
+
+        bmcl::Option<msg_t> msg;
+
+        msg = sender.poll_msg_data(r);
+        EXPECT_TRUE(msg.isSome());
+
+        msg = sender.poll_msg_data(r);
+        EXPECT_TRUE(msg.isSome());
+
+        msg = sender.poll_msg_data(r);
+        EXPECT_FALSE(msg.isSome());
     }
 
     {
-        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 1));
+        auto e = r.accept_rep(NodeId(2), MsgAppendEntriesRep(t, true, 2));
         EXPECT_FALSE(e.isSome());
     }
 
-        {
-        auto e = r.accept_rep(NodeId(3), MsgAppendEntriesRep(t, true, 1));
+    {
+        auto e = r.accept_rep(NodeId(3), MsgAppendEntriesRep(t, true, 2));
         EXPECT_FALSE(e.isSome());
     }
 
+    r.tick();
     r.tick();
     EXPECT_TRUE(r.is_shutdown());
 }
