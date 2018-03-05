@@ -71,6 +71,7 @@ public:
     bmcl::Result<MsgAddEntryRep, Error> add_entry(EntryId id, const UserData& data);
     bmcl::Result<MsgAddEntryRep, Error> add_node(EntryId id, NodeId node);
     bmcl::Result<MsgAddEntryRep, Error> remove_node(EntryId id, NodeId node);
+    bmcl::Option<Error> start_election();
 
     bmcl::Option<Error> send_appendentries(NodeId node);
     bmcl::Option<Error> send_smth_for(NodeId node, ISender* sender);

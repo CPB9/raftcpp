@@ -598,12 +598,12 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
         return r.unwrap();
 
     /* if we're the only node, we can consider the entry committed */
-    if (1 == _nodes.get_num_voting_nodes())
+    if (_nodes.is_me_the_only_voting())
         _committer.commit_all();
 
     for (const Node& i: _nodes.items())
     {
-        if (i.is_me() || !i.is_voting())
+        if (i.is_me())
             continue;
 
         /* Only send new entries.
@@ -843,5 +843,12 @@ void Server::sync_log_and_nodes()
     me->set_next_idx(_committer.get_current_idx() + 1);
 }
 
+bmcl::Option<Error> Server::start_election()
+{
+    if (!is_follower())
+        return Error::NotFollower;
+    become_candidate();
+    return bmcl::None;
+}
 
 }

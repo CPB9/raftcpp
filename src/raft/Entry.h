@@ -39,10 +39,20 @@ struct InternalData
     Type type;
     NodeId node;
 
-    //inline bool is_voting_cfg_change() const { return type != AddNonVotingNode && type != type != AddNonVotingNode; }
-    inline bool is_voting_cfg_change() const { return true; }
-    inline bool is_cfg_change() const { return true; }
+    inline bool is_voting_cfg_change() const { return type == AddNonVotingNode || type == RemoveNode || type == DemoteNode; }
 };
+
+inline const char* to_string(InternalData::Type type)
+{
+    switch (type)
+    {
+    case InternalData::AddNonVotingNode: return "add nonvoting";
+    case InternalData::AddNode: return "add voting";
+    case InternalData::DemoteNode: return "demote";
+    case InternalData::RemoveNode: return "remove";
+    }
+    return "unknown";
+}
 
 /** Entry that is stored in the server's entry log. */
 class Entry
