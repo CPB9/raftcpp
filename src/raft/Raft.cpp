@@ -90,6 +90,9 @@ void Server::become_leader()
     _timer.reset_elapsed();
     _current_leader = _nodes.get_my_id();
 
+    auto r = accept_entry(Entry::add_noop(_current_term, 0));
+    assert(r.isOk());
+
     for (const Node& i: _nodes.items())
     {
         Node& n = _nodes.get_node(i.get_id()).unwrap();
@@ -224,6 +227,7 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
             if (_nodes.is_me(id))
                 set_state(State::Shutdown);
         }
+        case  InternalData::Noop:
         break;
         default:
             assert(0);
@@ -660,6 +664,9 @@ void Server::pop_log(const Entry& ety)
     }
     break;
 
+    case InternalData::Noop:
+    break;
+
     default:
         assert(false);
         break;
@@ -705,6 +712,9 @@ bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
         if (node.isSome())
             _nodes.remove_node(node->get_id());
     break;
+
+    case InternalData::Noop:
+        break;
 
     default:
         assert(false);

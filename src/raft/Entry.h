@@ -33,6 +33,7 @@ struct InternalData
         AddNode,
         DemoteNode,
         RemoveNode,
+        Noop,
     };
 
     InternalData(Type type, NodeId node) : type(type), node(node){}
@@ -75,6 +76,7 @@ public:
     static Entry remove_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::RemoveNode, node)); }
     static Entry demote_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::DemoteNode, node)); }
     static Entry add_nonvoting_node(TermId term, EntryId id, NodeId node) { return Entry(term, id, InternalData(InternalData::AddNonVotingNode, node)); }
+    static Entry add_noop(TermId term, EntryId id) { return Entry(term, id, InternalData(InternalData::Noop, NodeId(0))); }
     static Entry user_empty(TermId term, EntryId id) { return Entry(term, id, UserData()); }
 };
 
