@@ -57,7 +57,7 @@ Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender,
         become_candidate();
         tick();
         assert(is_leader());
-        add_node(0, id);
+        accept_entry(Entry::add_node(_current_term, 0, id));
     }
     else
     {
@@ -76,7 +76,7 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, IS
         become_candidate();
         tick();
         assert(is_leader());
-        add_node(0, id);
+        accept_entry(Entry::add_node(_current_term, 0, id));
     }
     else
     {
@@ -702,11 +702,8 @@ bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
     switch (cmd.type)
     {
     case InternalData::AddNonVotingNode:
-        if (!_nodes.is_me(id) && node.isNone())
-        {
-            const Node& n = _nodes.add_node(id, false);
-            assert(!n.is_voting());
-        }
+        if (node.isNone())
+            _nodes.add_node(id, false);
     break;
 
     case InternalData::AddNode:
@@ -720,8 +717,7 @@ bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
     break;
 
     case InternalData::RemoveNode:
-        if (node.isSome())
-            _nodes.remove_node(node->get_id());
+        _nodes.remove_node(id);
     break;
 
     case InternalData::Noop:
