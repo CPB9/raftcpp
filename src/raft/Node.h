@@ -70,8 +70,7 @@ class Nodes
 {
 public:
     using Items = std::vector<Node>;
-    Nodes(NodeId id, bool isVoting);
-    Nodes(NodeId id, bmcl::ArrayView<NodeId> nodes);
+    Nodes(NodeId id);
     inline std::size_t count() const { return _nodes.size(); }
     inline const Items& items() const { return _nodes; }
     inline NodeId get_my_id() const { return _me; }
@@ -83,6 +82,7 @@ public:
     bmcl::Option<Node&> get_node(NodeId id);
     bmcl::Option<const Node&> get_my_node() const;
     Node& add_node(NodeId id, bool is_voting);
+    Node& add_my_node(bool is_voting);
     void remove_node(NodeId id);
     bool is_me_the_only_voting() const;
     bool is_me_candidate_ready() const;

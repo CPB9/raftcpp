@@ -5,17 +5,8 @@
 namespace raft
 {
 
-Nodes::Nodes(NodeId id, bool isVoting) : _me(id)
+Nodes::Nodes(NodeId id) : _me(id)
 {
-    Node& r = add_node(id, true);
-    r.set_voting(isVoting);
-}
-
-Nodes::Nodes(NodeId id, bmcl::ArrayView<NodeId> nodes): _me(id)
-{
-    add_node(id, true);
-    for (const auto& i : nodes)
-        add_node(i, true);
 }
 
 void Nodes::reset_all_votes()
@@ -74,6 +65,11 @@ Node& Nodes::add_node(NodeId id, bool is_voting)
     return *std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& n) { return n.get_id() == id; });
 }
 
+Node& Nodes::add_my_node(bool is_voting)
+{
+    return add_node(_me, is_voting);
+}
+
 void Nodes::remove_node(NodeId id)
 {
     const auto i = std::find_if(_nodes.begin(), _nodes.end(), [id](const Node& i) {return i.get_id() == id; });
@@ -116,21 +112,18 @@ bool Nodes::is_committed(Index idx) const
 
 bool Nodes::is_me_the_only_voting() const
 {
-    if (get_num_voting_nodes() > 1)
-        return false;
-
     bmcl::Option<const Node&> node = get_my_node();
-    return node.isSome() && node->is_voting();
+    if (node.isNone() || !node->is_voting())
+        return false;
+    return (get_num_voting_nodes() == 1);
 }
 
 bool Nodes::is_me_candidate_ready() const
 {
-    if (get_num_voting_nodes() <= 1)
-        return false;
-
     bmcl::Option<const Node&> node = get_my_node();
-    return node.isSome() && node->is_voting();
-
+    if (node.isNone() || !node->is_voting())
+        return false;
+    return (get_num_voting_nodes() > 1);
 }
 
 }

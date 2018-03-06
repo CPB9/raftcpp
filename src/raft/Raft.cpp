@@ -47,34 +47,45 @@ void Server::__log(const char *fmt, ...) const
     _saver->log(buf);
 }
 
-Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, isNewCluster), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
 {
     _current_term = _storage->term();
     _voted_for = _storage->vote();
-    become_follower();
     if (isNewCluster)
     {
+        _nodes.add_my_node(true);
         become_candidate();
         tick();
         assert(is_leader());
-        add_node(0, _nodes.get_my_id());
-    }
-}
-
-Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id, members), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
-{
-    _current_term = _storage->term();
-    _voted_for = _storage->vote();
-    become_follower();
-    if (_nodes.count() == 1)
-    {
-        become_candidate();
-        tick();
-        assert(is_leader());
-        add_node(0, _nodes.get_my_id());
+        add_node(0, id);
     }
     else
     {
+        become_follower();
+    }
+}
+
+Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
+{
+    _current_term = _storage->term();
+    _voted_for = _storage->vote();
+    if (members.size() == 1)
+    {   /*equivalent to Server(id, isNewCluster=true)*/
+        assert(*members.begin() == id);
+        _nodes.add_my_node(true);
+        become_candidate();
+        tick();
+        assert(is_leader());
+        add_node(0, id);
+    }
+    else
+    {
+        for (const auto& i : members)
+        {
+            _nodes.add_node(i, true);
+        }
+        assert(_nodes.get_my_node().isSome());
+        become_follower();
     }
 }
 
