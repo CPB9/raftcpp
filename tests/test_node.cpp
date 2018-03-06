@@ -107,3 +107,20 @@ TEST(TestNode, remove_node)
     nodes.remove_node(NodeId(3));
     EXPECT_FALSE(nodes.get_node(NodeId(3)).isSome());
 }
+
+TEST(TestNode, Rediness)
+{
+    Nodes nodes(NodeId(1));
+    nodes.add_my_node(false);
+    nodes.add_node(NodeId(2), true);
+    EXPECT_FALSE(nodes.is_me_candidate_ready());
+    EXPECT_FALSE(nodes.is_me_the_only_voting());
+
+    nodes.get_node(NodeId(1))->set_voting(true);
+    nodes.get_node(NodeId(2))->set_voting(false);
+    EXPECT_FALSE(nodes.is_me_candidate_ready());
+    EXPECT_TRUE(nodes.is_me_the_only_voting());
+
+    nodes.add_node(NodeId(3), true);
+    EXPECT_TRUE(nodes.is_me_candidate_ready());
+}
