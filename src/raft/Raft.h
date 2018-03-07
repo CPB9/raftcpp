@@ -61,7 +61,7 @@ public:
     const Timer& timer() const { return _timer; }
     const IStorage* storage() const { return _storage; }
 
-    bmcl::Option<Error> tick(std::chrono::milliseconds elapsed = std::chrono::milliseconds(0));
+    bmcl::Option<Error> tick(Time elapsed = Time(0));
     bmcl::Option<Error> apply_one();
     bmcl::Option<Error> apply_all(Index max_count = Index(-1));
 

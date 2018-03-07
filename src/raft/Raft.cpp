@@ -164,7 +164,7 @@ void Server::become_follower()
     __log("randomize election timeout to %d", _timer.get_election_timeout_rand());
 }
 
-bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_period)
+bmcl::Option<Error> Server::tick(Time elapsed_since_last_period)
 {
     if (is_shutdown())
         return Error::Shutdown;

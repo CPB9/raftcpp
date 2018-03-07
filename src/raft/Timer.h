@@ -13,30 +13,32 @@
 namespace raft
 {
 
+using Time = std::chrono::milliseconds;
+
 class Timer
 {
     friend class Server;
 public:
-    Timer();
-    void set_timeout(std::chrono::milliseconds msec, std::size_t factor);
+    Timer(Time ping = Time(200), std::size_t election_factor = 5);
+    void set_timeout(Time ping, std::size_t election_factor);
 
     bool is_time_to_elect() const { return election_timeout_rand <= timeout_elapsed; }
     bool is_time_to_ping() const { return request_timeout <= timeout_elapsed; }
-    inline std::chrono::milliseconds get_timeout_elapsed() const { return timeout_elapsed; }
-    inline std::chrono::milliseconds get_request_timeout() const { return request_timeout; }
-    inline std::chrono::milliseconds get_election_timeout() const { return election_timeout; }
-    inline std::chrono::milliseconds get_election_timeout_rand() const { return election_timeout_rand; }
-    inline std::chrono::milliseconds get_max_election_timeout() const { return std::chrono::milliseconds(2 * get_election_timeout().count()); }
+    inline Time get_timeout_elapsed() const { return timeout_elapsed; }
+    inline Time get_request_timeout() const { return request_timeout; }
+    inline Time get_election_timeout() const { return election_timeout; }
+    inline Time get_election_timeout_rand() const { return election_timeout_rand; }
+    inline Time get_max_election_timeout() const { return Time(2 * get_election_timeout().count()); }
 
 private:
-    inline void add_elapsed(std::chrono::milliseconds msec) { timeout_elapsed += msec; }
-    inline void reset_elapsed() { timeout_elapsed = std::chrono::milliseconds(0); }
+    inline void add_elapsed(Time elapsed) { timeout_elapsed += elapsed; }
+    inline void reset_elapsed() { timeout_elapsed = Time(0); }
     void randomize_election_timeout();
 
-    std::chrono::milliseconds timeout_elapsed;          /**< amount of time left till timeout */
-    std::chrono::milliseconds request_timeout;
-    std::chrono::milliseconds election_timeout;
-    std::chrono::milliseconds election_timeout_rand;
+    Time timeout_elapsed;          /**< amount of time left till timeout */
+    Time request_timeout;
+    Time election_timeout;
+    Time election_timeout_rand;
 };
 
 }

@@ -67,7 +67,7 @@ class Nodes
 public:
     using Items = std::vector<Node>;
     Nodes(NodeId id);
-    inline std::size_t count() const { return _nodes.size(); }
+    inline NodeCount count() const { return _nodes.size(); }
     inline const Items& items() const { return _nodes; }
     inline NodeId get_my_id() const { return _me; }
     inline bool is_me(NodeId id) const { return _me == id; }
@@ -82,10 +82,10 @@ public:
     void remove_node(NodeId id);
     bool is_me_the_only_voting() const;
     bool is_me_candidate_ready() const;
-    std::size_t get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
-    std::size_t get_num_voting_nodes() const;
+    NodeCount get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const;
+    NodeCount get_num_voting_nodes() const;
     bool votes_has_majority(bmcl::Option<NodeId> voted_for) const;
-    static bool votes_has_majority(std::size_t num_nodes, std::size_t nvotes);
+    static bool votes_has_majority(NodeCount num_nodes, NodeCount nvotes);
     bool is_committed(Index idx) const;
 private:
     NodeId _me;

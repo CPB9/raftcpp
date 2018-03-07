@@ -14,17 +14,17 @@
 namespace raft
 {
 
-Timer::Timer()
+Timer::Timer(Time ping, std::size_t election_factor)
 {
-    timeout_elapsed = std::chrono::milliseconds(0);
-    set_timeout(std::chrono::milliseconds(200), 5);
+    timeout_elapsed = Time(0);
+    set_timeout(ping, election_factor);
     randomize_election_timeout();
 }
 
-void Timer::set_timeout(std::chrono::milliseconds msec, std::size_t factor)
+void Timer::set_timeout(Time ping, std::size_t election_factor)
 {
-    request_timeout = msec;
-    election_timeout = msec * factor;
+    request_timeout = ping;
+    election_timeout = ping * election_factor;
     randomize_election_timeout();
 }
 
@@ -34,7 +34,7 @@ void Timer::randomize_election_timeout()
     std::random_device rd; // obtain a random number from hardware
     std::mt19937 eng(rd()); // seed the generator
     std::uniform_int_distribution<std::size_t> distr(election_timeout.count(), 2*election_timeout.count()); // define the range
-    election_timeout_rand = std::chrono::milliseconds(distr(eng));
+    election_timeout_rand = Time(distr(eng));
 }
 
 }

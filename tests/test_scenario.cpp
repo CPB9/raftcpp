@@ -21,12 +21,12 @@ TEST(TestScenario, leader_appears)
         storages.emplace_back(std::make_shared<raft::MemStorage>());
         servers.emplace_back(std::make_shared<raft::Server>(i, set, storages.back().get(), nullptr, &saver));
         raft::Server& rx = *servers.back();
-        rx.timer().set_timeout(std::chrono::milliseconds(100), 5);
+        rx.timer().set_timeout(Time(100), 5);
         sender.add(&rx);
     }
 
     /* NOTE: important for 1st node to send vote request before others */
-    //r[0].raft_periodic(std::chrono::milliseconds(1000));
+    //r[0].raft_periodic(Time(1000));
 
     std::size_t i;
     for (i = 0; i < 20; i++)
@@ -50,7 +50,7 @@ one_more_time:
 
         for (const auto& j : servers)
         {
-            j->tick(std::chrono::milliseconds(100));
+            j->tick(Time(100));
         }
     }
 

@@ -131,14 +131,14 @@ TEST(TestServer, starts_with_election_timeout_of_1000ms)
 {
     MemStorage storage;
     raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
-    EXPECT_EQ(std::chrono::milliseconds(1000), r.timer().get_election_timeout());
+    EXPECT_EQ(Time(1000), r.timer().get_election_timeout());
 }
 
 TEST(TestServer, starts_with_request_timeout_of_200ms)
 {
     MemStorage storage;
     raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
-    EXPECT_EQ(std::chrono::milliseconds(200), r.timer().get_request_timeout());
+    EXPECT_EQ(Time(200), r.timer().get_request_timeout());
 }
 
 TEST(TestServer, append_entry_means_entry_gets_current_term)
@@ -201,13 +201,13 @@ TEST(TestServer, periodic_elapses_election_timeout)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
     /* we don't want to set the timeout to zero */
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
+    r.timer().set_timeout(Time(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.tick(std::chrono::milliseconds(0));
+    r.tick(Time(0));
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.tick(std::chrono::milliseconds(100));
+    r.tick(Time(100));
     EXPECT_EQ(100, r.timer().get_timeout_elapsed().count());
 }
 
@@ -425,8 +425,8 @@ TEST(TestServer, recv_requestvote_reset_timeout)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
     prepare_follower(r);
 
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
-    r.tick(std::chrono::milliseconds(900));
+    r.timer().set_timeout(Time(200), 5);
+    r.tick(Time(900));
 
     auto rvr = r.accept_req(raft::NodeId(2), MsgVoteReq(r.get_current_term() + 1, 1, 0, false));
     EXPECT_TRUE(rvr.isOk());
@@ -1061,10 +1061,10 @@ TEST(TestFollower, becoming_candidate_resets_election_timeout)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
+    r.timer().set_timeout(Time(200), 5);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
-    r.tick(std::chrono::milliseconds(900));
+    r.tick(Time(900));
     EXPECT_EQ(900, r.timer().get_timeout_elapsed().count());
 
     prepare_candidate(r);
@@ -1076,9 +1076,9 @@ TEST(TestFollower, recv_appendentries_resets_election_timeout)
 {
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
+    r.timer().set_timeout(Time(200), 5);
 
-    r.tick(std::chrono::milliseconds(900));
+    r.tick(Time(900));
 
     auto aer = r.accept_req(raft::NodeId(1), MsgAppendEntriesReq(1));
     EXPECT_TRUE(aer.isOk());
@@ -2012,10 +2012,10 @@ TEST(TestLeader, recv_entry_resets_election_timeout)
 {
     MemStorage storage;
     raft::Server r(raft::NodeId(1), true, &storage, &__Sender, &__Saver);
-    r.timer().set_timeout(std::chrono::milliseconds(200), 5);
+    r.timer().set_timeout(Time(200), 5);
     prepare_leader(r);
 
-    r.tick(std::chrono::milliseconds(900));
+    r.tick(Time(900));
 
     /* receive entry */
     auto cr = r.add_entry(1, raft::UserData("aaa", 4));
@@ -2209,7 +2209,6 @@ TEST(TestLeader, sends_empty_appendentries_every_request_timeout)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2), NodeId(3) }, &storage, &__Sender, &__Saver);
     Exchanger sender(&r);
 
-    r.timer().set_timeout(std::chrono::milliseconds(500), 2);
     EXPECT_EQ(0, r.timer().get_timeout_elapsed().count());
 
     prepare_leader(r);

@@ -16,5 +16,6 @@ enum class NodeId : std::size_t {};
 using TermId = std::size_t;
 using Index = std::size_t;
 using EntryId = std::size_t;
+using NodeCount = std::size_t;
 
 }
