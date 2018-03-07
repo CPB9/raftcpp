@@ -196,10 +196,10 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
         if (_nodes.is_me_candidate_ready())
             become_precandidate();
     }
-    return apply_one().unwrapErrOption();
+    return apply_one();
 }
 
-bmcl::Result<bool, Error> Server::apply_one()
+bmcl::Option<Error> Server::apply_one()
 {
     if (is_shutdown())
         return Error::Shutdown;
@@ -208,7 +208,7 @@ bmcl::Result<bool, Error> Server::apply_one()
     if (r.isErr())
     {
         if (r.unwrapErr() == Error::NothingToApply)
-            return false;
+            return bmcl::None;
         return r.unwrapErr();
     }
 
@@ -222,9 +222,8 @@ bmcl::Result<bool, Error> Server::apply_one()
         {
         case InternalData::AddNode:
         {
-            assert(node.isSome());
-            if (node.isSome())
-                node->set_has_sufficient_logs();
+            node = _nodes.add_node(id, true);
+            node->set_has_sufficient_logs();
         }
         break;
         case InternalData::DemoteNode:
@@ -253,19 +252,17 @@ bmcl::Result<bool, Error> Server::apply_one()
     }
 
     __log("applied log: %d, id: %d", _committer.get_last_applied_idx(), ety.id());
-    return true;
+    return bmcl::None;
 }
 
 bmcl::Option<Error> Server::apply_all(Index max_count)
 {
     Index i = 0;
-    while(i < max_count)
+    while(i < max_count && _committer.has_not_applied())
     {
-        auto r = apply_one();
-        if (r.isErr())
-            return r.unwrapErr();
-        if (!r.unwrap())
-            return bmcl::None;
+        bmcl::Option<Error> e = apply_one();
+        if (e.isSome())
+            return e;
         ++i;
     }
     return bmcl::None;

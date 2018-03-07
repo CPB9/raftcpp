@@ -1159,6 +1159,39 @@ TEST(TestFollower, remove_me)
     EXPECT_TRUE(r.is_shutdown());
 }
 
+TEST(TestFollower, remove_than_add_again)
+{
+    MemStorage storage;
+    Index i = 0;
+    storage.push_back(Entry::add_node(1, ++i, NodeId(1)));
+
+    storage.push_back(Entry::add_nonvoting_node(1, ++i, NodeId(2)));
+    storage.push_back(Entry::add_node(1, ++i, NodeId(2)));
+
+    storage.push_back(Entry::add_nonvoting_node(1, ++i, NodeId(3)));
+    storage.push_back(Entry::add_node(1, ++i, NodeId(3)));
+
+    storage.push_back(Entry::remove_node(1, ++i, NodeId(2)));
+    storage.push_back(Entry::user_empty(1, ++i));
+
+    storage.push_back(Entry::add_nonvoting_node(1, ++i, NodeId(2)));
+    storage.push_back(Entry::user_empty(1, ++i));
+
+    raft::Server r(NodeId(2), false, &storage, nullptr, &__Saver);
+    EXPECT_EQ(0, r.nodes().count());
+    EXPECT_TRUE(r.is_follower());
+    EXPECT_FALSE(r.is_shutdown());
+
+    bmcl::Option<raft::Error> e = r.accept_req(NodeId(3), raft::MsgAppendEntriesReq(1, true, 1, i)).takeErrOption();
+    EXPECT_TRUE(e.isNone());
+
+    e = r.apply_all();
+
+    EXPECT_TRUE(r.nodes().get_my_node().isSome());
+    EXPECT_FALSE(r.committer().has_not_applied());
+    EXPECT_FALSE(r.is_shutdown());
+}
+
 /* Candidate 5.2 */
 TEST(TestCandidate, election_timeout_and_no_leader_results_in_new_election)
 {
