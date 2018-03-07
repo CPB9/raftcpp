@@ -223,7 +223,6 @@ bmcl::Option<Error> Server::apply_one()
         case InternalData::AddNode:
         {
             node = _nodes.add_node(id, true);
-            node->set_has_sufficient_logs();
         }
         break;
         case InternalData::DemoteNode:
@@ -326,12 +325,11 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
     node->set_next_idx(r.current_idx + 1);
     node->set_match_idx(r.current_idx);
 
-    if (!node->is_voting() && !_committer.voting_change_is_in_progress() && _committer.get_current_idx() <= r.current_idx + 1 && false == node->has_sufficient_logs())
+    if (!node->is_voting() && !_committer.voting_change_is_in_progress() && _committer.get_current_idx() <= r.current_idx + 1)
     {
         auto e = push_log(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
         if (e.isSome())
             return e;
-        node->set_has_sufficient_logs();
     }
 
     /* Update commit idx */

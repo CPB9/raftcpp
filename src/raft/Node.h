@@ -23,9 +23,8 @@ class Node
         VotedForMe              = 0,
         NodeVoting              = 1,
         NeedVoteReq             = 2,
-        NodeHasSufficientLog    = 3,
-        NeedAppendEntriesReq    = 4,
-        IsMe                    = 5,
+        NeedAppendEntriesReq    = 3,
+        IsMe                    = 4,
     };
 
 public:
@@ -49,9 +48,6 @@ public:
 
     inline void set_voting(bool voting) { _flags.set(NodeVoting, voting); }
     inline bool is_voting() const { return _flags.test(NodeVoting); }
-
-    inline void set_has_sufficient_logs() { _flags.set(NodeHasSufficientLog, true); }
-    inline bool has_sufficient_logs() const { return _flags.test(NodeHasSufficientLog); }
 
     inline void set_need_vote_req(bool need) { _flags.set(NeedVoteReq, need); }
     inline bool need_vote_req() const { return _flags.test(NeedVoteReq); }
