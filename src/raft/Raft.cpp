@@ -196,12 +196,19 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
         if (_nodes.is_me_candidate_ready())
             become_precandidate();
     }
+    return apply_one().unwrapErrOption();
+}
+
+bmcl::Result<bool, Error> Server::apply_one()
+{
+    if (is_shutdown())
+        return Error::Shutdown;
 
     auto r = _committer.entry_apply_one(_saver);
     if (r.isErr())
     {
         if (r.unwrapErr() == Error::NothingToApply)
-            return bmcl::None;
+            return false;
         return r.unwrapErr();
     }
 
@@ -239,13 +246,28 @@ bmcl::Option<Error> Server::tick(std::chrono::milliseconds elapsed_since_last_pe
                 set_state(State::Shutdown);
         }
         case  InternalData::Noop:
-        break;
+            break;
         default:
             assert(0);
         }
     }
 
     __log("applied log: %d, id: %d", _committer.get_last_applied_idx(), ety.id());
+    return true;
+}
+
+bmcl::Option<Error> Server::apply_all(Index max_count)
+{
+    Index i = 0;
+    while(i < max_count)
+    {
+        auto r = apply_one();
+        if (r.isErr())
+            return r.unwrapErr();
+        if (!r.unwrap())
+            return bmcl::None;
+        ++i;
+    }
     return bmcl::None;
 }
 
@@ -686,7 +708,7 @@ void Server::pop_log(const Entry& ety)
 
 bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
 {
-    auto e = _committer.entry_append(ety, needVoteChecks);
+    auto e = _committer.entry_push_back(ety, needVoteChecks);
     if (e.isSome())
         return e;
 

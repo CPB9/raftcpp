@@ -36,7 +36,7 @@ public:
     inline void commit_all() { set_commit_idx(_storage->get_current_idx()); }
     void set_commit_idx(Index idx);
 
-    bmcl::Option<Error> entry_append(const Entry& ety, bool needVoteChecks = false);
+    bmcl::Option<Error> entry_push_back(const Entry& ety, bool needVoteChecks = false);
     bmcl::Result<Entry, Error> entry_apply_one(ISaver* saver);
     bmcl::Option<Entry> entry_pop_back();
 

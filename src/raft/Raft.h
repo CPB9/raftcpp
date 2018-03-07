@@ -62,6 +62,8 @@ public:
     const IStorage* storage() const { return _storage; }
 
     bmcl::Option<Error> tick(std::chrono::milliseconds elapsed = std::chrono::milliseconds(0));
+    bmcl::Result<bool, Error> apply_one();
+    bmcl::Option<Error> apply_all(Index max_count);
 
     bmcl::Result<MsgAppendEntriesRep, Error> accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae);
     bmcl::Option<Error> accept_rep(NodeId nodeid, const MsgAppendEntriesRep& r);

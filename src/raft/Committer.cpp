@@ -14,7 +14,7 @@ void Committer::commit_till(Index idx)
     set_commit_idx(std::min(last_log_idx, idx));
 }
 
-bmcl::Option<Error> Committer::entry_append(const Entry& ety, bool needVoteChecks)
+bmcl::Option<Error> Committer::entry_push_back(const Entry& ety, bool needVoteChecks)
 {
     /* Only one voting cfg change at a time */
     bool voting_change = ety.isInternal() && ety.getInternalData()->is_voting_cfg_change();
