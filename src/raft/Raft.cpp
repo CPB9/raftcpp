@@ -18,7 +18,7 @@
 /* for varags */
 #include <stdarg.h>
 
-#include "Raft.h"
+#include "raft/Raft.h"
 
 namespace raft
 {
@@ -220,9 +220,16 @@ bmcl::Option<Error> Server::apply_one()
         bmcl::Option<Node&> node = _nodes.get_node(id);
         switch (cmd.type)
         {
+        case InternalData::AddNonVotingNode:
+        {
+            node = _nodes.add_node(id, false);
+            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
+        }
+        break;
         case InternalData::AddNode:
         {
             node = _nodes.add_node(id, true);
+            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
         }
         break;
         case InternalData::DemoteNode:
@@ -232,21 +239,16 @@ bmcl::Option<Error> Server::apply_one()
                 node->set_voting(false);
         }
         break;
-        case InternalData::AddNonVotingNode:
-        {
-            _nodes.add_node(id, false);
-        }
-        break;
         case InternalData::RemoveNode:
         {
             _nodes.remove_node(id);
-            if (_nodes.is_me(id))
+            if (_nodes.is_me(id) && (_last_cfg_seen.isNone() || _last_cfg_seen.unwrap() <= _committer.get_last_applied_idx()))
                 set_state(State::Shutdown);
         }
         case  InternalData::Noop:
             break;
         default:
-            assert(0);
+            assert(false);
         }
     }
 
@@ -388,7 +390,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
 
     /* update current leader because ae->term is up to date */
     _current_leader = nodeid;
-
+    _last_cfg_seen  = ae.last_cfg_seen;
     _timer.reset_elapsed();
 
     /* Not the first appendentries we've received */
@@ -398,8 +400,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
         bmcl::Option<const Entry&> e = _committer.get_at_idx(ae.prev_log_idx);
         if (e.isNone())
         {
-            /* 2. Reply false if log doesn't contain an entry at prevLogIndex
-            whose term matches prevLogTerm (§5.3) */
+            /* 2. Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3) */
             __log("AE no log at prev_idx %d for ", ae.prev_log_idx, nodeid);
             return MsgAppendEntriesRep(_current_term, false, _committer.get_current_idx());
         }
@@ -663,35 +664,34 @@ void Server::pop_log(const Entry& ety)
 
     const InternalData& cmd = ety.getInternalData().unwrap();
     NodeId id = cmd.node;
+    bmcl::Option<Node&> node;
 
     switch (cmd.type)
     {
-    case InternalData::DemoteNode:
-    {
-        bmcl::Option<Node&> node = _nodes.get_node(id);
-        node->set_voting(true);
-    }
-    break;
-
-    case InternalData::RemoveNode:
-    {
-        const Node& node = _nodes.add_node(id, false);
-    }
-    break;
-
     case InternalData::AddNonVotingNode:
     {
         _nodes.remove_node(id);
     }
     break;
-
     case InternalData::AddNode:
     {
-        bmcl::Option<Node&> node = _nodes.get_node(id);
-        node->set_voting(false);
+        node = _nodes.get_node(id);
+        if (node.isSome())
+            node->set_voting(false);
     }
     break;
-
+    case InternalData::DemoteNode:
+    {
+        node = _nodes.get_node(id);
+        if (node.isSome())
+            node->set_voting(true);
+    }
+    break;
+    case InternalData::RemoveNode:
+    {
+        node = _nodes.add_node(id, false);
+    }
+    break;
     case InternalData::Noop:
     break;
 
@@ -719,23 +719,24 @@ bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
     switch (cmd.type)
     {
     case InternalData::AddNonVotingNode:
-        if (node.isNone())
-            _nodes.add_node(id, false);
-    break;
+        node = _nodes.add_node(id, false);
+        node->set_last_cfg_seen_idx(_committer.get_current_idx());
+        break;
 
     case InternalData::AddNode:
         node = _nodes.add_node(id, true);
-        assert(node.isSome());
-        assert(node->is_voting());
-    break;
+        node->set_last_cfg_seen_idx(_committer.get_current_idx());
+        break;
 
     case InternalData::DemoteNode:
-        node->set_voting(false);
-    break;
+        assert(node.isSome());
+        if (node.isSome())
+            node->set_voting(false);
+        break;
 
     case InternalData::RemoveNode:
         _nodes.remove_node(id);
-    break;
+        break;
 
     case InternalData::Noop:
         break;
@@ -811,7 +812,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
         return bmcl::None;
     }
 
-    MsgAppendEntriesReq ae(_current_term, 0, TermId(0), _committer.get_commit_idx());
+    MsgAppendEntriesReq ae(_current_term, 0, TermId(0), _committer.get_commit_idx(), node.get_last_cfg_seen_idx());
     Index next_idx = node.get_next_idx();
     ae.entries = _committer.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
 

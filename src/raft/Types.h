@@ -9,26 +9,14 @@
 
 #pragma once
 #include <bmcl/Option.h>
-#include "Ids.h"
-#include "Entry.h"
+#include "raft/Ids.h"
+#include "raft/Entry.h"
+#include "raft/Error.h"
+#include "raft/Storage.h"
 
 
 namespace raft
 {
-
-enum class Error : uint8_t
-{
-    Shutdown,
-    NotFollower,
-    NotCandidate,
-    NotLeader,
-    OneVotingChangeOnly,
-    NodeUnknown,
-    NothingToApply,
-    NothingToSend,
-    CantSendToMyself,
-    CantSend,
-};
 
 enum class ReqVoteState : uint8_t
 {
@@ -37,7 +25,6 @@ enum class ReqVoteState : uint8_t
     Granted,
 };
 
-const char* to_string(Error e);
 const char* to_string(ReqVoteState vote);
 
 /** Entry message response.
@@ -78,15 +65,18 @@ struct MsgVoteRep
  * This message is used to tell nodes if it's safe to apply entries to the FSM.
  * Can be sent without any entries as a keep alive message.
  * This message could force a leader/candidate to become a follower. */
+
 struct MsgAppendEntriesReq
 {
-    MsgAppendEntriesReq(TermId term) : term(term), prev_log_idx(0), prev_log_term(TermId(0)), leader_commit(0), n_entries(0), entries(nullptr) {}
-    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index n_entries = 0, const Entry* entries = nullptr)
-        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), n_entries(n_entries), entries(entries) {}
+    MsgAppendEntriesReq(TermId term) : term(term), prev_log_idx(0), prev_log_term(TermId(0)), leader_commit(0), last_cfg_seen(0), n_entries(0), entries(nullptr) {}
+    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index last_cfg_seen, Index n_entries = 0, const Entry* entries = nullptr)
+        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), last_cfg_seen(last_cfg_seen), n_entries(n_entries), entries(entries) {}
     TermId  term;           /**< currentTerm, to force other leader/candidate to step down */
     Index   prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     TermId  prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
     Index   leader_commit;  /**< the index of the entry that has been appended to the majority of the cluster. Entries up to this index will be applied to the FSM */
+    Index   last_cfg_seen;/**< last cfg change met in log, which is need to reuse node ids. set to 0, to disable it*/
+
     Index   n_entries;      /**< number of entries within this message */
     const Entry* entries;   /**< array of entries within this message */
 };

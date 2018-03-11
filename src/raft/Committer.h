@@ -1,8 +1,8 @@
 #pragma once
 #include <bmcl/Option.h>
 #include <bmcl/Result.h>
-#include "Types.h"
-#include "Storage.h"
+#include "raft/Types.h"
+#include "raft/Storage.h"
 
 namespace raft
 {

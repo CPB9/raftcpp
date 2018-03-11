@@ -1,7 +1,9 @@
 #pragma once
 #include <vector>
 #include <bmcl/Option.h>
-#include "Types.h"
+#include "raft/Error.h"
+#include "raft/Entry.h"
+#include "raft/Ids.h"
 
 namespace raft
 {

@@ -12,7 +12,7 @@
 #include <vector>
 #include <bmcl/Option.h>
 #include <bmcl/Either.h>
-#include "Ids.h"
+#include "raft/Ids.h"
 
 namespace raft
 {

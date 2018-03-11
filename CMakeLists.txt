@@ -29,6 +29,8 @@ bmcl_add_dep_bmcl(thirdparty/bmcl)
 bmcl_add_library(raftcpp STATIC
     src/raft/Ids.h
     src/raft/Entry.h
+    src/raft/Error.h
+    src/raft/Error.cpp
     src/raft/Raft.h
     src/raft/Raft.cpp
     src/raft/Committer.h

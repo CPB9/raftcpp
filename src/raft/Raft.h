@@ -12,10 +12,10 @@
 #include <bmcl/Option.h>
 #include <bmcl/Result.h>
 #include <bmcl/ArrayView.h>
-#include "Types.h"
-#include "Committer.h"
-#include "Node.h"
-#include "Timer.h"
+#include "raft/Types.h"
+#include "raft/Committer.h"
+#include "raft/Node.h"
+#include "raft/Timer.h"
 
 
 namespace raft
@@ -97,6 +97,7 @@ private:
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
     bool should_grant_vote(const MsgVoteReq& vr) const;
 
+    bmcl::Option<Index>     _last_cfg_seen;
     bmcl::Option<NodeId>    _voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
     bmcl::Option<NodeId>    _current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
     TermId                  _current_term;   /**< the server's best guess of what the current term is starts at zero */

@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <assert.h>
-#include "Node.h"
+#include "raft/Node.h"
 
 namespace raft
 {

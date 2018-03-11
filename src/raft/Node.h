@@ -11,7 +11,7 @@
 #pragma once
 #include <bitset>
 #include <bmcl/ArrayView.h>
-#include "Types.h"
+#include "raft/Types.h"
 
 namespace raft
 {
@@ -28,7 +28,7 @@ class Node
     };
 
 public:
-    inline explicit Node(NodeId id, bool is_me) : _next_idx(1),  _match_idx(0), _id(id), _flags(0)
+    inline explicit Node(NodeId id, bool is_me) : _id(id), _next_idx(1),  _match_idx(0), _last_cfg_seen_idx(0), _flags(0)
     {
         _flags.set(NodeVoting, true);
         _flags.set(IsMe, is_me);
@@ -38,10 +38,13 @@ public:
     inline bool is_me() const { return _flags.test(IsMe); }
 
     inline Index get_next_idx() const { return _next_idx; }
-    inline void set_next_idx(Index nextIdx) {/* log index begins at 1 */ _next_idx = nextIdx < 1 ? 1 : nextIdx; }
+    inline void set_next_idx(Index idx) {/* log index begins at 1 */ _next_idx = idx < 1 ? 1 : idx; }
 
     inline Index get_match_idx() const { return _match_idx; }
-    inline void set_match_idx(Index matchIdx) { _match_idx = matchIdx; }
+    inline void set_match_idx(Index idx) { _match_idx = idx; }
+
+    inline Index get_last_cfg_seen_idx() const { return _last_cfg_seen_idx; }
+    inline void set_last_cfg_seen_idx(Index idx) { _last_cfg_seen_idx = idx; }
 
     inline bool has_vote_for_me() const { return _flags.test(VotedForMe); }
     inline void vote_for_me(bool vote) { _flags.set(VotedForMe, vote); }
@@ -59,6 +62,7 @@ private:
     NodeId          _id;
     Index           _next_idx;
     Index           _match_idx;
+    Index           _last_cfg_seen_idx;
     std::bitset<8>  _flags;
 };
 
