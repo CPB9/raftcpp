@@ -97,11 +97,11 @@ private:
     MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
     bool should_grant_vote(const MsgVoteReq& vr) const;
 
-    bmcl::Option<Index>     _last_cfg_seen;
     bmcl::Option<NodeId>    _voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
     bmcl::Option<NodeId>    _current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
     TermId                  _current_term;   /**< the server's best guess of what the current term is starts at zero */
     State                   _state;          /**< follower/leader/candidate indicator */
+    Index                   _last_cfg_seen;
 
     Timer     _timer;
     Nodes     _nodes;

@@ -47,7 +47,7 @@ void Server::__log(const char *fmt, ...) const
     _saver->log(buf);
 }
 
-Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender, ISaver* saver) : _last_cfg_seen(0), _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
 {
     _current_term = _storage->term();
     _voted_for = _storage->vote();
@@ -65,7 +65,7 @@ Server::Server(NodeId id, bool isNewCluster, IStorage* storage, ISender* sender,
     }
 }
 
-Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
+Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender, ISaver* saver) : _last_cfg_seen(0), _nodes(id), _storage(storage), _committer(storage), _sender(sender), _saver(saver)
 {
     _current_term = _storage->term();
     _voted_for = _storage->vote();
@@ -242,7 +242,7 @@ bmcl::Option<Error> Server::apply_one()
         case InternalData::RemoveNode:
         {
             _nodes.remove_node(id);
-            if (_nodes.is_me(id) && (_last_cfg_seen.isNone() || _last_cfg_seen.unwrap() <= _committer.get_last_applied_idx()))
+            if (_nodes.is_me(id) && _last_cfg_seen <= _committer.get_last_applied_idx())
                 set_state(State::Shutdown);
         }
         case  InternalData::Noop:
