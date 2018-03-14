@@ -27,7 +27,7 @@ struct UserData
 
 struct InternalData
 {
-    enum Type
+    enum Type : uint8_t
     {
         AddNonVotingNode,
         AddNode,
@@ -37,8 +37,8 @@ struct InternalData
     };
 
     InternalData(Type type, NodeId node) : type(type), node(node){}
-    Type type;
     NodeId node;
+    Type type;
 
     inline bool is_voting_cfg_change() const { return type == AddNonVotingNode || type == RemoveNode || type == DemoteNode; }
 };

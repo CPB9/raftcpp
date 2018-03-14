@@ -58,7 +58,7 @@ Node& Nodes::add_node(NodeId id, bool is_voting)
             node->set_voting(true);
         return node.unwrap();
     }
-
+    assert(std::numeric_limits<NodeCount>::max() >= _nodes.size());
     _nodes.emplace_back(Node(id, is_me(id)));
     _nodes.back().set_voting(is_voting);
     std::sort(_nodes.begin(), _nodes.end(), [](const Node& l, const Node& r) { return l.get_id() < r.get_id(); });

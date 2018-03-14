@@ -310,7 +310,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
             return bmcl::None;
 
         if (r.current_idx < next_idx - 1)
-            node->set_next_idx(std::min(r.current_idx + 1, _committer.get_current_idx()));
+            node->set_next_idx(std::min<Index>(r.current_idx + 1, _committer.get_current_idx()));
         else
             node->set_next_idx(next_idx - 1);
 
