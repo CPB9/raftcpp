@@ -67,11 +67,7 @@ bmcl::Option<raft::Error> Exchanger::request_vote_rep(const raft::NodeId& from, 
 
 bmcl::Option<raft::Error> Exchanger::append_entries_req(const raft::Server * from, const raft::NodeId & to, const MsgAppendEntriesReq& msg)
 {
-    Entry* entries = (Entry*)calloc(1, sizeof(Entry) * msg.n_entries);
-    memcpy(entries, msg.entries, sizeof(Entry) * msg.n_entries);
-    MsgAppendEntriesReq tmp = msg;
-    tmp.entries = entries;
-    return __append_msg(from->nodes().get_my_id(), to, &tmp, sizeof(tmp), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
+    return __append_msg(from->nodes().get_my_id(), to, &msg, sizeof(msg), raft_message_type_e::RAFT_MSG_APPENDENTRIES);
 }
 
 bmcl::Option<raft::Error> Exchanger::append_entries_rep(const raft::NodeId& from, const raft::NodeId& to, const MsgAppendEntriesRep& msg)

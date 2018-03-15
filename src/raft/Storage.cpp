@@ -4,6 +4,24 @@
 
 namespace raft
 {
+DataHandler::DataHandler() : _ptr((const Entry*)nullptr), _prev_log_idx(0), _count(0){}
+DataHandler::DataHandler(const Entry* first_entry, Index prev_log_idx, Index count) : _ptr(first_entry), _prev_log_idx(prev_log_idx), _count(count) {}
+DataHandler::DataHandler(const IStorage* storage, Index prev_log_idx, Index count) : _ptr(storage), _prev_log_idx(prev_log_idx), _count(count) {}
+DataHandler::~DataHandler() {}
+Index DataHandler::count() const { return _count; }
+bool DataHandler::empty() const { return _count == 0; }
+Index DataHandler::prev_log_idx() const { return _prev_log_idx; }
+
+bmcl::Option<const Entry&> DataHandler::get_at_idx(Index idx) const
+{
+    if (idx <= _prev_log_idx || idx > _prev_log_idx + _count)
+        return bmcl::None;
+
+    if (_ptr.isFirst())
+        return _ptr.unwrapFirst()->get_at_idx(idx);
+    else
+        return _ptr.unwrapSecond()[idx - _prev_log_idx - 1];
+}
 
 IStorage::~IStorage() {}
 
@@ -11,7 +29,7 @@ MemStorage::MemStorage(): _base(0), _term(0) { }
 
 Index MemStorage::count() const
 {
-    return _entries.size();
+    return (Index)_entries.size();
 }
 
 bool MemStorage::empty() const
@@ -30,20 +48,16 @@ bmcl::Option<Error> MemStorage::push_back(const Entry& c)
     return bmcl::None;
 }
 
-bmcl::Option<const Entry*> MemStorage::get_from_idx(Index idx, Index* n_etys) const
+DataHandler MemStorage::get_from_idx(Index idx) const
 {
     assert(idx > _base);
     /* idx starts at 1 */
 
     if (idx <= _base || idx > get_current_idx())
-    {
-        *n_etys = 0;
-        return bmcl::None;
-    }
+        return DataHandler((IStorage*)this, idx - 1, Index(0));
 
     Index i = idx - _base - 1;
-    *n_etys = _entries.size() - i;
-    return &_entries[i];
+    return DataHandler((IStorage*)this, idx - 1, Index( _entries.size() - i));
 }
 
 bmcl::Option<const Entry&> MemStorage::get_at_idx(Index idx) const

@@ -8,6 +8,8 @@
 namespace raft
 {
 
+class DataHandler;
+
 class IStorage
 {
 public:
@@ -21,11 +23,29 @@ public:
     virtual bool empty() const = 0;
     virtual Index get_current_idx() const = 0;
     virtual bmcl::Option<const Entry&> get_at_idx(Index idx) const = 0;
-    virtual bmcl::Option<const Entry*> get_from_idx(Index idx, Index* n_etys) const = 0;
+    virtual DataHandler get_from_idx(Index idx) const = 0;
     virtual bmcl::Option<const Entry&> back() const = 0;
 
     virtual bmcl::Option<Error> push_back(const Entry& c) = 0;
     virtual bmcl::Option<Entry> pop_back() = 0;
+};
+
+class DataHandler
+{
+public:
+    explicit DataHandler();
+    DataHandler(const Entry* first_entry, Index prev_log_idx, Index count);
+    DataHandler(const IStorage* storage, Index prev_log_idx, Index count);
+    ~DataHandler();
+    Index count() const;
+    bool empty() const;
+    Index prev_log_idx() const;
+    bmcl::Option<const Entry&> get_at_idx(Index idx) const;
+
+private:
+    bmcl::Either<const IStorage*, const Entry*> _ptr;
+    Index _prev_log_idx;
+    Index _count;
 };
 
 class MemStorage : public IStorage
@@ -41,7 +61,7 @@ public:
     bool empty() const override;
     Index get_current_idx() const override;
     bmcl::Option<const Entry&> get_at_idx(Index idx) const override;
-    bmcl::Option<const Entry*> get_from_idx(Index idx, Index* n_etys) const override;
+    DataHandler get_from_idx(Index idx) const override;
     bmcl::Option<const Entry&> back() const override;
 
     bmcl::Option<Error> push_back(const Entry& c) override;

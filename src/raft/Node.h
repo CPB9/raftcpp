@@ -71,7 +71,7 @@ class Nodes
 public:
     using Items = std::vector<Node>;
     Nodes(NodeId id);
-    inline NodeCount count() const { return _nodes.size(); }
+    inline NodeCount count() const { return (NodeCount)_nodes.size(); }
     inline const Items& items() const { return _nodes; }
     inline NodeId get_my_id() const { return _me; }
     inline bool is_me(NodeId id) const { return _me == id; }

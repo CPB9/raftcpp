@@ -23,7 +23,7 @@ public:
     inline Index get_last_applied_idx() const { return _last_applied_idx; }
     inline Index get_current_idx() const { return _storage->get_current_idx(); }
     bmcl::Option<const Entry&> get_at_idx(Index idx) const { return _storage->get_at_idx(idx); }
-    bmcl::Option<const Entry*> get_from_idx(Index idx, Index* n_etys) const { return _storage->get_from_idx(idx, n_etys); }
+    DataHandler get_from_idx(Index idx) const { return _storage->get_from_idx(idx); }
 
     inline bool has_not_applied() const { return _last_applied_idx < get_commit_idx(); }
     inline bool is_committed(Index idx) const { return idx <= _commit_idx; }

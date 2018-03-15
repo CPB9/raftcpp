@@ -360,15 +360,15 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     if (is_shutdown())
         return Error::Shutdown;
 
-    if (0 < ae.n_entries)
+    if (0 < ae.data.count())
         __log("recvd appendentries t:%d from %d ci:%d lc:%d pli:%d plt:%d #%d",
               ae.term,
               nodeid,
               _committer.get_current_idx(),
               ae.leader_commit,
-              ae.prev_log_idx,
+              ae.data.prev_log_idx(),
               ae.prev_log_term,
-              ae.n_entries);
+              ae.data.count());
 
     if (_current_term == ae.term)
     {
@@ -395,37 +395,37 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
 
     /* Not the first appendentries we've received */
     /* NOTE: the log starts at 1 */
-    if (0 < ae.prev_log_idx)
+    if (0 < ae.data.prev_log_idx())
     {
-        bmcl::Option<const Entry&> e = _committer.get_at_idx(ae.prev_log_idx);
+        bmcl::Option<const Entry&> e = _committer.get_at_idx(ae.data.prev_log_idx());
         if (e.isNone())
         {
             /* 2. Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3) */
-            __log("AE no log at prev_idx %d for ", ae.prev_log_idx, nodeid);
+            __log("AE no log at prev_idx %d for ", ae.data.prev_log_idx(), nodeid);
             return MsgAppendEntriesRep(_current_term, false, _committer.get_current_idx());
         }
     }
 
-    Index node_current_idx = ae.prev_log_idx;
+    Index node_current_idx = ae.data.prev_log_idx();
 
     Index i;
-    for (i = 0; i < ae.n_entries; i++)
+    for (i = 0; i < ae.data.count(); i++)
     {
-        const Entry* ety = &ae.entries[i];
-        Index ety_index = ae.prev_log_idx + 1 + i;
-        node_current_idx = ety_index;
+        Index ety_index = ae.data.prev_log_idx() + 1 + i;
         bmcl::Option<const Entry&> existing_ety = _committer.get_at_idx(ety_index);
         if (existing_ety.isNone())
             break;
+        bmcl::Option<const Entry&> ety = ae.data.get_at_idx(ety_index);
+        node_current_idx = ety_index;
         if (existing_ety.unwrap().term() != ety->term() && !_committer.is_committed(ety_index))
         {
             /* 3. If an existing entry conflicts with a new one (same index
             but different terms), delete the existing entry and all that
             follow it (§5.3) */
             bool flag = true;
-            while (_committer.get_current_idx() >= ety_index)
+            while (flag && _committer.get_current_idx() >= ety_index)
             {
-                bmcl::Option<Entry> pop = _committer.entry_pop_back();
+                bmcl::Option<Entry> pop = _committer.entry_pop_back(/*[this](const InternalData& ety) { pop_log(ety); }*/);
                 if (pop.isNone())
                     flag = false;
                 else
@@ -436,9 +436,18 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
     }
 
     /* Pick up remainder in case of mismatch or missing entry */
-    for (; i < ae.n_entries; i++)
+    for (; i < ae.data.count(); i++)
     {
-        bmcl::Option<Error> e = push_log(ae.entries[i], false);
+        Index ety_index = ae.data.prev_log_idx() + 1 + i;
+
+        bmcl::Option<const Entry&> ety = ae.data.get_at_idx(ety_index);
+        if (ety.isNone())
+        {
+            //__log(); //unable to deserialize?
+            break;
+        }
+
+        bmcl::Option<Error> e = push_log(ety.unwrap(), false);
         if (e.isSome())
         {
             if (e.unwrap() == Error::Shutdown)
@@ -449,7 +458,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
             }
             break;
         }
-        node_current_idx = ae.prev_log_idx + 1 + i;
+        node_current_idx = ety_index;
     }
 
     /* 4. If leaderCommit > commitIndex, set commitIndex =
@@ -812,15 +821,13 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
         return bmcl::None;
     }
 
-    MsgAppendEntriesReq ae(_current_term, 0, TermId(0), _committer.get_commit_idx(), node.get_last_cfg_seen_idx());
     Index next_idx = node.get_next_idx();
-    ae.entries = _committer.get_from_idx(next_idx, &ae.n_entries).unwrapOr(nullptr);
+    MsgAppendEntriesReq ae(_current_term, TermId(0), _committer.get_commit_idx(), node.get_last_cfg_seen_idx(), _committer.get_from_idx(next_idx));
 
     /* previous log is the log just before the new logs */
     if (1 < next_idx)
     {
         bmcl::Option<const Entry&> prev_ety = _committer.get_at_idx(next_idx - 1);
-        ae.prev_log_idx = next_idx - 1;
         if (prev_ety.isSome())
             ae.prev_log_term = prev_ety.unwrap().term();
     }
@@ -831,7 +838,7 @@ bmcl::Option<Error> Server::send_appendentries(Node& node, ISender* sender)
           _committer.get_commit_idx(),
           ae.term,
           ae.leader_commit,
-          ae.prev_log_idx,
+          ae.data.prev_log_idx(),
           ae.prev_log_term);
 
     return sender->append_entries(node.get_id(), ae);

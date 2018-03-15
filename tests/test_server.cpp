@@ -187,7 +187,7 @@ TEST(TestServer, increment_lastApplied_when_lastApplied_lt_commitidx)
 
     /* need at least one entry */
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
-    r.accept_req(NodeId(2), MsgAppendEntriesReq(r.get_current_term(), true, r.committer().get_current_idx(), 1, 0));
+    r.accept_req(NodeId(2), MsgAppendEntriesReq(r.get_current_term(), r.committer().get_current_idx(), 1, 0));
     EXPECT_EQ(1, r.committer().get_commit_idx());
     EXPECT_EQ(0, r.committer().get_last_applied_idx());
 
@@ -506,7 +506,7 @@ TEST(TestFollower, becomes_follower_does_not_clear_voted_for)
     prepare_candidate(r);
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
-    r.accept_req(raft::NodeId(2), raft::MsgAppendEntriesReq(r.get_current_term(), r.committer().get_current_idx(), r.committer().get_last_log_term().unwrapOr(0), 0, 0));
+    r.accept_req(raft::NodeId(2), raft::MsgAppendEntriesReq(r.get_current_term(), r.committer().get_last_log_term().unwrapOr(0), 0, 0));
     EXPECT_TRUE(r.is_follower());
 
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
@@ -574,7 +574,7 @@ TEST(TestFollower, recv_appendentries_does_not_log_if_no_entries_are_specified)
     EXPECT_EQ(0, storage.count());
 
     /* receive an appendentry with commit */
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 4, 1, 5, 0));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 5, 0, DataHandler(&storage, 1, 0)));
     EXPECT_TRUE(aer.isOk());
     EXPECT_EQ(0, storage.count());
 }
@@ -590,12 +590,10 @@ TEST(TestFollower, recv_appendentries_increases_log)
 
     /* receive an appendentry with commit */
     /* first appendentries msg */
-    MsgAppendEntriesReq ae(3, 0, 1, 5, 0);
     /* include one entry */
-    Entry ety(2, 1, raft::UserData("aaa", 4));
     /* check that old terms are passed onto the log */
-    ae.entries = &ety;
-    ae.n_entries = 1;
+    Entry ety(2, 1, raft::UserData("aaa", 4));
+    MsgAppendEntriesReq ae(3, 1, 5, 0, DataHandler(&ety, 0, 1));
 
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
@@ -618,11 +616,8 @@ TEST(TestFollower, recv_appendentries_reply_false_if_doesnt_have_log_at_prev_log
 
     /* log idx that server doesn't have */
     /* prev_log_term is less than current term (ie. 2) */
-    MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, r.get_current_term(), 0, 0);
-    /* include one entry */
     Entry ety(r.get_current_term()-1, 1, raft::UserData("aaa", 4));
-    ae.entries = &ety;
-    ae.n_entries = 1;
+    MsgAppendEntriesReq ae(r.get_current_term() + 1, r.get_current_term(), 0, 0, DataHandler(&ety, 1, 1));
 
     /* trigger reply */
     auto aer = r.accept_req(raft::NodeId(2), ae);
@@ -670,12 +665,10 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     /* pass a appendentry that is newer  */
 
     /* entries from 2 onwards will be overwritten by this appendentries message */
-    MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, 1, 0, 0);
     /* include one entry */
     std::vector<uint8_t> str4 = {4, 4, 4};
-    Entry mety = Entry(r.get_current_term() - 1, 4, UserData(str4));
-    ae.entries = &mety;
-    ae.n_entries = 1;
+    Entry ety = Entry(r.get_current_term() - 1, 4, UserData(str4));
+    MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, 0, 0, DataHandler(&ety, 1, 1));
 
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
@@ -707,12 +700,10 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_conflict_with_new_entrie
     /* pass a appendentry that is newer  */
 
     /* ALL append entries will be overwritten by this appendentries message */
-    MsgAppendEntriesReq ae(2, 0, 0, 0, 0);
     /* include one entry */
     std::vector<uint8_t> str4 = { 4, 4, 4 };
-    Entry mety = Entry(0, 4, UserData(str4));
-    ae.entries = &mety;
-    ae.n_entries = 1;
+    Entry ety = Entry(0, 4, UserData(str4));
+    MsgAppendEntriesReq ae(2, 0, 0, 0, DataHandler(&ety, 0, 1));
 
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
@@ -735,10 +726,8 @@ TEST(TestFollower, recv_appendentries_delete_entries_if_current_idx_greater_than
     __create_mock_entries_for_conflict_tests(&storage, strs);
     EXPECT_EQ(3, storage.count());
 
-    MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, 1, 0, 0);
-    Entry e = Entry::user_empty(0, 1);
-    ae.entries = &e;
-    ae.n_entries = 1;
+    Entry ety = Entry::user_empty(0, 1);
+    MsgAppendEntriesReq ae(r.get_current_term() + 1, 1, 0, 0, DataHandler(&ety, 1, 1));
 
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
@@ -758,11 +747,8 @@ TEST(TestFollower, recv_appendentries_add_new_entries_not_already_in_log)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
     prepare_follower(r);
 
-    MsgAppendEntriesReq ae(r.get_current_term(), 0, 1, 0, 0);
-    /* include entries */
-    Entry e[2] = { Entry::user_empty(0, 1), Entry::user_empty(0, 2) };
-    ae.entries = e;
-    ae.n_entries = 2;
+    Entry ety[2] = { Entry::user_empty(0, 1), Entry::user_empty(0, 2) };
+    MsgAppendEntriesReq ae(r.get_current_term(), 0, 0, 0, DataHandler(ety, 0, 2));
 
     auto aer = r.accept_req(raft::NodeId(2), ae);
     EXPECT_TRUE(aer.isOk());
@@ -775,11 +761,8 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    MsgAppendEntriesReq ae(r.get_current_term(), 0, 1, 0, 0);
-    /* include 1 entry */
-    Entry e[2] = { Entry::user_empty(0, 1), Entry::user_empty(0, 2) };
-    ae.entries = e;
-    ae.n_entries = 1;
+    Entry ety[2] = { Entry::user_empty(0, 1), Entry::user_empty(0, 2) };
+    MsgAppendEntriesReq ae(r.get_current_term(), 1, 0, 0, DataHandler(ety, 0, 1));
 
     {
         auto aer = r.accept_req(raft::NodeId(2), ae);
@@ -796,8 +779,9 @@ TEST(TestFollower, recv_appendentries_does_not_add_dupe_entries_already_in_log)
     }
 
     /* lets get the server to append 2 now! */
-    ae.n_entries = 2;
-    auto aer = r.accept_req(raft::NodeId(2), ae);
+    MsgAppendEntriesReq ae2(r.get_current_term(), 1, 0, 0, DataHandler(ety, 0, 2));
+
+    auto aer = r.accept_req(raft::NodeId(2), ae2);
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(aer.unwrap().success);
     EXPECT_EQ(2, storage.count());
@@ -810,24 +794,18 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_prevLogIdx)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    MsgAppendEntriesReq ae(1, 0, 1, 0, 0);
-    /* include entries */
-    Entry e[4] = { Entry::user_empty(1, 1), Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4)};
-    ae.entries = e;
-    ae.n_entries = 4;
 
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        Entry e[4] = { Entry::user_empty(1, 1), Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4) };
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0, DataHandler(e, 0, 4)));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
 
     /* receive an appendentry with commit */
-    ae = MsgAppendEntriesReq(1, 4, 1, 5, 0);
-
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 5, 0));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -840,13 +818,9 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    MsgAppendEntriesReq ae(1, 0, 1, 0, 0);
-    /* include entries */
-    Entry e[4] = { Entry::user_empty(1, 1), Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4) };
-    ae.entries = e;
-    ae.n_entries = 4;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        Entry e[4] = { Entry::user_empty(1, 1), Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4) };
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0, DataHandler(e, 0, 4)));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -854,7 +828,7 @@ TEST(TestFollower, recv_appendentries_set_commitidx_to_LeaderCommit)
     /* receive an appendentry with commit */
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 3, 1, 3, 0));
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 3, 0));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -872,7 +846,7 @@ TEST(TestFollower, recv_appendentries_failure_includes_current_idx)
 
     /* receive an appendentry with commit */
     /* lower term means failure */
-    MsgAppendEntriesReq ae(r.get_current_term()-1, 0, 0, 0, 0);
+    MsgAppendEntriesReq ae(r.get_current_term()-1, 0, 0, 0);
     {
         auto aer = r.accept_req(raft::NodeId(2), ae);
         EXPECT_TRUE(aer.isOk());
@@ -936,36 +910,27 @@ TEST(TestFollower, recv_appendentries_heartbeat_does_not_overwrite_logs)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    MsgAppendEntriesReq ae(1, 0, 1, 0, 0);
-    /* include entries */
-    Entry e1 = Entry::user_empty(1, 1);
-    ae.entries = &e1;
-    ae.n_entries = 1;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        Entry e1 = Entry::user_empty(1, 1);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0, DataHandler(&e1, 0, 1)));
         EXPECT_TRUE(aer.isOk());
     }
 
     /* The server sends a follow up AE
      * NOTE: the server has received a response from the last AE so
      * prev_log_idx has been incremented */
-    ae = MsgAppendEntriesReq(1, 1, 1, 0, 0);
-    /* include entries */
-    Entry e2[4] = { Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4), Entry::user_empty(1, 5) };
-    ae.entries = e2;
-    ae.n_entries = 4;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        Entry e2[4] = { Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4), Entry::user_empty(1, 5) };
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0, DataHandler(e2, 1, 4)));
         EXPECT_TRUE(aer.isOk());
     }
 
     /* receive a heartbeat
      * NOTE: the leader hasn't received the response to the last AE so it can
      * only assume prev_Log_idx is still 1 */
-    ae = MsgAppendEntriesReq(1, 1, 1, 0, 0);
     /* receipt of appendentries changes commit idx */
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -978,33 +943,22 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     MemStorage storage;
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
 
-    MsgAppendEntriesReq ae(1, 0, 1, 0, 0);
-    /* include entries */
     Entry e[7] = {Entry::user_empty(1, 1), Entry::user_empty(1, 2), Entry::user_empty(1, 3), Entry::user_empty(1, 4), Entry::user_empty(1, 5), Entry::user_empty(1, 6), Entry::user_empty(1, 7) };
-    ae.entries = &e[0];
-    ae.n_entries = 1;
+
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 0, 0, DataHandler(&e[0], 0, 1)));
         EXPECT_TRUE(aer.isOk());
     }
 
     /* Follow up AE. Node responded with success */
-    ae = MsgAppendEntriesReq(1, 1, 1, 4, 0);
-    /* include entries */
-    ae.entries = &e[1];
-    ae.n_entries = 4;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 4, 0, DataHandler(&e[1], 1, 4)));
         EXPECT_TRUE(aer.isOk());
     }
 
     /* The server sends a follow up AE */
-    ae = MsgAppendEntriesReq(1, 1, 1, 4, 0);
-    /* include entries */
-    ae.entries = &e[1];
-    ae.n_entries = 5;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 4, 0, DataHandler(&e[1], 1, 5)));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1014,12 +968,8 @@ TEST(TestFollower, recv_appendentries_does_not_deleted_commited_entries)
     /* The server sends a follow up AE.
      * This appendentry forces the node to check if it's going to delete
      * commited logs */
-    ae = MsgAppendEntriesReq(1, 3, 1, 4, 0);
-    /* include entries */
-    ae.entries = &e[4];
-    ae.n_entries = 3;
     {
-        auto aer = r.accept_req(raft::NodeId(2), ae);
+        auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(1, 1, 4, 0, DataHandler(&e[4], 3, 3)));
         EXPECT_TRUE(aer.isOk());
         EXPECT_TRUE(aer.unwrap().success);
     }
@@ -1131,7 +1081,7 @@ TEST(TestFollower, remove_other_node)
     NodeId rem = leader == NodeId(2) ? NodeId(3) : NodeId(2);
 
     Entry ety = Entry::remove_node (t, 0, rem);
-    auto e = r.accept_req(leader, MsgAppendEntriesReq(t, 0, t - 1, 4, 0, 1, &ety));
+    auto e = r.accept_req(leader, MsgAppendEntriesReq(t, t - 1, 4, 0, DataHandler(&ety, 0, 1)));
     r.tick();
     EXPECT_TRUE(e.isOk());
     EXPECT_EQ(2, r.nodes().count());
@@ -1150,7 +1100,7 @@ TEST(TestFollower, remove_me)
     NodeId rem = leader == NodeId(2) ? NodeId(3) : NodeId(2);
 
     Entry ety = Entry::remove_node (t, 0, r.nodes().get_my_id());
-    auto e = r.accept_req(leader, MsgAppendEntriesReq(t, 0, t - 1, 4, 0, 1, &ety));
+    auto e = r.accept_req(leader, MsgAppendEntriesReq(t, t - 1, 4, 0, DataHandler(&ety, 0, 1)));
     r.tick();
     EXPECT_TRUE(e.isOk());
     EXPECT_EQ(2, r.nodes().count());
@@ -1181,7 +1131,7 @@ TEST(TestFollower, remove_than_add_again)
     EXPECT_TRUE(r.is_follower());
     EXPECT_FALSE(r.is_shutdown());
 
-    raft::MsgAppendEntriesReq req(1, true, 1, i, i-2);
+    raft::MsgAppendEntriesReq req(1, 1, i, i-2);
     bmcl::Option<raft::Error> e = r.accept_req(NodeId(3), req).takeErrOption();
     EXPECT_TRUE(e.isNone());
 
@@ -1334,7 +1284,7 @@ TEST(TestCandidate, recv_appendentries_from_same_term_results_in_step_down)
     EXPECT_FALSE(r.is_follower());
     EXPECT_EQ(raft::NodeId(1), r.get_voted_for());
 
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term(), 1, 1, 0, 0));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term(), 1, 0, 0));
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_FALSE(r.is_candidate());
@@ -1366,7 +1316,7 @@ TEST(TestCandidate, recv_appendentries_doesnt_use_1_cfg_change_restriction)
     , raft::Entry::add_node(term, 3, raft::NodeId(5))
     };
 
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term(), 0, 1, 4, 0, 3, entries));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term(), 1, 4, 0, DataHandler(entries, 0, 3)));
     EXPECT_TRUE(aer.isOk());
     EXPECT_EQ(3, storage.count());
     EXPECT_EQ(3, r.committer().get_commit_idx());
@@ -1558,7 +1508,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
     EXPECT_TRUE(msg.isSome());
     MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
     EXPECT_NE(nullptr, ae);
-    EXPECT_EQ(1, ae->prev_log_idx);
+    EXPECT_EQ(1, ae->data.prev_log_idx());
 
 
     r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), true, 1));
@@ -1575,10 +1525,10 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
 
-        EXPECT_EQ(1, ae->prev_log_idx);
-        EXPECT_EQ(1, ae->n_entries);
-        EXPECT_EQ(100, ae->entries[0].id());
-        EXPECT_EQ(2, ae->entries[0].term());
+        EXPECT_EQ(1, ae->data.prev_log_idx());
+        EXPECT_EQ(1, ae->data.count());
+        EXPECT_EQ(100, ae->data.get_at_idx(ae->data.prev_log_idx() + 1)->id());
+        EXPECT_EQ(2, ae->data.get_at_idx(ae->data.prev_log_idx() + 1)->term());
     }
 
     /* set next_idx */
@@ -1593,7 +1543,7 @@ TEST(TestLeader, sends_appendentries_with_prevLogIdx)
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
 
-        EXPECT_EQ(2, ae->prev_log_idx);
+        EXPECT_EQ(2, ae->data.prev_log_idx());
     }
 }
 
@@ -1631,7 +1581,7 @@ TEST(TestLeader, sends_appendentries_when_node_has_next_idx_of_0)
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
 
-        EXPECT_EQ(0, ae->prev_log_idx);
+        EXPECT_EQ(0, ae->data.prev_log_idx());
     }
 }
 
@@ -1874,7 +1824,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
 
         EXPECT_EQ(5, ae->prev_log_term);
-        EXPECT_EQ(5, ae->prev_log_idx);
+        EXPECT_EQ(5, ae->data.prev_log_idx());
     }
 
     /* receive mock success responses */
@@ -1889,7 +1839,7 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
 
         EXPECT_EQ(1, ae->prev_log_term);
-        EXPECT_EQ(1, ae->prev_log_idx);
+        EXPECT_EQ(1, ae->data.prev_log_idx());
     }
 
     EXPECT_FALSE(sender.poll_msg_data(r).isSome());
@@ -1933,7 +1883,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
 
         EXPECT_EQ(5, ae->prev_log_term);
-        EXPECT_EQ(5, ae->prev_log_idx);
+        EXPECT_EQ(5, ae->data.prev_log_idx());
     }
 
     /* receive mock success responses */
@@ -1948,7 +1898,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
 
         EXPECT_EQ(4, ae->prev_log_term);
-        EXPECT_EQ(4, ae->prev_log_idx);
+        EXPECT_EQ(4, ae->data.prev_log_idx());
     }
 
     /* receive mock success responses */
@@ -1963,7 +1913,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
 
         EXPECT_EQ(3, ae->prev_log_term);
-        EXPECT_EQ(3, ae->prev_log_idx);
+        EXPECT_EQ(3, ae->data.prev_log_idx());
     }
 
     EXPECT_FALSE(sender.poll_msg_data(r).isSome());
@@ -2058,12 +2008,10 @@ TEST(TestLeader, recv_entry_is_committed_returns_neg_1_if_invalidated)
     EXPECT_EQ(0, r.committer().get_commit_idx());
 
     /* append entry that invalidates entry message */
-    MsgAppendEntriesReq ae(r.get_current_term()+1, ci, 0, 2, 0);
+   ;
 
     Entry e(r.get_current_term() + 1, 999, raft::UserData("aaa", 4));
-    ae.entries = &e;
-    ae.n_entries = 1;
-    auto aer = r.accept_req(raft::NodeId(2), ae);
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 0, 2, 0, DataHandler(&e, ci, 1)));
     EXPECT_TRUE(aer.isOk());
 
     EXPECT_TRUE(aer.unwrap().success);
@@ -2183,7 +2131,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
     prepare_leader(r);
 
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 6, 5, 0, 0));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 5, 0, 0));
     EXPECT_TRUE(aer.isOk());
 
     /* after more recent appendentries from node 2, node 1 should
@@ -2198,7 +2146,7 @@ TEST(TestLeader, recv_appendentries_steps_down_if_newer_term)
     raft::Server r(raft::NodeId(1), { NodeId(1), NodeId(2) }, &storage, &__Sender, &__Saver);
     prepare_leader(r);
 
-    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 5, 5, 0, 0));
+    auto aer = r.accept_req(raft::NodeId(2), MsgAppendEntriesReq(r.get_current_term() + 1, 5, 0, 0));
     EXPECT_TRUE(aer.isOk());
     EXPECT_TRUE(r.is_follower());
 }

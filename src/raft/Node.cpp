@@ -79,7 +79,7 @@ void Nodes::remove_node(NodeId id)
 
 NodeCount Nodes::get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const
 {
-    NodeCount votes = std::count_if(_nodes.begin(), _nodes.end(), [](const Node& i) { return !i.is_me() && i.is_voting() && i.has_vote_for_me(); });
+    NodeCount votes = (NodeCount)std::count_if(_nodes.begin(), _nodes.end(), [](const Node& i) { return !i.is_me() && i.is_voting() && i.has_vote_for_me(); });
 
     if (voted_for == _me)
         votes += 1;
@@ -89,7 +89,7 @@ NodeCount Nodes::get_nvotes_for_me(bmcl::Option<NodeId> voted_for) const
 
 NodeCount Nodes::get_num_voting_nodes() const
 {
-    return std::count_if(_nodes.begin(), _nodes.end(), [](const Node& i) { return i.is_voting(); });
+    return (NodeCount)std::count_if(_nodes.begin(), _nodes.end(), [](const Node& i) { return i.is_voting(); });
 }
 
 bool Nodes::votes_has_majority(bmcl::Option<NodeId> voted_for) const
@@ -106,7 +106,7 @@ bool Nodes::votes_has_majority(NodeCount num_nodes, NodeCount nvotes)
 
 bool Nodes::is_committed(Index idx) const
 {
-    NodeCount votes = std::count_if(_nodes.begin(), _nodes.end(), [idx](const Node& i) { return i.is_voting() && idx <= i.get_match_idx(); });
+    NodeCount votes = (NodeCount)std::count_if(_nodes.begin(), _nodes.end(), [idx](const Node& i) { return i.is_voting() && idx <= i.get_match_idx(); });
     return (get_num_voting_nodes() / 2 < votes);
 }
 

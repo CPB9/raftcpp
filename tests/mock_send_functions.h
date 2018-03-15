@@ -55,7 +55,7 @@ public:
 
 class Saver : public raft::ISaver
 {
-    bmcl::Option<Error> apply_log(const Entry& entry, std::size_t entry_idx) override { return bmcl::None; }
+    bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) override { return bmcl::None; }
     void log(const char *buf) override {}
 };
 

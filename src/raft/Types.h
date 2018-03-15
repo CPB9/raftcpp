@@ -68,17 +68,15 @@ struct MsgVoteRep
 
 struct MsgAppendEntriesReq
 {
-    MsgAppendEntriesReq(TermId term) : term(term), prev_log_idx(0), prev_log_term(TermId(0)), leader_commit(0), last_cfg_seen(0), n_entries(0), entries(nullptr) {}
-    MsgAppendEntriesReq(TermId term, Index prev_log_idx, TermId prev_log_term, Index leader_commit, Index last_cfg_seen, Index n_entries = 0, const Entry* entries = nullptr)
-        : term(term), prev_log_idx(prev_log_idx), prev_log_term(prev_log_term), leader_commit(leader_commit), last_cfg_seen(last_cfg_seen), n_entries(n_entries), entries(entries) {}
+    MsgAppendEntriesReq(TermId term) : term(term), prev_log_term(TermId(0)), leader_commit(0), last_cfg_seen(0) {}
+    MsgAppendEntriesReq(TermId term, TermId prev_log_term, Index leader_commit, Index last_cfg_seen, DataHandler data = DataHandler())
+        : term(term), prev_log_term(prev_log_term), leader_commit(leader_commit), last_cfg_seen(last_cfg_seen), data(data) {}
     TermId  term;           /**< currentTerm, to force other leader/candidate to step down */
-    Index   prev_log_idx;   /**< the index of the log just before the newest entry for the node who receives this message */
     TermId  prev_log_term;  /**< the term of the log just before the newest entry for the node who receives this message */
     Index   leader_commit;  /**< the index of the entry that has been appended to the majority of the cluster. Entries up to this index will be applied to the FSM */
-    Index   last_cfg_seen;/**< last cfg change met in log, which is need to reuse node ids. set to 0, to disable it*/
+    Index   last_cfg_seen;  /**< last cfg change met in log, which is need to reuse node ids. set to 0, to disable it*/
 
-    Index   n_entries;      /**< number of entries within this message */
-    const Entry* entries;   /**< array of entries within this message */
+    DataHandler data;
 };
 
 /** Appendentries response message.
