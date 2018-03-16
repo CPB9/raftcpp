@@ -4,9 +4,17 @@
 
 namespace raft
 {
+
+IIndexAccess::~IIndexAccess() {}
+IStorage::~IStorage() {}
+
 DataHandler::DataHandler() : _ptr((const Entry*)nullptr), _prev_log_idx(0), _count(0){}
 DataHandler::DataHandler(const Entry* first_entry, Index prev_log_idx, Index count) : _ptr(first_entry), _prev_log_idx(prev_log_idx), _count(count) {}
-DataHandler::DataHandler(const IStorage* storage, Index prev_log_idx, Index count) : _ptr(storage), _prev_log_idx(prev_log_idx), _count(count) {}
+DataHandler::DataHandler(const IIndexAccess* storage, Index prev_log_idx, Index count) : _ptr(storage), _prev_log_idx(prev_log_idx), _count(count)
+{
+    assert(_count <= storage->count() - _prev_log_idx);
+}
+
 DataHandler::~DataHandler() {}
 Index DataHandler::count() const { return _count; }
 bool DataHandler::empty() const { return _count == 0; }
@@ -23,7 +31,6 @@ bmcl::Option<const Entry&> DataHandler::get_at_idx(Index idx) const
         return _ptr.unwrapSecond()[idx - _prev_log_idx - 1];
 }
 
-IStorage::~IStorage() {}
 
 MemStorage::MemStorage(): _base(0), _term(0) { }
 
