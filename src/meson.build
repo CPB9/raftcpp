@@ -1,14 +1,22 @@
 headers = [
   'raft/Raft.h',
-  'raft/Log.h',
+  'raft/Committer.h',
   'raft/Node.h',
+  'raft/Error.h',
+  'raft/Storage.h',
+  'raft/Timer.h',
   'raft/Types.h',
+  'raft/Ids.h',
+  'raft/Entry.h',
 ]
 
 src = [
   'raft/Raft.cpp',
-  'raft/Log.cpp',
+  'raft/Committer.cpp',
   'raft/Node.cpp',
+  'raft/Error.cpp',
+  'raft/Storage.cpp',
+  'raft/Timer.cpp',
   'raft/Types.cpp',
 ]
 
