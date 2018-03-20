@@ -107,18 +107,30 @@ public:
     virtual bmcl::Option<Error> append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) = 0;
 };
 
-class ISaver
+class IEventHandler
 {
 public:
-    virtual ~ISaver();
+    virtual ~IEventHandler();
 
-    /** Callback for finite state machine application
-    * Return Shutdown if you want the server to shutdown. */
-    virtual bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) = 0;
+    virtual void become_leader() {}
+    virtual void become_follower() {}
+    virtual void become_candidate() {}
+    virtual void become_precandidate() {}
+    virtual void radomize_timeouts() {}
 
-    /** Callback for catching debugging log messages */
-    virtual void log(const char *buf) = 0;
+    virtual void rcvd(NodeId from, const MsgAppendEntriesReq&) {}
+    virtual void rcvd(NodeId from, const MsgAppendEntriesRep&) {}
+    virtual void rcvd(NodeId from, const MsgVoteReq&) {}
+    virtual void rcvd(NodeId from, const MsgVoteRep&) {}
+
+    virtual void send(NodeId to, const MsgAppendEntriesReq&) {}
+    virtual void send(NodeId to, const MsgAppendEntriesRep&) {}
+    virtual void send(NodeId to, const MsgVoteReq&) {}
+    virtual void send(NodeId to, const MsgVoteRep&) {}
+
+    virtual void entry_rcvd(const Entry&) {}
+    virtual void entry_stored(Index entry_idx, const Entry&) {}
+    virtual void entry_poped(Index entry_idx, const Entry&) {}
+    virtual void entry_applied(Index entry_idx, const Entry&) {}
 };
-
-
 }

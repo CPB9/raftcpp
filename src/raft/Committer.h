@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <bmcl/Option.h>
 #include <bmcl/Result.h>
 #include "raft/Types.h"
@@ -6,6 +7,8 @@
 
 namespace raft
 {
+
+using Applier = std::function<bmcl::Option<Error>(Index entry_idx, const Entry&)>;
 
 enum class EntryState : uint8_t
 {
@@ -37,7 +40,7 @@ public:
     void set_commit_idx(Index idx);
 
     bmcl::Option<Error> entry_push_back(const Entry& ety, bool needVoteChecks = false);
-    bmcl::Result<Entry, Error> entry_apply_one(ISaver* saver);
+    bmcl::Result<Entry, Error> entry_apply_one(const Applier& applier);
     bmcl::Option<Entry> entry_pop_back();
 
 private:

@@ -12,7 +12,7 @@ DataHandler::DataHandler() : _ptr((const Entry*)nullptr), _prev_log_idx(0), _cou
 DataHandler::DataHandler(const Entry* first_entry, Index prev_log_idx, Index count) : _ptr(first_entry), _prev_log_idx(prev_log_idx), _count(count) {}
 DataHandler::DataHandler(const IIndexAccess* storage, Index prev_log_idx, Index count) : _ptr(storage), _prev_log_idx(prev_log_idx), _count(count)
 {
-    assert(_count <= storage->count() - _prev_log_idx);
+    //assert(_count <= storage->count() - _prev_log_idx);
 }
 
 DataHandler::~DataHandler() {}

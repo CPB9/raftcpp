@@ -35,13 +35,13 @@ class Server
 {
     friend class Logger;
 public:
-    explicit Server(NodeId id, bool isnewCluster, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new or join existing cluster ()
-    explicit Server(NodeId id, bmcl::ArrayView<NodeId> members, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
-    explicit Server(NodeId id, std::initializer_list<NodeId> members, IStorage* storage, ISender* sender = nullptr, ISaver* saver = nullptr); //create new cluster with initial set of members, which includes id
+    explicit Server(NodeId id, bool isnewCluster, const Applier& applyer, IStorage* storage, ISender* sender = nullptr, IEventHandler* events = nullptr); //create new or join existing cluster ()
+    explicit Server(NodeId id, bmcl::ArrayView<NodeId> members, const Applier& applyer, IStorage* storage, ISender* sender = nullptr, IEventHandler* events = nullptr); //create new cluster with initial set of members, which includes id
+    explicit Server(NodeId id, std::initializer_list<NodeId> members, const Applier& applyer, IStorage* storage, ISender* sender = nullptr, IEventHandler* events = nullptr); //create new cluster with initial set of members, which includes id
 
     inline void set_sender(ISender* sender) {_sender = sender; }
-    inline void set_saver(ISaver* saver) { _saver = saver; }
-    inline const ISaver* get_saver() const { return _saver; }
+    inline void set_applier(const Applier& applier) { _applier = applier; }
+    inline void set_event_handler(IEventHandler* events) { _events = events; if (!_events) _events = &_defaultEventsHandler; }
 
     inline bmcl::Option<NodeId> get_current_leader() const { return _current_leader; }
     inline TermId get_current_term() const { return _current_term; }
@@ -89,13 +89,15 @@ private:
     void become_precandidate();
     void become_leader();
     void set_state(State state);
+
+    bool should_grant_vote(const MsgVoteReq& vr) const;
+    MsgAppendEntriesRep prepare_response(NodeId nodeid, bool success, Index index);
+    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
     bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
+
     void pop_log(const Entry& ety);
     bmcl::Option<Error> push_log(const Entry& ety, bool needVoteChecks);
-    void __log(const char *fmt, ...) const;
-    MsgVoteRep prepare_requestvote_response_t(NodeId candidate, ReqVoteState vote);
-    bool should_grant_vote(const MsgVoteReq& vr) const;
 
     bmcl::Option<NodeId>    _voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
     bmcl::Option<NodeId>    _current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */
@@ -108,7 +110,10 @@ private:
     Committer _committer;
     IStorage* _storage;
     ISender*  _sender;
-    ISaver*   _saver;
+    Applier   _applier;
+    IEventHandler* _events;
+    IEventHandler _defaultEventsHandler;
+
 };
 
 }

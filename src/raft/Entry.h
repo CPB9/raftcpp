@@ -9,21 +9,12 @@
 * @version 0.1
 */
 #pragma once
-#include <vector>
 #include <bmcl/Option.h>
 #include <bmcl/Either.h>
 #include "raft/Ids.h"
 
 namespace raft
 {
-
-struct UserData
-{
-    UserData() {}
-    UserData(const std::vector<uint8_t>& data) : data(data) {}
-    UserData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len){ }
-    std::vector<uint8_t> data;
-};
 
 struct InternalData
 {

@@ -3,9 +3,7 @@
 namespace raft
 {
 
-ISaver::~ISaver()
-{
-}
+IEventHandler::~IEventHandler(){}
 
 ISender::~ISender()
 {

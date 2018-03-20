@@ -12,14 +12,13 @@ TEST(TestScenario, leader_appears)
     std::vector<std::shared_ptr<raft::MemStorage>> storages;
 
     Exchanger sender;
-    Saver saver;
 
     std::vector<raft::NodeId> set = {NodeId(1), NodeId(2), NodeId(3)};
 
     for (const NodeId& i : set)
     {
         storages.emplace_back(std::make_shared<raft::MemStorage>());
-        servers.emplace_back(std::make_shared<raft::Server>(i, set, storages.back().get(), nullptr, &saver));
+        servers.emplace_back(std::make_shared<raft::Server>(i, set, [](Index, Entry) {return bmcl::None; }, storages.back().get(), nullptr));
         raft::Server& rx = *servers.back();
         rx.timer().set_timeout(Time(100), 5);
         sender.add(&rx);

@@ -5,6 +5,9 @@
 
 using namespace raft;
 
+Applier __Applier = [](Index entry_idx, const Entry &) {return bmcl::None; };
+
+
 TEST(TestMemStorage, new_is_empty)
 {
     MemStorage s;
@@ -164,40 +167,37 @@ TEST(TestMemStorage, cant_append_duplicates)
 
 TEST(TestServer, apply_entry_increments_last_applied_idx)
 {
-    Saver saver;
     MemStorage storage;
     storage.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
 
     Committer lc(&storage);
     lc.set_commit_idx(1);
-    lc.entry_apply_one(&saver);
+    lc.entry_apply_one(__Applier);
     EXPECT_EQ(1, lc.get_last_applied_idx());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_we_dont_have_entry_to_apply)
 {
-    Saver saver;
     MemStorage storage;
     Committer lc(&storage);
 
-    lc.entry_apply_one(&saver);
+    lc.entry_apply_one(__Applier);
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 }
 
 TEST(TestLogCommitter, wont_apply_entry_if_there_isnt_a_majority)
 {
-    Saver saver;
     MemStorage s;
     Committer lc(&s);
 
-    auto e = lc.entry_apply_one(&saver);
+    auto e = lc.entry_apply_one(__Applier);
     EXPECT_EQ(e.unwrapErr(), Error::NothingToApply);
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());
 
     s.push_back(Entry(1, 1, raft::UserData("aaa", 4)));
-    lc.entry_apply_one(&saver);
+    lc.entry_apply_one(__Applier);
     /* Not allowed to be applied because we haven't confirmed a majority yet */
     EXPECT_EQ(0, lc.get_last_applied_idx());
     EXPECT_EQ(0, lc.get_commit_idx());

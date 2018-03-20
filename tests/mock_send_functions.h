@@ -53,12 +53,6 @@ public:
     bmcl::Option<Error> append_entries(const NodeId& node, const MsgAppendEntriesReq& msg) override;
 };
 
-class Saver : public raft::ISaver
-{
-    bmcl::Option<Error> apply_log(const Entry& entry, Index entry_idx) override { return bmcl::None; }
-    void log(const char *buf) override {}
-};
-
 class Exchanger
 {
 public:

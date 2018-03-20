@@ -32,7 +32,7 @@ bmcl::Option<Error> Committer::entry_push_back(const Entry& ety, bool needVoteCh
     return bmcl::None;
 }
 
-bmcl::Result<Entry, Error> Committer::entry_apply_one(ISaver* saver)
+bmcl::Result<Entry, Error> Committer::entry_apply_one(const Applier& applier)
 {    /* Don't apply after the commit_idx */
     if (!has_not_applied())
         return Error::NothingToApply;
@@ -45,8 +45,7 @@ bmcl::Result<Entry, Error> Committer::entry_apply_one(ISaver* saver)
     const Entry& ety = etyo.unwrap();
 
     _last_applied_idx = log_idx;
-    assert(saver);
-    bmcl::Option<Error> e = saver->apply_log(ety, _last_applied_idx);
+    bmcl::Option<Error> e = applier(_last_applied_idx, ety);
     if (e.isSome())
         return e.unwrap();
 

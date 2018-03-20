@@ -1,13 +1,5 @@
-/**
- * Copyright (c) 2013, Willem-Hendrik Thiart
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
- *
- * @file
- * @author Willem Thiart himself@willemthiart.com
- */
-
 #pragma once
+#include <vector>
 
 namespace raft
 {
@@ -17,5 +9,13 @@ using TermId = std::size_t;
 using Index = std::size_t;
 using EntryId = std::size_t;
 using NodeCount = std::size_t;
+
+struct UserData
+{
+    UserData() {}
+    UserData(const std::vector<uint8_t>& data) : data(data) {}
+    UserData(const void* buf, std::size_t len) : data((const uint8_t*)buf, (const uint8_t*)buf + len) { }
+    std::vector<uint8_t> data;
+};
 
 }
