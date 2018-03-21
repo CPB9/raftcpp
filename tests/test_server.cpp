@@ -1777,11 +1777,11 @@ TEST(TestLeader, recv_appendentries_response_do_not_increase_commit_idx_because_
     EXPECT_EQ(0, r.committer().get_commit_idx());
     r.accept_rep(raft::NodeId(3), MsgAppendEntriesRep(r.get_current_term(), true, 3));
     EXPECT_EQ(3, r.committer().get_commit_idx());
-    r.tick();
+    r.tick(std::chrono::milliseconds(0), 1);
     EXPECT_EQ(1, r.committer().get_last_applied_idx());
-    r.tick();
+    r.tick(std::chrono::milliseconds(0), 1);
     EXPECT_EQ(2, r.committer().get_last_applied_idx());
-    r.tick();
+    r.tick(std::chrono::milliseconds(0), 1);
     EXPECT_EQ(3, r.committer().get_last_applied_idx());
 }
 
