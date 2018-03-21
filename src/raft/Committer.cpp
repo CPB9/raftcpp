@@ -59,7 +59,6 @@ bmcl::Result<Entry, Error> Committer::entry_apply_one(const Applier& applier)
 void Committer::set_commit_idx(Index idx)
 {
     assert(get_commit_idx() <= idx);
-    assert(idx <= get_current_idx());
     _commit_idx = idx;
 }
 
