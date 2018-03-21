@@ -61,8 +61,7 @@ public:
     const Timer& timer() const { return _timer; }
     const IStorage* storage() const { return _storage; }
 
-    bmcl::Option<Error> tick(Time elapsed = Time(0));
-    bmcl::Option<Error> apply_one();
+    bmcl::Option<Error> tick(Time elapsed = Time(0), Index max_count = Index(-1));
     bmcl::Option<Error> apply_all(Index max_count = Index(-1));
 
     bmcl::Result<MsgAppendEntriesRep, Error> accept_req(NodeId nodeid, const MsgAppendEntriesReq& ae);
@@ -96,8 +95,9 @@ private:
     bmcl::Option<Error> send_appendentries(Node& node, ISender* sender);
     bmcl::Option<Error> send_reqvote(Node& node, ISender* sender);
 
-    void pop_log(const Entry& ety);
-    bmcl::Option<Error> push_log(const Entry& ety, bool needVoteChecks);
+    void entry_pop(const Entry& ety);
+    bmcl::Option<Error> entry_push(const Entry& ety, bool needVoteChecks);
+    bmcl::Option<Error> entry_apply_one();
 
     bmcl::Option<NodeId>    _voted_for;      /**< The candidate the server voted for in its current term, or Nil if it hasn't voted for any.  */
     bmcl::Option<NodeId>    _current_leader; /**< what this node thinks is the node ID of the current leader, or -1 if there isn't a known current leader. */

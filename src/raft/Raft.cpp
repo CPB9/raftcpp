@@ -150,7 +150,7 @@ void Server::become_follower()
     _events->radomize_timeouts();
 }
 
-bmcl::Option<Error> Server::tick(Time elapsed_since_last_period)
+bmcl::Option<Error> Server::tick(Time elapsed_since_last_period, Index max_count)
 {
     if (is_shutdown())
         return Error::Shutdown;
@@ -182,64 +182,7 @@ bmcl::Option<Error> Server::tick(Time elapsed_since_last_period)
         if (_nodes.is_me_candidate_ready())
             become_precandidate();
     }
-    return apply_one();
-}
-
-bmcl::Option<Error> Server::apply_one()
-{
-    if (is_shutdown())
-        return Error::Shutdown;
-
-    auto r = _committer.entry_apply_one(_applier);
-    if (r.isErr())
-    {
-        if (r.unwrapErr() == Error::NothingToApply)
-            return bmcl::None;
-        return r.unwrapErr();
-    }
-
-    const Entry& ety = r.unwrap();
-    if (r.unwrap().isInternal())
-    {
-        const InternalData& cmd = ety.getInternalData().unwrap();
-        NodeId id = cmd.node;
-        bmcl::Option<Node&> node = _nodes.get_node(id);
-        switch (cmd.type)
-        {
-        case InternalData::AddNonVotingNode:
-        {
-            node = _nodes.add_node(id, false);
-            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
-        }
-        break;
-        case InternalData::AddNode:
-        {
-            node = _nodes.add_node(id, true);
-            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
-        }
-        break;
-        case InternalData::DemoteNode:
-        {
-            assert(node.isSome());
-            if (node.isSome())
-                node->set_voting(false);
-        }
-        break;
-        case InternalData::RemoveNode:
-        {
-            _nodes.remove_node(id);
-            if (_nodes.is_me(id) && _last_cfg_seen <= _committer.get_last_applied_idx())
-                set_state(State::Shutdown);
-        }
-        case  InternalData::Noop:
-            break;
-        default:
-            assert(false);
-        }
-    }
-
-    _events->entry_applied(_committer.get_last_applied_idx() , ety);
-    return bmcl::None;
+    return apply_all(max_count);
 }
 
 bmcl::Option<Error> Server::apply_all(Index max_count)
@@ -247,7 +190,7 @@ bmcl::Option<Error> Server::apply_all(Index max_count)
     Index i = 0;
     while(i < max_count && _committer.has_not_applied())
     {
-        bmcl::Option<Error> e = apply_one();
+        bmcl::Option<Error> e = entry_apply_one();
         if (e.isSome())
             return e;
         ++i;
@@ -315,7 +258,7 @@ bmcl::Option<Error> Server::accept_rep(NodeId nodeid, const MsgAppendEntriesRep&
 
     if (!node->is_voting() && !_committer.voting_change_is_in_progress() && _committer.get_current_idx() <= r.current_idx + 1)
     {
-        auto e = push_log(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
+        auto e = entry_push(Entry::add_node(get_current_term(), EntryId(0), node->get_id()), false);
         if (e.isSome())
             return e;
     }
@@ -417,7 +360,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
                     flag = false;
                     continue;
                 }
-                pop_log(pop.unwrap());
+                entry_pop(pop.unwrap());
                 _events->entry_poped(_committer.get_current_idx(), pop.unwrap());
             }
             break;
@@ -436,7 +379,7 @@ bmcl::Result<MsgAppendEntriesRep, Error> Server::accept_req(NodeId nodeid, const
             break;
         }
 
-        bmcl::Option<Error> e = push_log(ety.unwrap(), false);
+        bmcl::Option<Error> e = entry_push(ety.unwrap(), false);
         if (e.isSome())
         {
             if (e.unwrap() == Error::Shutdown)
@@ -629,7 +572,7 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
 
     _events->entry_rcvd(ety);
     assert(ety.term() == _current_term);
-    auto r = push_log(ety, true);
+    auto r = entry_push(ety, true);
     if (r.isSome())
         return r.unwrap();
 
@@ -657,7 +600,64 @@ bmcl::Result<MsgAddEntryRep, Error> Server::accept_entry(const Entry& ety)
     return MsgAddEntryRep(_current_term, ety.id(), _committer.get_current_idx());
 }
 
-void Server::pop_log(const Entry& ety)
+bmcl::Option<Error> Server::entry_apply_one()
+{
+    if (is_shutdown())
+        return Error::Shutdown;
+
+    auto r = _committer.entry_apply_one(_applier);
+    if (r.isErr())
+    {
+        if (r.unwrapErr() == Error::NothingToApply)
+            return bmcl::None;
+        return r.unwrapErr();
+    }
+
+    const Entry& ety = r.unwrap();
+    if (r.unwrap().isInternal())
+    {
+        const InternalData& cmd = ety.getInternalData().unwrap();
+        NodeId id = cmd.node;
+        bmcl::Option<Node&> node = _nodes.get_node(id);
+        switch (cmd.type)
+        {
+        case InternalData::AddNonVotingNode:
+        {
+            node = _nodes.add_node(id, false);
+            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
+        }
+        break;
+        case InternalData::AddNode:
+        {
+            node = _nodes.add_node(id, true);
+            node->set_last_cfg_seen_idx(_committer.get_last_applied_idx());
+        }
+        break;
+        case InternalData::DemoteNode:
+        {
+            assert(node.isSome());
+            if (node.isSome())
+                node->set_voting(false);
+        }
+        break;
+        case InternalData::RemoveNode:
+        {
+            _nodes.remove_node(id);
+            if (_nodes.is_me(id) && _last_cfg_seen <= _committer.get_last_applied_idx())
+                set_state(State::Shutdown);
+        }
+        case  InternalData::Noop:
+            break;
+        default:
+            assert(false);
+        }
+    }
+
+    _events->entry_applied(_committer.get_last_applied_idx() , ety);
+    return bmcl::None;
+}
+
+void Server::entry_pop(const Entry& ety)
 {
     if (ety.isUser())
         return;
@@ -701,7 +701,7 @@ void Server::pop_log(const Entry& ety)
     }
 }
 
-bmcl::Option<Error> Server::push_log(const Entry& ety, bool needVoteChecks)
+bmcl::Option<Error> Server::entry_push(const Entry& ety, bool needVoteChecks)
 {
     auto e = _committer.entry_push_back(ety, needVoteChecks);
     if (e.isSome())
