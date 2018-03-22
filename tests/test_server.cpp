@@ -1797,34 +1797,30 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
 
     bmcl::Option<const Node&> n = r.nodes().get_node(raft::NodeId(2));
 
-    MsgAppendEntriesReq* ae;
-
-    /* become leader sets next_idx to current_idx (leader added noop)*/
     prepare_leader(r);
-    EXPECT_EQ(6, n->get_next_idx());
+    /* become leader sets next_idx to current_idx*/
+    EXPECT_EQ(storage.get_current_idx() + 1, n->get_next_idx());
 
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         ASSERT_TRUE(msg.isSome());
-        ae = msg->cast_to_appendentries().unwrapOr(nullptr);
+        MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
     }
 
-    /* FIRST entry log application */
-    /* send appendentries -
-     * server will be waiting for response */
+    /* FIRST try to send all entries - server will be waiting for response */
     r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         ASSERT_TRUE(msg.isSome());
-        ae = msg->cast_to_appendentries().unwrapOr(nullptr);
-        EXPECT_NE(nullptr, ae);
+        MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
+        ASSERT_NE(nullptr, ae);
 
-        EXPECT_EQ(5, ae->prev_log_term);
-        EXPECT_EQ(5, ae->data.prev_log_idx());
+        EXPECT_EQ(r.committer().get_last_log_term(), ae->prev_log_term);
+        EXPECT_EQ(r.committer().get_current_idx(), ae->data.prev_log_idx());
     }
 
-    /* receive mock success responses */
+    /* receive response with lower node's current index */
     r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 1));
     EXPECT_EQ(2, n->get_next_idx());
 
@@ -1832,8 +1828,8 @@ TEST(TestLeader, recv_appendentries_response_jumps_to_lower_next_idx)
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         ASSERT_TRUE(msg.isSome());
-        ae = msg->cast_to_appendentries().unwrapOr(nullptr);
-        EXPECT_NE(nullptr, ae);
+        MsgAppendEntriesReq* ae = msg->cast_to_appendentries().unwrapOr(nullptr);
+        ASSERT_NE(nullptr, ae);
 
         EXPECT_EQ(1, ae->prev_log_term);
         EXPECT_EQ(1, ae->data.prev_log_idx());
@@ -1859,9 +1855,9 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
 
     MsgAppendEntriesReq* ae;
 
-    /* become leader sets next_idx to current_idx */
+    /* become leader sets next_idx to current_idx + 1*/
     prepare_leader(r);
-    EXPECT_EQ(6, n->get_next_idx());
+    EXPECT_EQ(r.committer().get_current_idx() + 1, n->get_next_idx());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
         ASSERT_TRUE(msg.isSome());
@@ -1869,9 +1865,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         EXPECT_NE(nullptr, ae);
     }
 
-    /* FIRST entry log application */
-    /* send appendentries -
-    * server will be waiting for response */
+    /* FIRST try to send all entries - server will be waiting for response */
     r.send_appendentries(n->get_id());
     {
         bmcl::Option<msg_t> msg = sender.poll_msg_data(r);
@@ -1879,8 +1873,8 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
         ae = msg->cast_to_appendentries().unwrapOr(nullptr);
         EXPECT_NE(nullptr, ae);
 
-        EXPECT_EQ(5, ae->prev_log_term);
-        EXPECT_EQ(5, ae->data.prev_log_idx());
+        EXPECT_EQ(r.committer().get_last_log_term(), ae->prev_log_term);
+        EXPECT_EQ(r.committer().get_current_idx(), ae->data.prev_log_idx());
     }
 
     /* receive mock success responses */
@@ -1899,7 +1893,7 @@ TEST(TestLeader, recv_appendentries_response_decrements_to_lower_next_idx)
     }
 
     /* receive mock success responses */
-    r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 4));
+    r.accept_rep(n->get_id(), MsgAppendEntriesRep(r.get_current_term(), false, 3));
     EXPECT_EQ(4, n->get_next_idx());
 
     /* see if new appendentries have appropriate values */
