@@ -38,11 +38,10 @@ Server::Server(NodeId id, bool isNewCluster, const Applier& applyer, IStorage* s
     _voted_for = _storage->vote();
     if (isNewCluster)
     {
-        _nodes.add_my_node(true);
+        entry_push(Entry::add_node(_current_term, 0, id), false);
         become_candidate();
         tick();
         assert(is_leader());
-        accept_entry(Entry::add_node(_current_term, 0, id));
     }
     else
     {
@@ -59,17 +58,16 @@ Server::Server(NodeId id, bmcl::ArrayView<NodeId> members, const Applier& applye
     if (members.size() == 1)
     {   /*equivalent to Server(id, isNewCluster=true)*/
         assert(*members.begin() == id);
-        _nodes.add_my_node(true);
+        entry_push(Entry::add_node(_current_term, 0, id), false);
         become_candidate();
         tick();
         assert(is_leader());
-        accept_entry(Entry::add_node(_current_term, 0, id));
     }
     else
     {
         for (const auto& i : members)
         {
-            _nodes.add_node(i, true);
+            entry_push(Entry::add_node(_current_term, 0, i), false);
         }
         assert(_nodes.get_my_node().isSome());
         become_follower();
